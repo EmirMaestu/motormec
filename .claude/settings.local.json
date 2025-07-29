@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:v0.dev)",
+      "Bash(npm run dev:*)",
+      "Bash(rm:*)",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(cp:*)",
+      "Bash(touch:*)",
+      "Bash(npx convex:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(npm run build:*)",
+      "Bash(CONVEX_DEPLOYMENT=dev:charming-peacock-378 npx convex dev --once)",
+      "Bash(ls:*)",
+      "Bash(node:*)",
+      "Bash(grep:*)",
+      "Bash(git config:*)"
+    ],
+    "deny": []
+  }
+}

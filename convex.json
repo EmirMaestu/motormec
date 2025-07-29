@@ -1,0 +1,8 @@
+{
+  "node": {
+    "externalPackages": [
+      "@tabler/icons-react",
+      "lucide-react"
+    ]
+  }
+}
