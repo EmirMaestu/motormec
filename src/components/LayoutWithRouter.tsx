@@ -135,7 +135,7 @@ export default function LayoutWithRouter({ children }: LayoutProps) {
               <h2 className="text-xl font-semibold text-gray-900 truncate">
                 {currentRoute.title}
               </h2>
-              <p className="text-sm text-gray-500 mt-1 hidden sm:block truncate">
+              <p className="text-sm text-gray-500 mt-1 block truncate">
                 {currentRoute.description}
               </p>
             </div>
