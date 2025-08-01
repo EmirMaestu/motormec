@@ -15,7 +15,8 @@
       "Bash(ls:*)",
       "Bash(node:*)",
       "Bash(grep:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

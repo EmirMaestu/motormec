@@ -324,31 +324,47 @@ export const getCategories = query({
   handler: async () => {
     return {
       income: [
-        "Mantenimiento",
-        "Frenos", 
-        "Motor",
-        "Transmisión",
-        "Suspensión",
-        "Electricidad",
-        "Llantas",
-        "Carrocería",
-        "Aire Acondicionado",
-        "Diagnóstico",
-        "Servicio General"
+        "Servicios de Mantenimiento",
+        "Reparaciones de Motor",
+        "Reparaciones de Frenos",
+        "Reparaciones Eléctricas",
+        "Diagnóstico y Revisión",
+        "Servicios de Llantas",
+        "Venta de Repuestos",
+        "Otros Servicios"
       ],
       expense: [
-        "Repuestos",
-        "Herramientas",
-        "Servicios Públicos",
-        "Alquiler",
-        "Sueldos",
-        "Combustible",
-        "Mantenimiento Taller",
-        "Seguros",
-        "Impuestos",
-        "Marketing",
-        "Otros Gastos"
+        "Pago de Sueldos",
+        "Compra de Repuestos para Taller",
+        "Compra de Herramientas de Trabajo", 
+        "Compra de Equipos para Taller",
+        "Materiales de Trabajo",
+        "Aceites y Lubricantes",
+        "Pago de Alquiler del Local",
+        "Pago de Servicios Públicos",
+        "Pago de Servicios de Internet",
+        "Pago de Servicios de Telefonía",
+        "Combustible y Transporte",
+        "Mantenimiento de Equipos del Taller",
+        "Seguros y Licencias",
+        "Impuestos y Tasas Municipales",
+        "Publicidad y Marketing",
+        "Insumos de Limpieza",
+        "Servicios Externos de Reparación",
+        "Capacitación del Personal",
+        "Gastos de Oficina y Papelería",
+        "Otros Gastos Operativos"
       ]
     };
+  },
+});
+
+// Obtener todas las categorías únicas usadas (para el creatable)
+export const getUsedCategories = query({
+  args: {},
+  handler: async (ctx) => {
+    const allTransactions = await ctx.db.query("transactions").collect();
+    const usedCategories = [...new Set(allTransactions.map(t => t.category))];
+    return usedCategories.filter(Boolean).sort();
   },
 });

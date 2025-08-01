@@ -10,6 +10,7 @@ import VehicleHistory from '../components/pages/VehicleHistory';
 import VehicleCostManagement from '../components/pages/VehicleCostManagement';
 import Finance from '../components/pages/finance';
 import Reports from '../components/pages/reports';
+import Partners from '../components/pages/partners';
 import StockManagement from '../stock-management';
 
 // Ejemplos y demos
@@ -35,7 +36,7 @@ const AppRouter: React.FC = () => {
             <Route path="/reportes" element={<Reports />} />
             
             {/* Páginas adicionales que podrías necesitar */}
-            <Route path="/socios" element={<div className="p-6"><h1 className="text-2xl font-bold">Módulo de Socios</h1><p>En desarrollo...</p></div>} />
+            <Route path="/socios" element={<Partners />} />
             
             {/* Ejemplos y demos */}
             <Route path="/ejemplos/cards" element={<CarouselCardsDemo />} />

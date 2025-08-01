@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu"
+import { SingleCreatableSelect } from "../ui/single-creatable-select"
 import { FinanceCards } from "../module-cards"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
@@ -50,6 +51,7 @@ export default function Finance() {
   const financialSummary = useQuery(api.transactions.getFinancialSummary)
   const serviceStats = useQuery(api.transactions.getServiceStats) ?? []
   const categories = useQuery(api.transactions.getCategories)
+  const usedCategories = useQuery(api.transactions.getUsedCategories) ?? []
   const createTransaction = useMutation(api.transactions.createTransaction)
   const updateTransaction = useMutation(api.transactions.updateTransaction)
   const suspendTransaction = useMutation(api.transactions.suspendTransaction)
@@ -68,6 +70,8 @@ export default function Finance() {
     person: user?.firstName || user?.emailAddresses[0]?.emailAddress || "",
     paymentMethod: "Efectivo",
     notes: "",
+    employeeName: "", // Para pagos de sueldos
+    employeePosition: "", // Para pagos de sueldos
   })
 
   // Si financialSummary está cargando, mostrar valores por defecto
@@ -92,10 +96,6 @@ export default function Finance() {
 
   const validateTransaction = (transaction: typeof newTransaction) => {
     const newErrors: Record<string, string> = {}
-
-    if (!transaction.description.trim()) {
-      newErrors.description = "La descripción es requerida"
-    }
 
     if (!transaction.category) {
       newErrors.category = "La categoría es requerida"
@@ -126,15 +126,33 @@ export default function Finance() {
     setErrors({})
 
     try {
+      // Construir descripción mejorada
+      let enhancedDescription = newTransaction.description.trim()
+      let enhancedNotes = newTransaction.notes.trim() || undefined
+
+      // Para pagos de sueldos, generar descripción automática si hay empleado
+      if ((newTransaction.category === "Pago de Sueldos" || newTransaction.category === "Pago de Sueldos a Empleados") && newTransaction.employeeName) {
+        enhancedDescription = `Pago de sueldo - ${newTransaction.employeeName}`
+        if (newTransaction.employeePosition) {
+          enhancedDescription += ` (${newTransaction.employeePosition})`
+        }
+        if (newTransaction.description.trim() && newTransaction.description.trim() !== enhancedDescription) {
+          enhancedNotes = newTransaction.description.trim() + (enhancedNotes ? ` - ${enhancedNotes}` : "")
+        }
+      } else if (!enhancedDescription) {
+        // Si no hay descripción manual, usar la categoría como descripción
+        enhancedDescription = newTransaction.category
+      }
+
       await createTransaction({
         date: newTransaction.date,
-        description: newTransaction.description.trim(),
+        description: enhancedDescription,
         type: newTransaction.type,
         category: newTransaction.category,
         amount: parseFloat(newTransaction.amount),
         supplier: newTransaction.person.trim() || undefined,
         paymentMethod: newTransaction.paymentMethod,
-        notes: newTransaction.notes.trim() || undefined,
+        notes: enhancedNotes,
       })
 
       // Resetear formulario
@@ -147,6 +165,8 @@ export default function Finance() {
         person: user?.firstName || user?.emailAddresses[0]?.emailAddress || "",
         paymentMethod: "Efectivo",
         notes: "",
+        employeeName: "",
+        employeePosition: "",
       })
       setIsAddDialogOpen(false)
       setErrors({})
@@ -168,6 +188,8 @@ export default function Finance() {
       person: user?.firstName || user?.emailAddresses[0]?.emailAddress || "",
       paymentMethod: "Efectivo",
       notes: "",
+      employeeName: "",
+      employeePosition: "",
     })
     setErrors({})
   }
@@ -219,10 +241,6 @@ export default function Finance() {
 
   const validateEditTransaction = (transaction: any) => {
     const newErrors: Record<string, string> = {}
-
-    if (!transaction.description?.trim()) {
-      newErrors.description = "La descripción es requerida"
-    }
 
     if (!transaction.category) {
       newErrors.category = "La categoría es requerida"
@@ -427,37 +445,28 @@ export default function Finance() {
                     </FormField>
                   </div>
                   
-                  <FormField id="description" label="Descripción" required error={errors.description}>
+                  <FormField id="description" label="Descripción (opcional)" error={errors.description}>
                     <Input
                       id="description"
                       value={newTransaction.description}
                       onChange={(e) => handleNewTransactionChange('description', e.target.value)}
-                      placeholder="Describe la transacción..."
+                      placeholder="Describe la transacción (opcional)..."
                       className={errors.description ? "border-red-300 focus:border-red-500" : ""}
                     />
                   </FormField>
 
                   <div className="grid grid-cols-2 gap-4">
                     <FormField id="category" label="Categoría" required error={errors.category}>
-                      <Select 
-                        value={newTransaction.category} 
-                        onValueChange={(value) => handleNewTransactionChange('category', value)}
-                      >
-                        <SelectTrigger className={errors.category ? "border-red-300 focus:border-red-500" : ""}>
-                          <SelectValue placeholder="Seleccionar categoría" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories && (
-                            newTransaction.type === "Ingreso" 
-                              ? categories.income.map((cat) => (
-                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                                ))
-                              : categories.expense.map((cat) => (
-                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                                ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <SingleCreatableSelect
+                        value={newTransaction.category}
+                        onChange={(value) => handleNewTransactionChange('category', value)}
+                        options={[
+                          ...(categories ? (newTransaction.type === "Ingreso" ? categories.income : categories.expense) : []),
+                          ...usedCategories
+                        ].filter((cat, index, arr) => arr.indexOf(cat) === index)}
+                        placeholder="Seleccionar o escribir categoría..."
+                        className={errors.category ? "border-red-300 focus:border-red-500" : ""}
+                      />
                     </FormField>
                     <FormField id="amount" label="Monto" required error={errors.amount}>
                       <Input
@@ -474,15 +483,50 @@ export default function Finance() {
                   </div>
 
                   {newTransaction.type === "Egreso" && (
-                    <FormField id="person" label="Persona/Responsable" required error={errors.person}>
-                      <Input
-                        id="person"
-                        value={newTransaction.person}
-                        onChange={(e) => handleNewTransactionChange('person', e.target.value)}
-                        placeholder="Nombre de la persona responsable"
-                        className={errors.person ? "border-red-300 focus:border-red-500" : ""}
-                      />
-                    </FormField>
+                    <>
+                      <FormField id="person" label="Persona/Responsable" required error={errors.person}>
+                        <Input
+                          id="person"
+                          value={newTransaction.person}
+                          onChange={(e) => handleNewTransactionChange('person', e.target.value)}
+                          placeholder="Nombre de la persona responsable"
+                          className={errors.person ? "border-red-300 focus:border-red-500" : ""}
+                        />
+                      </FormField>
+
+                      {/* Campos específicos para pago de sueldos */}
+                      {(newTransaction.category === "Pago de Sueldos" || newTransaction.category === "Pago de Sueldos a Empleados") && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField id="employeeName" label="Nombre del Empleado">
+                            <Input
+                              id="employeeName"
+                              value={newTransaction.employeeName}
+                              onChange={(e) => handleNewTransactionChange('employeeName', e.target.value)}
+                              placeholder="Nombre completo del empleado"
+                            />
+                          </FormField>
+                          <FormField id="employeePosition" label="Cargo/Posición">
+                            <SingleCreatableSelect
+                              value={newTransaction.employeePosition}
+                              onChange={(value) => handleNewTransactionChange('employeePosition', value)}
+                              options={[
+                                "Mecánico Senior",
+                                "Mecánico Junior",
+                                "Mecánico Especialista",
+                                "Administrador",
+                                "Recepcionista",
+                                "Ayudante de Taller",
+                                "Supervisor",
+                                "Contador",
+                                "Vendedor de Repuestos",
+                                "Limpieza"
+                              ]}
+                              placeholder="Seleccionar o escribir cargo..."
+                            />
+                          </FormField>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   <FormField id="paymentMethod" label="Método de Pago">
@@ -592,37 +636,28 @@ export default function Finance() {
                   </FormField>
                 </div>
                 
-                <FormField id="edit-description" label="Descripción" required error={errors.description}>
+                <FormField id="edit-description" label="Descripción (opcional)" error={errors.description}>
                   <Input
                     id="edit-description"
                     value={editingTransaction.description}
                     onChange={(e) => handleEditTransactionChange('description', e.target.value)}
-                    placeholder="Describe la transacción..."
+                    placeholder="Describe la transacción (opcional)..."
                     className={errors.description ? "border-red-300 focus:border-red-500" : ""}
                   />
                 </FormField>
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField id="edit-category" label="Categoría" required error={errors.category}>
-                    <Select 
-                      value={editingTransaction.category} 
-                      onValueChange={(value) => handleEditTransactionChange('category', value)}
-                    >
-                      <SelectTrigger className={errors.category ? "border-red-300 focus:border-red-500" : ""}>
-                        <SelectValue placeholder="Seleccionar categoría" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories && (
-                          editingTransaction.type === "Ingreso" 
-                            ? categories.income.map((cat) => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                              ))
-                            : categories.expense.map((cat) => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                              ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <SingleCreatableSelect
+                      value={editingTransaction.category}
+                      onChange={(value) => handleEditTransactionChange('category', value)}
+                      options={[
+                        ...(categories ? (editingTransaction.type === "Ingreso" ? categories.income : categories.expense) : []),
+                        ...usedCategories
+                      ].filter((cat, index, arr) => arr.indexOf(cat) === index)}
+                      placeholder="Seleccionar o escribir categoría..."
+                      className={errors.category ? "border-red-300 focus:border-red-500" : ""}
+                    />
                   </FormField>
                   <FormField id="edit-amount" label="Monto" required error={errors.amount}>
                     <Input

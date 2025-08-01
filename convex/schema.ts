@@ -30,6 +30,34 @@ export default defineSchema({
     lowStock: v.boolean(),
   }),
 
+  // Historial de movimientos de inventario
+  inventoryMovements: defineTable({
+    productId: v.optional(v.id("products")), // null si el producto fue eliminado
+    productName: v.string(),
+    productType: v.string(),
+    movementType: v.union(
+      v.literal("created"),
+      v.literal("updated"), 
+      v.literal("deleted"),
+      v.literal("stock_increase"),
+      v.literal("stock_decrease")
+    ),
+    previousQuantity: v.optional(v.number()),
+    newQuantity: v.optional(v.number()),
+    quantityChange: v.optional(v.number()),
+    previousPrice: v.optional(v.number()),
+    newPrice: v.optional(v.number()),
+    reason: v.optional(v.string()),
+    timestamp: v.string(),
+    userId: v.optional(v.string()),
+    userName: v.optional(v.string()),
+    details: v.optional(v.object({
+      previousData: v.optional(v.any()),
+      newData: v.optional(v.any()),
+      notes: v.optional(v.string()),
+    })),
+  }),
+
   // Vehículos
   vehicles: defineTable({
     plate: v.string(),
@@ -77,6 +105,62 @@ export default defineSchema({
       supplier: v.optional(v.string()),
       notes: v.optional(v.string()),
     }))),
+  }),
+
+  // Historial de movimientos de vehículos
+  vehicleMovements: defineTable({
+    vehicleId: v.optional(v.id("vehicles")), // null si el vehículo fue eliminado
+    vehiclePlate: v.string(),
+    vehicleInfo: v.string(), // "Marca Modelo Año"
+    owner: v.string(),
+    movementType: v.union(
+      v.literal("created"),           // Vehículo ingresado
+      v.literal("status_changed"),    // Cambio de estado (Ingresado -> En Reparación -> Listo -> Entregado)
+      v.literal("assigned"),          // Mecánico asignado
+      v.literal("unassigned"),        // Mecánico desasignado
+      v.literal("work_started"),      // Inicio de trabajo
+      v.literal("work_paused"),       // Trabajo pausado
+      v.literal("work_completed"),    // Trabajo completado
+      v.literal("updated"),           // Actualización general (costo, servicios, etc.)
+      v.literal("suspended"),         // Vehículo suspendido
+      v.literal("delivered"),         // Vehículo entregado
+      v.literal("deleted")            // Vehículo eliminado
+    ),
+    // Estados
+    previousStatus: v.optional(v.string()),
+    newStatus: v.optional(v.string()),
+    // Costos
+    previousCost: v.optional(v.number()),
+    newCost: v.optional(v.number()),
+    costChange: v.optional(v.number()),
+    // Responsables
+    assignedUser: v.optional(v.string()), // userId
+    assignedUserName: v.optional(v.string()),
+    unassignedUser: v.optional(v.string()), // userId
+    unassignedUserName: v.optional(v.string()),
+    // Trabajo
+    workDuration: v.optional(v.number()), // en milisegundos
+    workSessionId: v.optional(v.string()),
+    // Servicios
+    previousServices: v.optional(v.array(v.string())),
+    newServices: v.optional(v.array(v.string())),
+    // Información general
+    reason: v.optional(v.string()),
+    description: v.optional(v.string()),
+    timestamp: v.string(),
+    userId: v.optional(v.string()), // Usuario que hizo el cambio
+    userName: v.optional(v.string()),
+    // Datos detallados
+    details: v.optional(v.object({
+      previousData: v.optional(v.any()),
+      newData: v.optional(v.any()),
+      notes: v.optional(v.string()),
+      workSession: v.optional(v.object({
+        startTime: v.string(),
+        endTime: v.optional(v.string()),
+        duration: v.optional(v.number()),
+      })),
+    })),
   }),
 
   // Socios

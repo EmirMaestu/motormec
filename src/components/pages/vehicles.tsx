@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { useOrganization, useUser } from '@clerk/clerk-react'
-import { Plus, Search, Filter, Edit3, MoreHorizontal, Calculator, History, Crown, User, Play, Pause, Square } from "lucide-react"
+import { Plus, Search, Filter, Edit3, MoreHorizontal, Calculator, Crown, User, Play, Pause, Square, CheckCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
@@ -223,6 +223,7 @@ export default function Vehicles() {
   const pauseWorkOnVehicle = useMutation(api.vehicles.pauseWorkOnVehicle)
   const completeWorkOnVehicle = useMutation(api.vehicles.completeWorkOnVehicle)
 
+
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
@@ -259,6 +260,7 @@ export default function Vehicles() {
         return <Badge variant="outline">{status}</Badge>
     }
   }
+
 
   const handleAddVehicle = async () => {
     if (newVehicle.plate && newVehicle.brand && newVehicle.model && newVehicle.owner) {
@@ -485,8 +487,8 @@ export default function Vehicles() {
             onClick={() => navigate("/vehiculos/historial")}
             className="flex items-center gap-2"
           >
-            <History className="h-4 w-4" />
-            Ver Historial
+            <CheckCircle className="h-4 w-4" />
+            Vehículos Completados
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -1340,7 +1342,7 @@ export default function Vehicles() {
         <VehicleCards />
       </div>
 
-      {/* Filtros */}
+          {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

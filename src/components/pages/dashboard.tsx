@@ -5,11 +5,13 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "../ui/button"
 import { Badge } from "../ui/badge"
-import { Car, Clock, Play, Square, Pause } from "lucide-react"
+import { Car, Clock, Play, Square, Pause, DollarSign, TrendingUp, Users, Wrench, Plus } from "lucide-react"
 import { WorkTimer } from "../ui/work-timer"
+import { useNavigate } from "react-router-dom"
 
 export default function Dashboard() {
   const { user } = useUser()
+  const navigate = useNavigate()
 
   // Determinar si el usuario es admin
   const isAdmin = user?.organizationMemberships?.[0]?.role === "org:admin"
@@ -26,6 +28,14 @@ export default function Dashboard() {
   const completeWorkOnVehicle = useMutation(api.vehicles.completeWorkOnVehicle)
   const workDaySummary = useQuery(api.vehicles.getWorkDaySummary, {
     userId: user?.id || ""
+  })
+
+  // Datos adicionales para admin
+  const financialSummary = useQuery(api.transactions.getFinancialSummary)
+  const recentTransactions = useQuery(api.transactions.getActiveTransactions)
+  const allVehiclesAdmin = useQuery(api.vehicles.getVehiclesForUser, {
+    userId: user?.id || "",
+    isAdmin: true
   })
 
   // Separar vehículos asignados y disponibles
@@ -323,68 +333,268 @@ export default function Dashboard() {
     )
   }
 
-  // Vista para administradores (mantener la vista original)
+  // Vista completa para administradores
   return (
     <div className="space-y-6">
+      {/* Header de bienvenida */}
+      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6">
+        <h1 className="text-2xl font-bold text-gray-900">Panel de Administración</h1>
+        <p className="text-gray-600 mt-1">Vista general completa del taller - {user?.firstName}</p>
+      </div>
+
       {/* Cards de estadísticas con carousel */}
       <DashboardCards />
 
-      {/* Actividad reciente */}
+      {/* Resumen financiero */}
+      {financialSummary && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ingresos Totales</CardTitle>
+              <TrendingUp className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                ${financialSummary.totalIngresos?.toLocaleString() || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Vehículos entregados
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Egresos Totales</CardTitle>
+              <TrendingUp className="h-4 w-4 text-red-600 rotate-180" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">
+                ${financialSummary.totalEgresos?.toLocaleString() || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Gastos operativos
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ganancia Neta</CardTitle>
+              <DollarSign className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${
+                (financialSummary.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                ${financialSummary.balance?.toLocaleString() || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Balance mensual
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Accesos rápidos */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Accesos Rápidos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Button 
+              variant="outline" 
+              className="h-20 flex flex-col gap-2"
+              onClick={() => navigate("/vehiculos")}
+            >
+              <Car className="h-6 w-6" />
+              <span className="text-sm">Vehículos</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-20 flex flex-col gap-2"
+              onClick={() => navigate("/finanzas")}
+            >
+              <DollarSign className="h-6 w-6" />
+              <span className="text-sm">Finanzas</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-20 flex flex-col gap-2"
+              onClick={() => navigate("/vehiculos")}
+            >
+              <Plus className="h-6 w-6" />
+              <span className="text-sm">Nuevo Vehículo</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-20 flex flex-col gap-2"
+              onClick={() => navigate("/socios")}
+            >
+              <Users className="h-6 w-6" />
+              <span className="text-sm">Socios</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Vehículos recientes y transacciones */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Vehículos en taller */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Vehículos en Taller</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/vehiculos")}>
+              Ver todos
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {allVehiclesAdmin?.slice(0, 5).map((vehicle) => (
+              <div key={vehicle._id} className="flex items-center justify-between border-b border-gray-100 pb-2">
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{vehicle.plate} - {vehicle.brand} {vehicle.model}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant={
+                      vehicle.status === "Listo" ? "default" : 
+                      vehicle.status === "En Reparación" ? "secondary" : "outline"
+                    } className="text-xs">
+                      {vehicle.status}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">{vehicle.owner}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-medium">${vehicle.cost.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(vehicle.entryDate).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {(!allVehiclesAdmin || allVehiclesAdmin.length === 0) && (
+              <div className="text-center py-4 text-gray-500">
+                <Car className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No hay vehículos en el taller</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Transacciones recientes */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Transacciones Recientes</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/finanzas")}>
+              Ver todas
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {recentTransactions?.slice(0, 5).map((transaction) => (
+              <div key={transaction._id} className="flex items-center justify-between border-b border-gray-100 pb-2">
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{transaction.description}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant={transaction.type === "Ingreso" ? "default" : "destructive"} className="text-xs">
+                      {transaction.type}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">{transaction.category}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-medium ${
+                    transaction.type === "Ingreso" ? "text-green-600" : "text-red-600"
+                  }`}>
+                    ${Math.abs(transaction.amount).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(transaction.date).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {(!recentTransactions || recentTransactions.length === 0) && (
+              <div className="text-center py-4 text-gray-500">
+                <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No hay transacciones registradas</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Métricas de rendimiento */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Actividad Reciente</CardTitle>
+            <CardTitle>Rendimiento del Equipo</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Toyota Corolla 2020 - Mantenimiento completo</p>
-                <p className="text-xs text-muted-foreground">Hace 2 horas</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Honda Civic 2019 - Reparación de frenos</p>
-                <p className="text-xs text-muted-foreground">Hace 4 horas</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Ford Focus 2021 - Diagnóstico eléctrico</p>
-                <p className="text-xs text-muted-foreground">Hace 6 horas</p>
-              </div>
+          <CardContent>
+            <div className="space-y-4">
+              {allVehiclesAdmin && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm">Vehículos con mecánico asignado</span>
+                    </div>
+                    <span className="text-sm font-medium">
+                      {allVehiclesAdmin.filter(v => v.responsibles && v.responsibles.length > 0).length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wrench className="h-4 w-4 text-orange-600" />
+                      <span className="text-sm">Trabajos en proceso</span>
+                    </div>
+                    <span className="text-sm font-medium">
+                      {allVehiclesAdmin.filter(v => v.responsibles?.some((r: any) => r.isWorking)).length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-purple-600" />
+                      <span className="text-sm">Vehículos listos para entregar</span>
+                    </div>
+                    <span className="text-sm font-medium">
+                      {allVehiclesAdmin.filter(v => v.status === "Listo").length}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Próximas Citas</CardTitle>
+            <CardTitle>Estado General</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between border-l-4 border-red-500 pl-4">
-              <div>
-                <p className="text-sm font-medium">Chevrolet Aveo 2018</p>
-                <p className="text-xs text-muted-foreground">Cambio de aceite</p>
-              </div>
-              <span className="text-xs text-red-600 font-medium">Urgente</span>
-            </div>
-            <div className="flex items-center justify-between border-l-4 border-yellow-500 pl-4">
-              <div>
-                <p className="text-sm font-medium">Nissan Sentra 2020</p>
-                <p className="text-xs text-muted-foreground">Revisión general</p>
-              </div>
-              <span className="text-xs text-yellow-600 font-medium">Mañana</span>
-            </div>
-            <div className="flex items-center justify-between border-l-4 border-blue-500 pl-4">
-              <div>
-                <p className="text-sm font-medium">Hyundai Elantra 2019</p>
-                <p className="text-xs text-muted-foreground">Alineación y balanceo</p>
-              </div>
-              <span className="text-xs text-blue-600 font-medium">2 días</span>
+          <CardContent>
+            <div className="space-y-4">
+              {allVehiclesAdmin && (
+                <>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-600">
+                      {allVehiclesAdmin.length}
+                    </div>
+                    <p className="text-sm text-muted-foreground">Total vehículos</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <div className="text-lg font-semibold text-orange-600">
+                        {allVehiclesAdmin.filter(v => v.status === "En Reparación").length}
+                      </div>
+                      <p className="text-xs text-muted-foreground">En reparación</p>
+                    </div>
+                    <div>
+                      <div className="text-lg font-semibold text-green-600">
+                        {allVehiclesAdmin.filter(v => v.status === "Listo").length}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Listos</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

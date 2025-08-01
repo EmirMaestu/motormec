@@ -28,6 +28,8 @@ import type * as seedAllData from "../seedAllData.js";
 import type * as seedData from "../seedData.js";
 import type * as transactions from "../transactions.js";
 import type * as vehicles from "../vehicles.js";
+import type * as vehicles_backup from "../vehicles_backup.js";
+import type * as vehicles_simplified from "../vehicles_simplified.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -53,6 +55,8 @@ declare const fullApi: ApiFromModules<{
   seedData: typeof seedData;
   transactions: typeof transactions;
   vehicles: typeof vehicles;
+  vehicles_backup: typeof vehicles_backup;
+  vehicles_simplified: typeof vehicles_simplified;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
