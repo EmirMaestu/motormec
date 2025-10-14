@@ -66,6 +66,7 @@ export default defineSchema({
     year: v.number(),
     owner: v.string(),
     phone: v.string(),
+    customerId: v.optional(v.id("customers")), // Referencia al cliente
     status: v.string(),
     entryDate: v.string(),
     exitDate: v.optional(v.string()),
@@ -105,7 +106,9 @@ export default defineSchema({
       supplier: v.optional(v.string()),
       notes: v.optional(v.string()),
     }))),
-  }),
+  }).index("by_customer", ["customerId"])
+    .index("by_plate", ["plate"])
+    .index("by_status", ["status"]),
 
   // Historial de movimientos de vehículos
   vehicleMovements: defineTable({
@@ -174,6 +177,26 @@ export default defineSchema({
     joinDate: v.string(),
     active: v.boolean(),
   }),
+
+  // Clientes
+  customers: defineTable({
+    name: v.string(),
+    email: v.optional(v.string()),
+    phone: v.string(),
+    address: v.optional(v.string()),
+    documentType: v.optional(v.string()), // "DNI", "CUIT", "Pasaporte", etc.
+    documentNumber: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAt: v.string(),
+    active: v.boolean(),
+    // Métricas del cliente
+    totalVehicles: v.optional(v.number()),
+    totalSpent: v.optional(v.number()),
+    lastVisit: v.optional(v.string()),
+    visitCount: v.optional(v.number()),
+  }).index("by_phone", ["phone"])
+    .index("by_email", ["email"])
+    .index("by_document", ["documentType", "documentNumber"]),
 
   // Transacciones financieras
   transactions: defineTable({

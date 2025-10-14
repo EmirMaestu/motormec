@@ -15,6 +15,7 @@ import { FinanceCards } from "../module-cards"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { useUser } from "@clerk/clerk-react"
+import DateRangeFilter, { type DateRangeValue } from "../ui/date-range-filter"
 
 // Componente para campos con errores (fuera del componente principal)
 const FormField = ({ 
@@ -47,9 +48,48 @@ const FormField = ({
 
 export default function Finance() {
   const { user } = useUser()
-  const transactions = useQuery(api.transactions.getActiveTransactions) ?? []
-  const financialSummary = useQuery(api.transactions.getFinancialSummary)
-  const serviceStats = useQuery(api.transactions.getServiceStats) ?? []
+  
+  // Estado para el filtro de fechas
+  const [dateFilter, setDateFilter] = useState<DateRangeValue>({
+    type: 'thisMonth',
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+    label: 'Este Mes'
+  })
+  
+  // Usar queries filtradas o no filtradas dependiendo del tipo de filtro
+  const allTransactions = useQuery(api.transactions.getActiveTransactions) ?? []
+  const filteredTransactions = useQuery(
+    api.transactions.getTransactionsByDateRange,
+    dateFilter.type !== 'thisMonth' ? {
+      startDate: dateFilter.startDate!,
+      endDate: dateFilter.endDate!
+    } : "skip"
+  )
+  
+  const allFinancialSummary = useQuery(api.transactions.getFinancialSummary)
+  const filteredFinancialSummary = useQuery(
+    api.transactions.getFinancialSummaryByDateRange,
+    dateFilter.type !== 'thisMonth' ? {
+      startDate: dateFilter.startDate!,
+      endDate: dateFilter.endDate!
+    } : "skip"
+  )
+  
+  const allServiceStats = useQuery(api.transactions.getServiceStats) ?? []
+  const filteredServiceStats = useQuery(
+    api.transactions.getServiceStatsByDateRange,
+    dateFilter.type !== 'thisMonth' ? {
+      startDate: dateFilter.startDate!,
+      endDate: dateFilter.endDate!
+    } : "skip"
+  )
+  
+  // Usar datos filtrados o datos generales según el filtro activo
+  const transactions = dateFilter.type !== 'thisMonth' ? (filteredTransactions ?? []) : allTransactions
+  const financialSummary = dateFilter.type !== 'thisMonth' ? filteredFinancialSummary : allFinancialSummary
+  const serviceStats = dateFilter.type !== 'thisMonth' ? (filteredServiceStats ?? []) : allServiceStats
+  
   const categories = useQuery(api.transactions.getCategories)
   const usedCategories = useQuery(api.transactions.getUsedCategories) ?? []
   const createTransaction = useMutation(api.transactions.createTransaction)
@@ -154,6 +194,7 @@ export default function Finance() {
         paymentMethod: newTransaction.paymentMethod,
         notes: enhancedNotes,
       })
+
 
       // Resetear formulario
       setNewTransaction({
@@ -320,7 +361,9 @@ export default function Finance() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Resumen Mensual</CardTitle>
+            <CardTitle>
+              {dateFilter.type === 'thisMonth' ? 'Resumen Mensual' : `Resumen - ${dateFilter.label}`}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
@@ -353,7 +396,9 @@ export default function Finance() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Servicios Más Rentables</CardTitle>
+            <CardTitle>
+              {dateFilter.type === 'thisMonth' ? 'Servicios Más Rentables' : `Servicios Más Rentables - ${dateFilter.label}`}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {serviceStats.length > 0 ? (
@@ -378,11 +423,26 @@ export default function Finance() {
         </Card>
       </div>
 
+      {/* Filtro de fechas */}
+      <DateRangeFilter
+        value={dateFilter}
+        onChange={setDateFilter}
+        compact
+        className="w-full md:w-auto"
+      />
+
       {/* Tabla de transacciones */}
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Transacciones Recientes</CardTitle>
+            <div>
+              <CardTitle>Transacciones Recientes</CardTitle>
+              {dateFilter.type !== 'thisMonth' && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Periodo: {dateFilter.label}
+                </p>
+              )}
+            </div>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="flex items-center gap-2">

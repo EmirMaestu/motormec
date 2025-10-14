@@ -9,6 +9,7 @@ import {
   Package,
   FileText,
   Users,
+  UserCheck,
   ChevronLeft,
   Menu,
   X,
@@ -48,6 +49,12 @@ const navigationItems = [
     color: "text-orange-600",
   },
   {
+    title: "Clientes",
+    icon: UserCheck,
+    path: "/clientes",
+    color: "text-purple-600",
+  },
+  {
     title: "Socios",
     icon: Users,
     path: "/socios",
@@ -66,6 +73,12 @@ const exampleItems = [
     title: "Demo Convex",
     icon: HelpCircle,
     path: "/ejemplos/convex",
+    color: "text-gray-600",
+  },
+  {
+    title: "Demo Clientes",
+    icon: UserCheck,
+    path: "/ejemplos/clientes",
     color: "text-gray-600",
   },
 ];

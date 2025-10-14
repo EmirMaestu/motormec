@@ -54,21 +54,6 @@ export const getTransactionsByCategory = query({
   },
 });
 
-export const getTransactionsByDateRange = query({
-  args: { startDate: v.string(), endDate: v.string() },
-  handler: async (ctx, args) => {
-    const transactions = await ctx.db
-      .query("transactions")
-      .filter((q) => 
-        q.and(
-          q.gte(q.field("date"), args.startDate),
-          q.lte(q.field("date"), args.endDate)
-        )
-      )
-      .collect();
-    return transactions.filter(t => t.active !== false);
-  },
-});
 
 export const createTransaction = mutation({
   args: {
@@ -366,5 +351,137 @@ export const getUsedCategories = query({
     const allTransactions = await ctx.db.query("transactions").collect();
     const usedCategories = [...new Set(allTransactions.map(t => t.category))];
     return usedCategories.filter(Boolean).sort();
+  },
+});
+
+// Obtener transacciones filtradas por rango de fechas
+export const getTransactionsByDateRange = query({
+  args: {
+    startDate: v.string(),
+    endDate: v.string(),
+    includeInactive: v.optional(v.boolean())
+  },
+  handler: async (ctx, args) => {
+    const allTransactions = await ctx.db.query("transactions").collect();
+    
+    const filteredTransactions = allTransactions.filter(transaction => {
+      // Filtrar por estado activo/inactivo
+      if (!args.includeInactive && transaction.active === false) {
+        return false;
+      }
+      
+      // Filtrar por rango de fechas
+      const transactionDate = transaction.date;
+      return transactionDate >= args.startDate && transactionDate <= args.endDate;
+    });
+    
+    return filteredTransactions.sort((a, b) => b.date.localeCompare(a.date));
+  },
+});
+
+// Obtener resumen financiero filtrado por fechas
+export const getFinancialSummaryByDateRange = query({
+  args: {
+    startDate: v.string(),
+    endDate: v.string()
+  },
+  handler: async (ctx, args) => {
+    const transactions = await ctx.db
+      .query("transactions")
+      .filter((q) => 
+        q.and(
+          q.gte(q.field("date"), args.startDate),
+          q.lte(q.field("date"), args.endDate),
+          q.neq(q.field("active"), false)
+        )
+      )
+      .collect();
+
+    const totalIngresos = transactions
+      .filter(t => t.type === "Ingreso")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalEgresos = transactions
+      .filter(t => t.type === "Egreso")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const balance = totalIngresos - totalEgresos;
+
+    // Calcular estadísticas adicionales
+    const transactionCount = transactions.length;
+    const averageTransaction = transactionCount > 0 ? (totalIngresos + totalEgresos) / transactionCount : 0;
+
+    // Agrupar por categorías
+    const categorySummary = transactions.reduce((acc, transaction) => {
+      const category = transaction.category || 'Sin categoría';
+      if (!acc[category]) {
+        acc[category] = { ingresos: 0, egresos: 0, total: 0, count: 0 };
+      }
+      
+      if (transaction.type === 'Ingreso') {
+        acc[category].ingresos += transaction.amount;
+      } else {
+        acc[category].egresos += transaction.amount;
+      }
+      acc[category].total += transaction.amount;
+      acc[category].count += 1;
+      
+      return acc;
+    }, {} as Record<string, { ingresos: number; egresos: number; total: number; count: number }>);
+
+    return {
+      totalIngresos,
+      totalEgresos,
+      balance,
+      transactionCount,
+      averageTransaction,
+      categorySummary,
+      dateRange: {
+        startDate: args.startDate,
+        endDate: args.endDate
+      }
+    };
+  },
+});
+
+// Obtener estadísticas de servicios filtradas por fechas
+export const getServiceStatsByDateRange = query({
+  args: {
+    startDate: v.string(),
+    endDate: v.string()
+  },
+  handler: async (ctx, args) => {
+    const transactions = await ctx.db
+      .query("transactions")
+      .filter((q) => 
+        q.and(
+          q.gte(q.field("date"), args.startDate),
+          q.lte(q.field("date"), args.endDate),
+          q.eq(q.field("type"), "Ingreso"),
+          q.neq(q.field("active"), false)
+        )
+      )
+      .collect();
+
+    const categoryStats = transactions.reduce((acc, transaction) => {
+      const category = transaction.category || 'Sin categoría';
+      if (!acc[category]) {
+        acc[category] = { total: 0, count: 0 };
+      }
+      acc[category].total += transaction.amount;
+      acc[category].count += 1;
+      return acc;
+    }, {} as Record<string, { total: number; count: number }>);
+    
+    const sortedServices = Object.entries(categoryStats)
+      .map(([service, stats]) => ({
+        service,
+        total: stats.total,
+        count: stats.count,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+    
+    return sortedServices;
   },
 });

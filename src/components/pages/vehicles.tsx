@@ -16,6 +16,7 @@ import { Label } from "../ui/label"
 import { VehicleCards } from "../module-cards"
 import { CreatableSelect } from "../ui/creatable-select"
 import { WorkTimer, formatWorkTime } from "../ui/work-timer"
+import DateRangeFilter, { type DateRangeValue } from "../ui/date-range-filter"
 
 // Componente para seleccionar responsables
 function ResponsibleSelector({ 
@@ -172,14 +173,33 @@ export default function Vehicles() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [responsibleFilter, setResponsibleFilter] = useState("all")
+  const [dateFilter, setDateFilter] = useState<DateRangeValue>({
+    type: 'thisMonth',
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+    label: 'Este Mes'
+  })
   
-  // Convex hooks - obtener vehículos según el rol del usuario
-  const allVehicles = useQuery(
+  // Convex hooks - obtener vehículos según el rol del usuario y filtros de fecha
+  const allVehiclesDefault = useQuery(
     api.vehicles.getVehiclesForUser, 
     currentUserId && typeof isAdmin === 'boolean' 
       ? { userId: currentUserId, isAdmin } 
       : "skip"
   ) ?? []
+  
+  const filteredVehiclesByDate = useQuery(
+    api.vehicles.getVehiclesByDateRange,
+    dateFilter.type !== 'thisMonth' && currentUserId && typeof isAdmin === 'boolean' ? {
+      startDate: dateFilter.startDate!,
+      endDate: dateFilter.endDate!,
+      userId: currentUserId,
+      isAdmin
+    } : "skip"
+  ) ?? []
+  
+  // Usar datos filtrados o datos generales según el filtro activo
+  const allVehicles = dateFilter.type !== 'thisMonth' ? filteredVehiclesByDate : allVehiclesDefault
   
   // Aplicar filtros localmente
   const vehiclesInTaller = allVehicles.filter(vehicle => {
@@ -1342,6 +1362,14 @@ export default function Vehicles() {
         <VehicleCards />
       </div>
 
+      {/* Filtro de fechas */}
+      <DateRangeFilter
+        value={dateFilter}
+        onChange={setDateFilter}
+        compact
+        className="w-full md:w-auto"
+      />
+
           {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
@@ -1388,7 +1416,14 @@ export default function Vehicles() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <CardTitle>Vehículos en Taller</CardTitle>
+              <div>
+                <CardTitle>Vehículos en Taller</CardTitle>
+                {dateFilter.type !== 'thisMonth' && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Periodo: {dateFilter.label}
+                  </p>
+                )}
+              </div>
               {!isAdmin && (
                 <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 hidden sm:inline-flex">
                   <User className="h-3 w-3 mr-1" />

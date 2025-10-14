@@ -23,6 +23,7 @@ export const createVehicle = mutation({
     year: v.number(),
     owner: v.string(),
     phone: v.string(),
+    customerId: v.optional(v.id("customers")),
     status: v.string(),
     entryDate: v.string(),
     services: v.array(v.string()),
@@ -45,11 +46,57 @@ export const createVehicle = mutation({
     }))),
   },
   handler: async (ctx, args) => {
+    // Si no se proporciona customerId, intentar encontrar o crear cliente basado en teléfono
+    let customerId = args.customerId;
+    
+    if (!customerId && args.phone) {
+      // Buscar cliente existente por teléfono
+      const existingCustomer = await ctx.db
+        .query("customers")
+        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .filter((q) => q.eq(q.field("active"), true))
+        .first();
+
+      if (existingCustomer) {
+        customerId = existingCustomer._id;
+      } else {
+        // Crear nuevo cliente si no existe
+        customerId = await ctx.db.insert("customers", {
+          name: args.owner,
+          phone: args.phone,
+          createdAt: new Date().toISOString(),
+          active: true,
+          totalVehicles: 0,
+          totalSpent: 0,
+          visitCount: 0,
+        });
+      }
+    }
+
     const vehicleId = await ctx.db.insert("vehicles", {
       ...args,
+      customerId,
       inTaller: true,
       lastUpdated: new Date().toISOString(),
     });
+
+    // Actualizar métricas del cliente si existe
+    if (customerId) {
+      const vehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_customer", (q) => q.eq("customerId", customerId))
+        .collect();
+
+      const totalVehicles = vehicles.length;
+      const totalSpent = vehicles.reduce((sum, vehicle) => sum + vehicle.cost, 0);
+      
+      await ctx.db.patch(customerId, {
+        totalVehicles,
+        totalSpent,
+        lastVisit: args.entryDate,
+        visitCount: totalVehicles,
+      });
+    }
 
     return vehicleId;
   },
@@ -64,6 +111,7 @@ export const updateVehicle = mutation({
     year: v.optional(v.number()),
     owner: v.optional(v.string()),
     phone: v.optional(v.string()),
+    customerId: v.optional(v.id("customers")),
     status: v.optional(v.string()),
     entryDate: v.optional(v.string()),
     exitDate: v.optional(v.string()),
@@ -467,6 +515,224 @@ export const getWorkDaySummary = query({
         owner: v.owner,
         isUserWorking: v.responsibles?.find(r => r.userId === args.userId)?.isWorking || false
       }))
+    };
+  },
+});
+
+// Obtener vehículos con información de cliente
+export const getVehiclesWithCustomers = query({
+  handler: async (ctx) => {
+    const vehicles = await ctx.db.query("vehicles").collect();
+    
+    const vehiclesWithCustomers = await Promise.all(
+      vehicles.map(async (vehicle) => {
+        const customer = vehicle.customerId 
+          ? await ctx.db.get(vehicle.customerId)
+          : null;
+        
+        return {
+          ...vehicle,
+          customer,
+        };
+      })
+    );
+
+    return vehiclesWithCustomers;
+  },
+});
+
+// Obtener vehículo con información de cliente
+export const getVehicleWithCustomer = query({
+  args: { vehicleId: v.id("vehicles") },
+  handler: async (ctx, args) => {
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle) return null;
+
+    const customer = vehicle.customerId 
+      ? await ctx.db.get(vehicle.customerId)
+      : null;
+
+    return {
+      ...vehicle,
+      customer,
+    };
+  },
+});
+
+// Asignar vehículo a cliente existente
+export const assignVehicleToCustomer = mutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+    customerId: v.id("customers"),
+  },
+  handler: async (ctx, args) => {
+    const vehicle = await ctx.db.get(args.vehicleId);
+    const customer = await ctx.db.get(args.customerId);
+
+    if (!vehicle) throw new Error("Vehículo no encontrado");
+    if (!customer) throw new Error("Cliente no encontrado");
+
+    // Actualizar vehículo con nuevo cliente
+    await ctx.db.patch(args.vehicleId, {
+      customerId: args.customerId,
+      owner: customer.name,
+      phone: customer.phone,
+    });
+
+    // Actualizar métricas del cliente anterior (si existe)
+    if (vehicle.customerId && vehicle.customerId !== args.customerId) {
+      const oldCustomerVehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_customer", (q) => q.eq("customerId", vehicle.customerId))
+        .collect();
+
+      const oldTotalVehicles = oldCustomerVehicles.filter(v => v._id !== args.vehicleId).length;
+      const oldTotalSpent = oldCustomerVehicles
+        .filter(v => v._id !== args.vehicleId)
+        .reduce((sum, v) => sum + v.cost, 0);
+
+      await ctx.db.patch(vehicle.customerId, {
+        totalVehicles: oldTotalVehicles,
+        totalSpent: oldTotalSpent,
+        visitCount: oldTotalVehicles,
+      });
+    }
+
+    // Actualizar métricas del nuevo cliente
+    const newCustomerVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_customer", (q) => q.eq("customerId", args.customerId))
+      .collect();
+
+    const newTotalVehicles = newCustomerVehicles.length;
+    const newTotalSpent = newCustomerVehicles.reduce((sum, v) => sum + v.cost, 0);
+    const lastVisit = newCustomerVehicles
+      .sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime())[0]?.entryDate;
+
+    await ctx.db.patch(args.customerId, {
+      totalVehicles: newTotalVehicles,
+      totalSpent: newTotalSpent,
+      lastVisit,
+      visitCount: newTotalVehicles,
+    });
+
+    return args.vehicleId;
+  },
+});
+
+// Obtener vehículos sin cliente asignado
+export const getVehiclesWithoutCustomer = query({
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("vehicles")
+      .filter((q) => q.eq(q.field("customerId"), undefined))
+      .order("desc")
+      .collect();
+  },
+});
+
+// Obtener todos los vehículos con información de cliente (incluye los sin cliente)
+export const getAllVehiclesWithCustomerInfo = query({
+  handler: async (ctx) => {
+    const vehicles = await ctx.db.query("vehicles").order("desc").collect();
+    
+    const vehiclesWithCustomers = await Promise.all(
+      vehicles.map(async (vehicle) => {
+        const customer = vehicle.customerId 
+          ? await ctx.db.get(vehicle.customerId)
+          : null;
+        
+        return {
+          ...vehicle,
+          customer,
+          hasCustomer: !!vehicle.customerId
+        };
+      })
+    );
+
+    return vehiclesWithCustomers;
+  },
+});
+
+// Obtener vehículos filtrados por rango de fechas (fecha de ingreso)
+export const getVehiclesByDateRange = query({
+  args: {
+    startDate: v.string(),
+    endDate: v.string(),
+    userId: v.optional(v.string()),
+    isAdmin: v.optional(v.boolean())
+  },
+  handler: async (ctx, args) => {
+    let vehicles = await ctx.db.query("vehicles").collect();
+    
+    // Filtrar por rango de fechas (fecha de ingreso)
+    vehicles = vehicles.filter(vehicle => {
+      const entryDate = vehicle.entryDate;
+      return entryDate >= args.startDate && entryDate <= args.endDate;
+    });
+
+    // Si no es admin, filtrar solo vehículos asignados al usuario o sin asignar
+    if (args.userId && !args.isAdmin) {
+      vehicles = vehicles.filter(vehicle => {
+        // Sin responsables asignados (está libre para tomar)
+        if (!vehicle.responsibles || vehicle.responsibles.length === 0) {
+          return true;
+        }
+        
+        // Si el usuario está entre los responsables asignados
+        return vehicle.responsibles.some((r: any) => r.userId === args.userId);
+      });
+    }
+
+    return vehicles.sort((a, b) => 
+      new Date(b.lastUpdated || b.entryDate).getTime() - 
+      new Date(a.lastUpdated || a.entryDate).getTime()
+    );
+  },
+});
+
+// Obtener estadísticas de vehículos filtradas por fechas
+export const getVehicleStatsByDateRange = query({
+  args: {
+    startDate: v.string(),
+    endDate: v.string()
+  },
+  handler: async (ctx, args) => {
+    const allVehicles = await ctx.db.query("vehicles").collect();
+    
+    // Filtrar por rango de fechas (fecha de ingreso)
+    const vehicles = allVehicles.filter(vehicle => {
+      const entryDate = vehicle.entryDate;
+      return entryDate >= args.startDate && entryDate <= args.endDate;
+    });
+    
+    return {
+      total: vehicles.length,
+      inTaller: vehicles.filter(v => 
+        v.inTaller === true || 
+        (v.inTaller === undefined && v.status !== "Entregado" && v.status !== "Suspendido")
+      ).length,
+      outOfTaller: vehicles.filter(v => 
+        v.inTaller === false || 
+        (v.inTaller === undefined && (v.status === "Entregado" || v.status === "Suspendido"))
+      ).length,
+      byStatus: {
+        ingresados: vehicles.filter(v => v.status === "Ingresado").length,
+        enReparacion: vehicles.filter(v => v.status === "En Reparación").length,
+        listos: vehicles.filter(v => v.status === "Listo").length,
+        entregados: vehicles.filter(v => v.status === "Entregado").length,
+        suspendidos: vehicles.filter(v => v.status === "Suspendido").length,
+      },
+      totalEarnings: vehicles
+        .filter(v => v.status === "Entregado")
+        .reduce((sum, v) => sum + v.cost, 0),
+      averageCost: vehicles.length > 0 
+        ? vehicles.reduce((sum, v) => sum + v.cost, 0) / vehicles.length 
+        : 0,
+      dateRange: {
+        startDate: args.startDate,
+        endDate: args.endDate
+      }
     };
   },
 });

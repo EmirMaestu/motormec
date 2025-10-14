@@ -11,11 +11,13 @@ import VehicleCostManagement from '../components/pages/VehicleCostManagement';
 import Finance from '../components/pages/finance';
 import Reports from '../components/pages/reports';
 import Partners from '../components/pages/partners';
+import Customers from '../components/pages/customers';
 import StockManagement from '../stock-management';
 
 // Ejemplos y demos
 import CarouselCardsDemo from '../examples/CollapsibleCardsDemo';
 import ConvexUsageExample from '../examples/ConvexUsageExample';
+import CustomersUsageExample from '../examples/CustomersUsageExample';
 
 const AppRouter: React.FC = () => {
   return (
@@ -37,10 +39,12 @@ const AppRouter: React.FC = () => {
             
             {/* Páginas adicionales que podrías necesitar */}
             <Route path="/socios" element={<Partners />} />
+            <Route path="/clientes" element={<Customers />} />
             
             {/* Ejemplos y demos */}
             <Route path="/ejemplos/cards" element={<CarouselCardsDemo />} />
             <Route path="/ejemplos/convex" element={<ConvexUsageExample />} />
+            <Route path="/ejemplos/clientes" element={<CustomersUsageExample />} />
             
             {/* Ruta 404 */}
             <Route path="*" element={

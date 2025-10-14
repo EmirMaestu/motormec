@@ -77,3 +77,30 @@ export const reorderNavigationItems = mutation({
     }
   },
 });
+
+// Función para inicializar el ítem de navegación de clientes
+export const initializeCustomersNavigation = mutation({
+  handler: async (ctx) => {
+    // Verificar si ya existe el ítem de clientes
+    const existingItem = await ctx.db
+      .query("navigationItems")
+      .filter((q) => q.eq(q.field("url"), "/clientes"))
+      .first();
+
+    if (!existingItem) {
+      // Obtener el orden más alto actual
+      const allItems = await ctx.db.query("navigationItems").collect();
+      const maxOrder = Math.max(...allItems.map(item => item.order), 0);
+
+      // Crear el ítem de navegación para clientes
+      await ctx.db.insert("navigationItems", {
+        title: "Clientes",
+        url: "/clientes",
+        icon: "Users",
+        color: "text-purple-600",
+        order: maxOrder + 1,
+        active: true,
+      });
+    }
+  },
+});
