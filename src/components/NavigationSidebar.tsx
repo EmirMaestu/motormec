@@ -13,8 +13,6 @@ import {
   ChevronLeft,
   Menu,
   X,
-  Settings,
-  HelpCircle,
 } from "lucide-react";
 
 const navigationItems = [
@@ -66,27 +64,6 @@ const navigationItems = [
     path: "/socios",
     color: "text-indigo-600",
     adminOnly: true,
-  },
-];
-
-const exampleItems = [
-  {
-    title: "Demo Cards",
-    icon: Settings,
-    path: "/ejemplos/cards",
-    color: "text-gray-600",
-  },
-  {
-    title: "Demo Convex",
-    icon: HelpCircle,
-    path: "/ejemplos/convex",
-    color: "text-gray-600",
-  },
-  {
-    title: "Demo Clientes",
-    icon: UserCheck,
-    path: "/ejemplos/clientes",
-    color: "text-gray-600",
   },
 ];
 

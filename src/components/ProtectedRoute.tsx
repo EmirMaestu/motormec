@@ -1,5 +1,4 @@
-import { ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { type ReactNode } from "react";
 import { useOrganization } from "@clerk/clerk-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Shield } from "lucide-react";
