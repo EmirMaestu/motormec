@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "../lib/utils";
-import { UserButton, useUser } from "@clerk/clerk-react";
+import { UserButton, useUser, useOrganization } from "@clerk/clerk-react";
 import {
   BarChart3,
   Car,
@@ -23,42 +23,49 @@ const navigationItems = [
     icon: BarChart3,
     path: "/dashboard",
     color: "text-blue-600",
+    adminOnly: false,
   },
   {
     title: "Vehículos",
     icon: Car,
     path: "/vehiculos",
     color: "text-green-600",
+    adminOnly: false,
   },
   {
     title: "Inventario",
     icon: Package,
     path: "/inventario",
     color: "text-purple-600",
+    adminOnly: false,
   },
   {
     title: "Finanzas",
     icon: DollarSign,
     path: "/finanzas",
     color: "text-emerald-600",
+    adminOnly: true,
   },
   {
     title: "Reportes",
     icon: FileText,
     path: "/reportes",
     color: "text-orange-600",
+    adminOnly: true,
   },
   {
     title: "Clientes",
     icon: UserCheck,
     path: "/clientes",
     color: "text-purple-600",
+    adminOnly: true,
   },
   {
     title: "Socios",
     icon: Users,
     path: "/socios",
     color: "text-indigo-600",
+    adminOnly: true,
   },
 ];
 
@@ -88,6 +95,10 @@ export default function NavigationSidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   const { user } = useUser();
+  const { membership } = useOrganization();
+
+  // Determinar si el usuario es admin
+  const isAdmin = membership?.role === "org:admin";
 
   // Cargar estado del sidebar desde localStorage
   useEffect(() => {
@@ -109,6 +120,11 @@ export default function NavigationSidebar() {
   const toggleMobile = () => {
     setIsMobileOpen(!isMobileOpen);
   };
+
+  // Filtrar elementos de navegación basados en el rol
+  const filteredNavigationItems = navigationItems.filter(
+    (item) => !item.adminOnly || isAdmin
+  );
 
   return (
     <>
@@ -181,7 +197,7 @@ export default function NavigationSidebar() {
                 Principal
               </p>
             )}
-            {navigationItems.map((item) => {
+            {filteredNavigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
 
@@ -224,7 +240,7 @@ export default function NavigationSidebar() {
           </div>
 
           {/* Ejemplos */}
-          <div className="pt-6 space-y-1">
+          {/* <div className="pt-6 space-y-1">
             {!isCollapsed && (
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-3">
                 Ejemplos
@@ -259,7 +275,6 @@ export default function NavigationSidebar() {
                     <span className="truncate">{item.title}</span>
                   )}
 
-                  {/* Tooltip para modo colapsado */}
                   {isCollapsed && (
                     <div className="absolute left-16 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
                       {item.title}
@@ -268,7 +283,7 @@ export default function NavigationSidebar() {
                 </Link>
               );
             })}
-          </div>
+          </div> */}
         </nav>
 
         {/* Footer del sidebar con UserButton */}

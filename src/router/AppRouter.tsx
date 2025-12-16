@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 import LayoutWithRouter from '../components/LayoutWithRouter';
+import ProtectedRoute from '../components/ProtectedRoute';
 
 // Páginas principales
 import Dashboard from '../components/pages/dashboard';
@@ -32,14 +33,34 @@ const AppRouter: React.FC = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/vehiculos" element={<Vehicles />} />
             <Route path="/vehiculos/historial" element={<VehicleHistory />} />
-            <Route path="/vehiculos/:vehicleId/costos" element={<VehicleCostManagement />} />
-            <Route path="/finanzas" element={<Finance />} />
+            <Route path="/vehiculos/:vehicleId/costos" element={
+              <ProtectedRoute adminOnly={true}>
+                <VehicleCostManagement />
+              </ProtectedRoute>
+            } />
+            <Route path="/finanzas" element={
+              <ProtectedRoute adminOnly={true}>
+                <Finance />
+              </ProtectedRoute>
+            } />
             <Route path="/inventario" element={<StockManagement />} />
-            <Route path="/reportes" element={<Reports />} />
+            <Route path="/reportes" element={
+              <ProtectedRoute adminOnly={true}>
+                <Reports />
+              </ProtectedRoute>
+            } />
             
             {/* Páginas adicionales que podrías necesitar */}
-            <Route path="/socios" element={<Partners />} />
-            <Route path="/clientes" element={<Customers />} />
+            <Route path="/socios" element={
+              <ProtectedRoute adminOnly={true}>
+                <Partners />
+              </ProtectedRoute>
+            } />
+            <Route path="/clientes" element={
+              <ProtectedRoute adminOnly={true}>
+                <Customers />
+              </ProtectedRoute>
+            } />
             
             {/* Ejemplos y demos */}
             <Route path="/ejemplos/cards" element={<CarouselCardsDemo />} />

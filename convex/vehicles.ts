@@ -29,26 +29,34 @@ export const createVehicle = mutation({
     services: v.array(v.string()),
     cost: v.number(),
     description: v.optional(v.string()),
-    responsibles: v.optional(v.array(v.object({
-      name: v.string(),
-      assignedAt: v.string(),
-      role: v.optional(v.string()),
-      userId: v.optional(v.string()),
-      isAdmin: v.optional(v.boolean()),
-      isWorking: v.optional(v.boolean()),
-      workStartedAt: v.optional(v.string()),
-      totalWorkTime: v.optional(v.number()),
-      workSessions: v.optional(v.array(v.object({
-        startTime: v.string(),
-        endTime: v.optional(v.string()),
-        duration: v.optional(v.number()),
-      }))),
-    }))),
+    responsibles: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          assignedAt: v.string(),
+          role: v.optional(v.string()),
+          userId: v.optional(v.string()),
+          isAdmin: v.optional(v.boolean()),
+          isWorking: v.optional(v.boolean()),
+          workStartedAt: v.optional(v.string()),
+          totalWorkTime: v.optional(v.number()),
+          workSessions: v.optional(
+            v.array(
+              v.object({
+                startTime: v.string(),
+                endTime: v.optional(v.string()),
+                duration: v.optional(v.number()),
+              })
+            )
+          ),
+        })
+      )
+    ),
   },
   handler: async (ctx, args) => {
     // Si no se proporciona customerId, intentar encontrar o crear cliente basado en teléfono
     let customerId = args.customerId;
-    
+
     if (!customerId && args.phone) {
       // Buscar cliente existente por teléfono
       const existingCustomer = await ctx.db
@@ -88,8 +96,11 @@ export const createVehicle = mutation({
         .collect();
 
       const totalVehicles = vehicles.length;
-      const totalSpent = vehicles.reduce((sum, vehicle) => sum + vehicle.cost, 0);
-      
+      const totalSpent = vehicles.reduce(
+        (sum, vehicle) => sum + vehicle.cost,
+        0
+      );
+
       await ctx.db.patch(customerId, {
         totalVehicles,
         totalSpent,
@@ -119,40 +130,54 @@ export const updateVehicle = mutation({
     cost: v.optional(v.number()),
     description: v.optional(v.string()),
     inTaller: v.optional(v.boolean()),
-    responsibles: v.optional(v.array(v.object({
-      name: v.string(),
-      assignedAt: v.string(),
-      role: v.optional(v.string()),
-      userId: v.optional(v.string()),
-      isAdmin: v.optional(v.boolean()),
-      isWorking: v.optional(v.boolean()),
-      workStartedAt: v.optional(v.string()),
-      totalWorkTime: v.optional(v.number()),
-      workSessions: v.optional(v.array(v.object({
-        startTime: v.string(),
-        endTime: v.optional(v.string()),
-        duration: v.optional(v.number()),
-      }))),
-    }))),
-    parts: v.optional(v.array(v.object({
-      id: v.string(),
-      name: v.string(),
-      price: v.number(),
-      quantity: v.number(),
-      source: v.union(v.literal("purchased"), v.literal("client")),
-      supplier: v.optional(v.string()),
-      notes: v.optional(v.string()),
-    }))),
-    costs: v.optional(v.object({
-      laborCost: v.optional(v.number()),
-      partsCost: v.optional(v.number()),
-      totalCost: v.optional(v.number()),
-    })),
+    responsibles: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          assignedAt: v.string(),
+          role: v.optional(v.string()),
+          userId: v.optional(v.string()),
+          isAdmin: v.optional(v.boolean()),
+          isWorking: v.optional(v.boolean()),
+          workStartedAt: v.optional(v.string()),
+          totalWorkTime: v.optional(v.number()),
+          workSessions: v.optional(
+            v.array(
+              v.object({
+                startTime: v.string(),
+                endTime: v.optional(v.string()),
+                duration: v.optional(v.number()),
+              })
+            )
+          ),
+        })
+      )
+    ),
+    parts: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          name: v.string(),
+          price: v.number(),
+          quantity: v.number(),
+          source: v.union(v.literal("purchased"), v.literal("client")),
+          supplier: v.optional(v.string()),
+          notes: v.optional(v.string()),
+        })
+      )
+    ),
+    costs: v.optional(
+      v.object({
+        laborCost: v.optional(v.number()),
+        partsCost: v.optional(v.number()),
+        totalCost: v.optional(v.number()),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
     const previousVehicle = await ctx.db.get(id);
-    
+
     if (!previousVehicle) {
       throw new Error("Vehículo no encontrado");
     }
@@ -160,7 +185,7 @@ export const updateVehicle = mutation({
     // Si se está entregando o suspendiendo, marcar como fuera del taller
     const { status } = updates;
     let newData: any = {};
-    
+
     if (status === "Entregado" || status === "Suspendido") {
       const exitDate = new Date().toISOString();
       newData = {
@@ -170,7 +195,7 @@ export const updateVehicle = mutation({
         exitDate,
         lastUpdated: exitDate,
       };
-      
+
       await ctx.db.patch(id, newData);
     } else if (status) {
       // Si el estado cambia a cualquier otro estado, marcar como en taller
@@ -181,18 +206,18 @@ export const updateVehicle = mutation({
         exitDate: undefined, // Limpiar fecha de salida si regresa al taller
         lastUpdated: new Date().toISOString(),
       };
-      
+
       await ctx.db.patch(id, newData);
     } else {
       // Para otros cambios
       const hasChanges = Object.keys(updates).length > 0;
-      
+
       if (hasChanges) {
         newData = {
           ...updates,
           lastUpdated: new Date().toISOString(),
         };
-        
+
         await ctx.db.patch(id, newData);
       }
     }
@@ -216,7 +241,7 @@ export const getVehiclesOutOfTaller = query({
   handler: async (ctx) => {
     return await ctx.db
       .query("vehicles")
-      .filter((q) => 
+      .filter((q) =>
         q.and(
           q.eq(q.field("inTaller"), false),
           q.or(
@@ -237,20 +262,20 @@ export const getVehiclesForUser = query({
   },
   handler: async (ctx, args) => {
     const allVehicles = await ctx.db.query("vehicles").collect();
-    
+
     if (args.isAdmin) {
       // Admin puede ver todos los vehículos
-      return allVehicles.filter(vehicle => vehicle.inTaller);
+      return allVehicles.filter((vehicle) => vehicle.inTaller);
     } else {
       // Miembros solo ven vehículos asignados a ellos o sin asignar
-      return allVehicles.filter(vehicle => {
+      return allVehicles.filter((vehicle) => {
         if (!vehicle.inTaller) return false;
-        
+
         // Sin responsables = disponible para cualquier miembro
         if (!vehicle.responsibles || vehicle.responsibles.length === 0) {
           return true;
         }
-        
+
         // Con responsables = solo si el usuario está asignado
         return vehicle.responsibles.some((r: any) => r.userId === args.userId);
       });
@@ -270,7 +295,9 @@ export const startWorkOnVehicle = mutation({
     if (!vehicle) throw new Error("Vehículo no encontrado");
 
     const responsibles = vehicle.responsibles || [];
-    let userIndex = responsibles.findIndex((r: any) => r.userId === args.userId);
+    let userIndex = responsibles.findIndex(
+      (r: any) => r.userId === args.userId
+    );
 
     // Si el usuario no está asignado, agregarlo
     const wasAlreadyAssigned = userIndex >= 0;
@@ -291,19 +318,27 @@ export const startWorkOnVehicle = mutation({
     // Iniciar trabajo
     const user = responsibles[userIndex];
     const startTime = new Date().toISOString();
-    
+
     user.isWorking = true;
     user.workStartedAt = startTime;
-    
+
     if (!user.workSessions) user.workSessions = [];
     user.workSessions.push({
       startTime,
     });
 
-    await ctx.db.patch(args.vehicleId, {
+    // Cambiar el estado del vehículo a "En Reparación" cuando se inicia el trabajo
+    const updateData: any = {
       responsibles,
       lastUpdated: new Date().toISOString(),
-    });
+    };
+
+    // Solo cambiar el estado si no está ya en "En Reparación"
+    if (vehicle.status !== "En Reparación") {
+      updateData.status = "En Reparación";
+    }
+
+    await ctx.db.patch(args.vehicleId, updateData);
 
     return args.vehicleId;
   },
@@ -319,30 +354,33 @@ export const pauseWorkOnVehicle = mutation({
     if (!vehicle) throw new Error("Vehículo no encontrado");
 
     const responsibles = vehicle.responsibles || [];
-    const userIndex = responsibles.findIndex((r: any) => r.userId === args.userId);
-    
+    const userIndex = responsibles.findIndex(
+      (r: any) => r.userId === args.userId
+    );
+
     if (userIndex === -1) {
       throw new Error("Usuario no asignado a este vehículo");
     }
 
     const user = responsibles[userIndex];
-    
+
     if (!user.isWorking) {
       throw new Error("El usuario no está trabajando en este vehículo");
     }
 
     const endTime = new Date().toISOString();
     const startTime = user.workStartedAt;
-    
+
     if (startTime) {
-      const duration = new Date(endTime).getTime() - new Date(startTime).getTime();
-      
+      const duration =
+        new Date(endTime).getTime() - new Date(startTime).getTime();
+
       // Actualizar la sesión más reciente
       if (user.workSessions && user.workSessions.length > 0) {
         const lastSession = user.workSessions[user.workSessions.length - 1];
         lastSession.endTime = endTime;
         lastSession.duration = duration;
-        
+
         // Actualizar tiempo total
         user.totalWorkTime = (user.totalWorkTime || 0) + duration;
       }
@@ -356,9 +394,9 @@ export const pauseWorkOnVehicle = mutation({
       lastUpdated: new Date().toISOString(),
     });
 
-    return { 
-      vehicleId: args.vehicleId, 
-      workDuration: user.workSessions?.[user.workSessions.length - 1]?.duration 
+    return {
+      vehicleId: args.vehicleId,
+      workDuration: user.workSessions?.[user.workSessions.length - 1]?.duration,
     };
   },
 });
@@ -373,8 +411,10 @@ export const completeWorkOnVehicle = mutation({
     if (!vehicle) throw new Error("Vehículo no encontrado");
 
     const responsibles = vehicle.responsibles || [];
-    const userIndex = responsibles.findIndex((r: any) => r.userId === args.userId);
-    
+    const userIndex = responsibles.findIndex(
+      (r: any) => r.userId === args.userId
+    );
+
     if (userIndex === -1) {
       throw new Error("Usuario no asignado a este vehículo");
     }
@@ -385,16 +425,17 @@ export const completeWorkOnVehicle = mutation({
     if (user.isWorking) {
       const endTime = new Date().toISOString();
       const startTime = user.workStartedAt;
-      
+
       if (startTime) {
-        workDuration = new Date(endTime).getTime() - new Date(startTime).getTime();
-        
+        workDuration =
+          new Date(endTime).getTime() - new Date(startTime).getTime();
+
         // Actualizar la sesión más reciente
         if (user.workSessions && user.workSessions.length > 0) {
           const lastSession = user.workSessions[user.workSessions.length - 1];
           lastSession.endTime = endTime;
           lastSession.duration = workDuration;
-          
+
           // Actualizar tiempo total
           user.totalWorkTime = (user.totalWorkTime || 0) + workDuration;
         }
@@ -418,13 +459,19 @@ export const getVehiclesInTaller = query({
   args: {},
   handler: async (ctx) => {
     const vehicles = await ctx.db.query("vehicles").collect();
-    return vehicles.filter(v => 
-      v.inTaller === true || 
-      (v.inTaller === undefined && v.status !== "Entregado" && v.status !== "Suspendido")
-    ).sort((a, b) => 
-      new Date(b.lastUpdated || b.entryDate).getTime() - 
-      new Date(a.lastUpdated || a.entryDate).getTime()
-    );
+    return vehicles
+      .filter(
+        (v) =>
+          v.inTaller === true ||
+          (v.inTaller === undefined &&
+            v.status !== "Entregado" &&
+            v.status !== "Suspendido")
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.lastUpdated || b.entryDate).getTime() -
+          new Date(a.lastUpdated || a.entryDate).getTime()
+      );
   },
 });
 
@@ -433,26 +480,33 @@ export const getVehicleStats = query({
   args: {},
   handler: async (ctx) => {
     const allVehicles = await ctx.db.query("vehicles").collect();
-    
+
     return {
       total: allVehicles.length,
-      inTaller: allVehicles.filter(v => 
-        v.inTaller === true || 
-        (v.inTaller === undefined && v.status !== "Entregado" && v.status !== "Suspendido")
+      inTaller: allVehicles.filter(
+        (v) =>
+          v.inTaller === true ||
+          (v.inTaller === undefined &&
+            v.status !== "Entregado" &&
+            v.status !== "Suspendido")
       ).length,
-      outOfTaller: allVehicles.filter(v => 
-        v.inTaller === false || 
-        (v.inTaller === undefined && (v.status === "Entregado" || v.status === "Suspendido"))
+      outOfTaller: allVehicles.filter(
+        (v) =>
+          v.inTaller === false ||
+          (v.inTaller === undefined &&
+            (v.status === "Entregado" || v.status === "Suspendido"))
       ).length,
       byStatus: {
-        ingresados: allVehicles.filter(v => v.status === "Ingresado").length,
-        enReparacion: allVehicles.filter(v => v.status === "En Reparación").length,
-        listos: allVehicles.filter(v => v.status === "Listo").length,
-        entregados: allVehicles.filter(v => v.status === "Entregado").length,
-        suspendidos: allVehicles.filter(v => v.status === "Suspendido").length,
+        ingresados: allVehicles.filter((v) => v.status === "Ingresado").length,
+        enReparacion: allVehicles.filter((v) => v.status === "En Reparación")
+          .length,
+        listos: allVehicles.filter((v) => v.status === "Listo").length,
+        entregados: allVehicles.filter((v) => v.status === "Entregado").length,
+        suspendidos: allVehicles.filter((v) => v.status === "Suspendido")
+          .length,
       },
       totalEarnings: allVehicles
-        .filter(v => v.status === "Entregado")
+        .filter((v) => v.status === "Entregado")
         .reduce((sum, v) => sum + v.cost, 0),
     };
   },
@@ -460,19 +514,20 @@ export const getVehicleStats = query({
 
 // Función para cerrar el día de trabajo de un mecánico
 export const closeWorkDay = mutation({
-  args: { 
+  args: {
     userId: v.string(),
-    notes: v.optional(v.string())
+    notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const vehicles = await ctx.db.query("vehicles").collect();
     let updatedCount = 0;
-    
+
     // Buscar todos los vehículos asignados al usuario que están "En Reparación"
     for (const vehicle of vehicles) {
-      if (vehicle.responsibles?.some(r => r.userId === args.userId) && 
-          vehicle.status === "En Reparación") {
-        
+      if (
+        vehicle.responsibles?.some((r) => r.userId === args.userId) &&
+        vehicle.status === "En Reparación"
+      ) {
         // Marcar como "Listo" los vehículos que estaban en reparación
         await ctx.db.patch(vehicle._id, {
           status: "Listo",
@@ -481,10 +536,10 @@ export const closeWorkDay = mutation({
         updatedCount++;
       }
     }
-    
-    return { 
+
+    return {
       updatedCount,
-      message: `Se actualizaron ${updatedCount} vehículos a estado "Listo"`
+      message: `Se actualizaron ${updatedCount} vehículos a estado "Listo"`,
     };
   },
 });
@@ -494,18 +549,18 @@ export const getWorkDaySummary = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
     const vehicles = await ctx.db.query("vehicles").collect();
-    
-    const userVehicles = vehicles.filter(vehicle => 
-      vehicle.responsibles?.some(r => r.userId === args.userId)
+
+    const userVehicles = vehicles.filter((vehicle) =>
+      vehicle.responsibles?.some((r) => r.userId === args.userId)
     );
-    
+
     return {
       totalAssigned: userVehicles.length,
-      inProgress: userVehicles.filter(v => 
-        v.responsibles?.some(r => r.userId === args.userId && r.isWorking)
+      inProgress: userVehicles.filter((v) =>
+        v.responsibles?.some((r) => r.userId === args.userId && r.isWorking)
       ).length,
-      completed: userVehicles.filter(v => v.status === "Listo").length,
-      vehicles: userVehicles.map(v => ({
+      completed: userVehicles.filter((v) => v.status === "Listo").length,
+      vehicles: userVehicles.map((v) => ({
         id: v._id,
         plate: v.plate,
         brand: v.brand,
@@ -513,8 +568,10 @@ export const getWorkDaySummary = query({
         status: v.status,
         services: v.services,
         owner: v.owner,
-        isUserWorking: v.responsibles?.find(r => r.userId === args.userId)?.isWorking || false
-      }))
+        isUserWorking:
+          v.responsibles?.find((r) => r.userId === args.userId)?.isWorking ||
+          false,
+      })),
     };
   },
 });
@@ -523,13 +580,13 @@ export const getWorkDaySummary = query({
 export const getVehiclesWithCustomers = query({
   handler: async (ctx) => {
     const vehicles = await ctx.db.query("vehicles").collect();
-    
+
     const vehiclesWithCustomers = await Promise.all(
       vehicles.map(async (vehicle) => {
-        const customer = vehicle.customerId 
+        const customer = vehicle.customerId
           ? await ctx.db.get(vehicle.customerId)
           : null;
-        
+
         return {
           ...vehicle,
           customer,
@@ -548,7 +605,7 @@ export const getVehicleWithCustomer = query({
     const vehicle = await ctx.db.get(args.vehicleId);
     if (!vehicle) return null;
 
-    const customer = vehicle.customerId 
+    const customer = vehicle.customerId
       ? await ctx.db.get(vehicle.customerId)
       : null;
 
@@ -586,9 +643,11 @@ export const assignVehicleToCustomer = mutation({
         .withIndex("by_customer", (q) => q.eq("customerId", vehicle.customerId))
         .collect();
 
-      const oldTotalVehicles = oldCustomerVehicles.filter(v => v._id !== args.vehicleId).length;
+      const oldTotalVehicles = oldCustomerVehicles.filter(
+        (v) => v._id !== args.vehicleId
+      ).length;
       const oldTotalSpent = oldCustomerVehicles
-        .filter(v => v._id !== args.vehicleId)
+        .filter((v) => v._id !== args.vehicleId)
         .reduce((sum, v) => sum + v.cost, 0);
 
       await ctx.db.patch(vehicle.customerId, {
@@ -605,9 +664,14 @@ export const assignVehicleToCustomer = mutation({
       .collect();
 
     const newTotalVehicles = newCustomerVehicles.length;
-    const newTotalSpent = newCustomerVehicles.reduce((sum, v) => sum + v.cost, 0);
-    const lastVisit = newCustomerVehicles
-      .sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime())[0]?.entryDate;
+    const newTotalSpent = newCustomerVehicles.reduce(
+      (sum, v) => sum + v.cost,
+      0
+    );
+    const lastVisit = newCustomerVehicles.sort(
+      (a, b) =>
+        new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+    )[0]?.entryDate;
 
     await ctx.db.patch(args.customerId, {
       totalVehicles: newTotalVehicles,
@@ -635,17 +699,17 @@ export const getVehiclesWithoutCustomer = query({
 export const getAllVehiclesWithCustomerInfo = query({
   handler: async (ctx) => {
     const vehicles = await ctx.db.query("vehicles").order("desc").collect();
-    
+
     const vehiclesWithCustomers = await Promise.all(
       vehicles.map(async (vehicle) => {
-        const customer = vehicle.customerId 
+        const customer = vehicle.customerId
           ? await ctx.db.get(vehicle.customerId)
           : null;
-        
+
         return {
           ...vehicle,
           customer,
-          hasCustomer: !!vehicle.customerId
+          hasCustomer: !!vehicle.customerId,
         };
       })
     );
@@ -660,33 +724,39 @@ export const getVehiclesByDateRange = query({
     startDate: v.string(),
     endDate: v.string(),
     userId: v.optional(v.string()),
-    isAdmin: v.optional(v.boolean())
+    isAdmin: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     let vehicles = await ctx.db.query("vehicles").collect();
-    
+
     // Filtrar por rango de fechas (fecha de ingreso)
-    vehicles = vehicles.filter(vehicle => {
+    // Agregar tiempo al final del día para incluir todas las horas del endDate
+    const endDatePlusOne = new Date(args.endDate);
+    endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
+    const endDateStr = endDatePlusOne.toISOString();
+
+    vehicles = vehicles.filter((vehicle) => {
       const entryDate = vehicle.entryDate;
-      return entryDate >= args.startDate && entryDate <= args.endDate;
+      return entryDate >= args.startDate && entryDate < endDateStr;
     });
 
     // Si no es admin, filtrar solo vehículos asignados al usuario o sin asignar
     if (args.userId && !args.isAdmin) {
-      vehicles = vehicles.filter(vehicle => {
+      vehicles = vehicles.filter((vehicle) => {
         // Sin responsables asignados (está libre para tomar)
         if (!vehicle.responsibles || vehicle.responsibles.length === 0) {
           return true;
         }
-        
+
         // Si el usuario está entre los responsables asignados
         return vehicle.responsibles.some((r: any) => r.userId === args.userId);
       });
     }
 
-    return vehicles.sort((a, b) => 
-      new Date(b.lastUpdated || b.entryDate).getTime() - 
-      new Date(a.lastUpdated || a.entryDate).getTime()
+    return vehicles.sort(
+      (a, b) =>
+        new Date(b.lastUpdated || b.entryDate).getTime() -
+        new Date(a.lastUpdated || a.entryDate).getTime()
     );
   },
 });
@@ -695,44 +765,56 @@ export const getVehiclesByDateRange = query({
 export const getVehicleStatsByDateRange = query({
   args: {
     startDate: v.string(),
-    endDate: v.string()
+    endDate: v.string(),
   },
   handler: async (ctx, args) => {
     const allVehicles = await ctx.db.query("vehicles").collect();
-    
+
     // Filtrar por rango de fechas (fecha de ingreso)
-    const vehicles = allVehicles.filter(vehicle => {
+    // Agregar tiempo al final del día para incluir todas las horas del endDate
+    const endDatePlusOne = new Date(args.endDate);
+    endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
+    const endDateStr = endDatePlusOne.toISOString();
+
+    const vehicles = allVehicles.filter((vehicle) => {
       const entryDate = vehicle.entryDate;
-      return entryDate >= args.startDate && entryDate <= args.endDate;
+      return entryDate >= args.startDate && entryDate < endDateStr;
     });
-    
+
     return {
       total: vehicles.length,
-      inTaller: vehicles.filter(v => 
-        v.inTaller === true || 
-        (v.inTaller === undefined && v.status !== "Entregado" && v.status !== "Suspendido")
+      inTaller: vehicles.filter(
+        (v) =>
+          v.inTaller === true ||
+          (v.inTaller === undefined &&
+            v.status !== "Entregado" &&
+            v.status !== "Suspendido")
       ).length,
-      outOfTaller: vehicles.filter(v => 
-        v.inTaller === false || 
-        (v.inTaller === undefined && (v.status === "Entregado" || v.status === "Suspendido"))
+      outOfTaller: vehicles.filter(
+        (v) =>
+          v.inTaller === false ||
+          (v.inTaller === undefined &&
+            (v.status === "Entregado" || v.status === "Suspendido"))
       ).length,
       byStatus: {
-        ingresados: vehicles.filter(v => v.status === "Ingresado").length,
-        enReparacion: vehicles.filter(v => v.status === "En Reparación").length,
-        listos: vehicles.filter(v => v.status === "Listo").length,
-        entregados: vehicles.filter(v => v.status === "Entregado").length,
-        suspendidos: vehicles.filter(v => v.status === "Suspendido").length,
+        ingresados: vehicles.filter((v) => v.status === "Ingresado").length,
+        enReparacion: vehicles.filter((v) => v.status === "En Reparación")
+          .length,
+        listos: vehicles.filter((v) => v.status === "Listo").length,
+        entregados: vehicles.filter((v) => v.status === "Entregado").length,
+        suspendidos: vehicles.filter((v) => v.status === "Suspendido").length,
       },
       totalEarnings: vehicles
-        .filter(v => v.status === "Entregado")
+        .filter((v) => v.status === "Entregado")
         .reduce((sum, v) => sum + v.cost, 0),
-      averageCost: vehicles.length > 0 
-        ? vehicles.reduce((sum, v) => sum + v.cost, 0) / vehicles.length 
-        : 0,
+      averageCost:
+        vehicles.length > 0
+          ? vehicles.reduce((sum, v) => sum + v.cost, 0) / vehicles.length
+          : 0,
       dateRange: {
         startDate: args.startDate,
-        endDate: args.endDate
-      }
+        endDate: args.endDate,
+      },
     };
   },
 });
