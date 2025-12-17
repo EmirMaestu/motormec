@@ -9,6 +9,7 @@ import Dashboard from '../components/pages/dashboard';
 import Vehicles from '../components/pages/vehicles';
 import VehicleHistory from '../components/pages/VehicleHistory';
 import VehicleCostManagement from '../components/pages/VehicleCostManagement';
+import ImportVehicles from '../components/pages/ImportVehicles';
 import Finance from '../components/pages/finance';
 import Reports from '../components/pages/reports';
 import Partners from '../components/pages/partners';
@@ -33,6 +34,11 @@ const AppRouter: React.FC = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/vehiculos" element={<Vehicles />} />
             <Route path="/vehiculos/historial" element={<VehicleHistory />} />
+            <Route path="/vehiculos/importar" element={
+              <ProtectedRoute adminOnly={true}>
+                <ImportVehicles />
+              </ProtectedRoute>
+            } />
             <Route path="/vehiculos/:vehicleId/costos" element={
               <ProtectedRoute adminOnly={true}>
                 <VehicleCostManagement />

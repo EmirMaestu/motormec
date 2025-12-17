@@ -81,10 +81,15 @@ export const createVehicle = mutation({
       }
     }
 
+    // Determinar si el vehículo está en el taller según su estado
+    const isInTaller =
+      args.status !== "Entregado" && args.status !== "Suspendido";
+
     const vehicleId = await ctx.db.insert("vehicles", {
       ...args,
       customerId,
-      inTaller: true,
+      inTaller: isInTaller,
+      exitDate: !isInTaller ? new Date().toISOString() : undefined,
       lastUpdated: new Date().toISOString(),
     });
 
@@ -815,6 +820,35 @@ export const getVehicleStatsByDateRange = query({
         startDate: args.startDate,
         endDate: args.endDate,
       },
+    };
+  },
+});
+
+// Función de migración para corregir vehículos entregados
+export const fixDeliveredVehicles = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const allVehicles = await ctx.db.query("vehicles").collect();
+    let updated = 0;
+
+    for (const vehicle of allVehicles) {
+      // Si el vehículo está "Entregado" o "Suspendido" pero inTaller es true, corregirlo
+      if (
+        (vehicle.status === "Entregado" || vehicle.status === "Suspendido") &&
+        vehicle.inTaller !== false
+      ) {
+        await ctx.db.patch(vehicle._id, {
+          inTaller: false,
+          exitDate: vehicle.exitDate || new Date().toISOString(),
+          lastUpdated: new Date().toISOString(),
+        });
+        updated++;
+      }
+    }
+
+    return {
+      updated,
+      message: `Se actualizaron ${updated} vehículos entregados/suspendidos`,
     };
   },
 });
