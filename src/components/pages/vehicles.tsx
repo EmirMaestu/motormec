@@ -4,6 +4,10 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useOrganization, useUser } from "@clerk/clerk-react";
 import {
+  formatDateToDDMMYYYY,
+  formatDateTimeToLocal,
+} from "../../lib/dateUtils";
+import {
   Plus,
   Search,
   Filter,
@@ -1381,14 +1385,7 @@ export default function Vehicles() {
                       Fecha de Ingreso
                     </label>
                     <p className="mt-1 text-sm text-gray-900 font-medium">
-                      {new Date(detailVehicle.entryDate).toLocaleDateString(
-                        "es-ES",
-                        {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        }
-                      )}
+                      {formatDateToDDMMYYYY(detailVehicle.entryDate)}
                     </p>
                   </div>
                   {detailVehicle.exitDate && (
@@ -1397,14 +1394,7 @@ export default function Vehicles() {
                         Fecha de Salida
                       </label>
                       <p className="mt-1 text-sm text-gray-900 font-medium">
-                        {new Date(detailVehicle.exitDate).toLocaleDateString(
-                          "es-ES",
-                          {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          }
-                        )}
+                        {formatDateToDDMMYYYY(detailVehicle.exitDate)}
                       </p>
                     </div>
                   )}
@@ -1413,15 +1403,9 @@ export default function Vehicles() {
                       Última Actualización
                     </label>
                     <p className="mt-1 text-sm text-gray-600">
-                      {new Date(
+                      {formatDateTimeToLocal(
                         detailVehicle.lastUpdated || detailVehicle.entryDate
-                      ).toLocaleDateString("es-ES", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1483,9 +1467,9 @@ export default function Vehicles() {
                                     <p className="text-sm text-gray-600">
                                       {responsible.role || "Mecánico"} •
                                       Asignado el{" "}
-                                      {new Date(
+                                      {formatDateToDDMMYYYY(
                                         responsible.assignedAt
-                                      ).toLocaleDateString("es-ES")}
+                                      )}
                                     </p>
                                   </div>
                                   {responsible.isAdmin && (
@@ -1546,30 +1530,15 @@ export default function Vehicles() {
                                             className="text-xs text-gray-600 flex justify-between items-center"
                                           >
                                             <span>
-                                              {new Date(
+                                              {formatDateTimeToLocal(
                                                 session.startTime
-                                              ).toLocaleDateString(
-                                                "es-ES"
-                                              )}{" "}
-                                              -
-                                              {new Date(
-                                                session.startTime
-                                              ).toLocaleTimeString("es-ES", {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                              })}
+                                              )}
                                               {session.endTime && (
                                                 <>
                                                   {" "}
                                                   hasta{" "}
-                                                  {new Date(
+                                                  {formatDateTimeToLocal(
                                                     session.endTime
-                                                  ).toLocaleTimeString(
-                                                    "es-ES",
-                                                    {
-                                                      hour: "2-digit",
-                                                      minute: "2-digit",
-                                                    }
                                                   )}
                                                 </>
                                               )}
@@ -2223,7 +2192,7 @@ export default function Vehicles() {
                       )}
                       <TableCell className="hidden sm:table-cell">
                         <span className="text-sm">
-                          {new Date(vehicle.entryDate).toLocaleDateString()}
+                          {formatDateToDDMMYYYY(vehicle.entryDate)}
                         </span>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>

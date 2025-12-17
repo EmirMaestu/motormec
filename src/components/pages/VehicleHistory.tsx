@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Search, Filter, Calendar, CheckCircle, XCircle, ArrowLeft, RotateCcw, MoreHorizontal, Eye } from "lucide-react"
+import { formatDateToDDMMYYYY } from "../../lib/dateUtils"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
@@ -12,21 +13,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "../ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog"
 import { VehicleHistoryCards } from "../module-cards"
+import { DateRangePicker, type DateRange } from "../ui/date-range-picker"
 
 export default function VehicleHistory() {
   const navigate = useNavigate()
   
-  // Convex hooks
-  const vehiclesOutOfTaller = useQuery(api.vehicles.getVehiclesOutOfTaller) ?? []
-  const updateVehicle = useMutation(api.vehicles.updateVehicle)
-  
+  // Estado para filtros
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [dateFilter, setDateFilter] = useState("all")
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null })
   const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false)
   const [vehicleToReturn, setVehicleToReturn] = useState<any>(null)
   const [detailVehicle, setDetailVehicle] = useState<any>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+  
+  // Convex hooks
+  const vehiclesOutOfTaller = useQuery(api.vehicles.getVehiclesOutOfTaller) ?? []
+  const updateVehicle = useMutation(api.vehicles.updateVehicle)
 
 
   // Filtrar vehículos
@@ -39,14 +42,15 @@ export default function VehicleHistory() {
 
     const matchesStatus = statusFilter === "all" || vehicle.status === statusFilter
 
-    // Filtro por fecha (últimos 30 días, 90 días, etc.)
+    // Filtro por rango de fechas
     let matchesDate = true
-    if (dateFilter !== "all") {
+    if (dateRange.from && dateRange.to) {
       const vehicleDate = new Date(vehicle.exitDate || vehicle.entryDate)
-      const now = new Date()
-      const daysAgo = parseInt(dateFilter)
-      const cutoffDate = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000))
-      matchesDate = vehicleDate >= cutoffDate
+      const fromDate = new Date(dateRange.from)
+      const toDate = new Date(dateRange.to)
+      // Ajustar toDate para incluir todo el día
+      toDate.setHours(23, 59, 59, 999)
+      matchesDate = vehicleDate >= fromDate && vehicleDate <= toDate
     }
 
     return matchesSearch && matchesStatus && matchesDate
@@ -149,19 +153,9 @@ export default function VehicleHistory() {
             </SelectContent>
           </Select>
 
-          <Select value={dateFilter} onValueChange={setDateFilter}>
-            <SelectTrigger className="w-[150px]">
-              <Calendar className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Período" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todo el tiempo</SelectItem>
-              <SelectItem value="7">Últimos 7 días</SelectItem>
-              <SelectItem value="30">Últimos 30 días</SelectItem>
-              <SelectItem value="90">Últimos 3 meses</SelectItem>
-              <SelectItem value="365">Último año</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="w-[280px]">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
+          </div>
         </div>
       </div>
 
@@ -232,11 +226,11 @@ export default function VehicleHistory() {
                         <span className="font-medium">${vehicle.cost.toLocaleString()}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm">{entryDate.toLocaleDateString()}</span>
+                        <span className="text-sm">{formatDateToDDMMYYYY(vehicle.entryDate)}</span>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm">
-                          {exitDate ? exitDate.toLocaleDateString() : "-"}
+                          {vehicle.exitDate ? formatDateToDDMMYYYY(vehicle.exitDate) : "-"}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -407,14 +401,14 @@ export default function VehicleHistory() {
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Ingreso:</span>
                       <span className="text-sm font-medium">
-                        {new Date(detailVehicle.entryDate).toLocaleDateString()}
+                        {formatDateToDDMMYYYY(detailVehicle.entryDate)}
                       </span>
                     </div>
                     {detailVehicle.exitDate && (
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Salida:</span>
                         <span className="text-sm font-medium">
-                          {new Date(detailVehicle.exitDate).toLocaleDateString()}
+                          {formatDateToDDMMYYYY(detailVehicle.exitDate)}
                         </span>
                       </div>
                     )}

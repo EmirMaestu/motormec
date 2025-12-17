@@ -8,6 +8,7 @@ import { Badge } from "../ui/badge"
 import { Car, Clock, Play, Square, Pause, DollarSign, TrendingUp, Users, Wrench, Plus } from "lucide-react"
 import { WorkTimer } from "../ui/work-timer"
 import { useNavigate } from "react-router-dom"
+import { formatDateToDDMMYYYY } from "../../lib/dateUtils"
 
 export default function Dashboard() {
   const { user } = useUser()
@@ -169,7 +170,7 @@ export default function Dashboard() {
                         <span className="font-medium">Servicios:</span> {vehicle.services.join(", ")}
                       </p>
                       <p className="text-xs text-gray-500">
-                        <span className="font-medium">Ingresado:</span> {new Date(vehicle.entryDate).toLocaleDateString()}
+                        <span className="font-medium">Ingresado:</span> {formatDateToDDMMYYYY(vehicle.entryDate)}
                       </p>
                     </div>
                   </div>
@@ -255,7 +256,7 @@ export default function Dashboard() {
                         <span className="font-medium">Servicios:</span> {vehicle.services.join(", ")}
                       </p>
                       <p className="text-xs text-gray-500">
-                        <span className="font-medium">Ingresado:</span> {new Date(vehicle.entryDate).toLocaleDateString()}
+                        <span className="font-medium">Ingresado:</span> {formatDateToDDMMYYYY(vehicle.entryDate)}
                       </p>
                     </div>
                   </div>
@@ -466,7 +467,7 @@ export default function Dashboard() {
                 <div className="text-right">
                   <p className="text-sm font-medium">${vehicle.cost.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(vehicle.entryDate).toLocaleDateString()}
+                    {formatDateToDDMMYYYY(vehicle.entryDate)}
                   </p>
                 </div>
               </div>
@@ -507,7 +508,7 @@ export default function Dashboard() {
                     ${Math.abs(transaction.amount).toLocaleString()}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(transaction.date).toLocaleDateString()}
+                    {formatDateToDDMMYYYY(transaction.date)}
                   </p>
                 </div>
               </div>

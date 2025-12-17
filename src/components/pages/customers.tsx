@@ -7,6 +7,7 @@ import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
 import { Textarea } from "../ui/textarea"
+import { formatDateToDDMMYYYY } from "../../lib/dateUtils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs"
@@ -390,7 +391,7 @@ export default function Customers() {
                   <div>
                     <CardTitle className="text-xl">{validSelectedCustomerMetrics.name}</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Cliente desde {new Date(validSelectedCustomerMetrics.createdAt).toLocaleDateString()}
+                      Cliente desde {formatDateToDDMMYYYY(validSelectedCustomerMetrics.createdAt)}
                     </p>
                   </div>
                   <Badge className="bg-green-100 text-green-800">
@@ -454,7 +455,7 @@ export default function Customers() {
                             <div>
                               <p className="text-sm font-bold">
                                 {validSelectedCustomerMetrics.lastVisit 
-                                  ? new Date(validSelectedCustomerMetrics.lastVisit).toLocaleDateString()
+                                  ? formatDateToDDMMYYYY(validSelectedCustomerMetrics.lastVisit)
                                   : "N/A"
                                 }
                               </p>
@@ -554,7 +555,7 @@ export default function Customers() {
                                     {vehicle.status}
                                   </Badge>
                                   <span className="text-xs text-muted-foreground">
-                                    Ingreso: {new Date(vehicle.entryDate).toLocaleDateString()}
+                                    Ingreso: {formatDateToDDMMYYYY(vehicle.entryDate)}
                                   </span>
                                 </div>
                               </div>
@@ -562,7 +563,7 @@ export default function Customers() {
                                 <p className="font-medium">${vehicle.cost.toLocaleString()}</p>
                                 {vehicle.exitDate && (
                                   <p className="text-xs text-muted-foreground">
-                                    Salida: {new Date(vehicle.exitDate).toLocaleDateString()}
+                                    Salida: {formatDateToDDMMYYYY(vehicle.exitDate)}
                                   </p>
                                 )}
                               </div>
