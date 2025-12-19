@@ -188,7 +188,7 @@ export const updateVehicle = mutation({
     }
 
     // Si se está entregando o suspendiendo, marcar como fuera del taller
-    const { status } = updates;
+    const { status, customerId } = updates;
     let newData: any = {};
 
     if (status === "Entregado" || status === "Suspendido") {
@@ -225,6 +225,45 @@ export const updateVehicle = mutation({
 
         await ctx.db.patch(id, newData);
       }
+    }
+
+    // Actualizar métricas del cliente anterior si cambió el customerId
+    if (customerId !== undefined && previousVehicle.customerId && previousVehicle.customerId !== customerId) {
+      const oldCustomerVehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_customer", (q) => q.eq("customerId", previousVehicle.customerId))
+        .collect();
+
+      await ctx.db.patch(previousVehicle.customerId, {
+        totalVehicles: oldCustomerVehicles.length,
+        totalSpent: oldCustomerVehicles.reduce((sum, v) => sum + v.cost, 0),
+        visitCount: oldCustomerVehicles.length,
+      });
+    }
+
+    // Actualizar métricas del cliente actual
+    const finalCustomerId = customerId !== undefined ? customerId : previousVehicle.customerId;
+    
+    if (finalCustomerId) {
+      const customerVehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_customer", (q) => q.eq("customerId", finalCustomerId))
+        .collect();
+
+      const totalVehicles = customerVehicles.length;
+      const totalSpent = customerVehicles.reduce((sum, v) => sum + v.cost, 0);
+
+      // Encontrar la fecha más reciente
+      const sortedVehicles = customerVehicles.sort((a, b) => 
+        new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+      );
+
+      await ctx.db.patch(finalCustomerId, {
+        totalVehicles,
+        totalSpent,
+        lastVisit: sortedVehicles[0]?.entryDate,
+        visitCount: totalVehicles,
+      });
     }
 
     return id;

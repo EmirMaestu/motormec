@@ -82,6 +82,41 @@ export const createCustomer = mutation({
   },
 });
 
+// Crear o devolver cliente existente (útil para formularios de vehículos)
+export const createOrGetCustomer = mutation({
+  args: {
+    name: v.string(),
+    phone: v.string(),
+    email: v.optional(v.string()),
+    address: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Verificar si ya existe un cliente con el mismo teléfono
+    const existingCustomer = await ctx.db
+      .query("customers")
+      .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+      .filter((q) => q.eq(q.field("active"), true))
+      .first();
+
+    // Si existe, devolver su ID
+    if (existingCustomer) {
+      return existingCustomer._id;
+    }
+
+    // Si no existe, crear uno nuevo
+    const customerId = await ctx.db.insert("customers", {
+      ...args,
+      createdAt: new Date().toISOString(),
+      active: true,
+      totalVehicles: 0,
+      totalSpent: 0,
+      visitCount: 0,
+    });
+
+    return customerId;
+  },
+});
+
 // Actualizar cliente
 export const updateCustomer = mutation({
   args: {
@@ -215,6 +250,43 @@ export const updateCustomerMetrics = mutation({
     });
 
     return args.customerId;
+  },
+});
+
+// Recalcular métricas de TODOS los clientes
+export const recalculateAllCustomerMetrics = mutation({
+  handler: async (ctx) => {
+    const customers = await ctx.db
+      .query("customers")
+      .filter((q) => q.eq(q.field("active"), true))
+      .collect();
+
+    let updated = 0;
+
+    for (const customer of customers) {
+      const vehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_customer", (q) => q.eq("customerId", customer._id))
+        .collect();
+
+      const totalVehicles = vehicles.length;
+      const totalSpent = vehicles.reduce((sum, vehicle) => sum + vehicle.cost, 0);
+      
+      const lastVisit = vehicles.length > 0 
+        ? vehicles.sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime())[0].entryDate
+        : undefined;
+
+      await ctx.db.patch(customer._id, {
+        totalVehicles,
+        totalSpent,
+        lastVisit,
+        visitCount: totalVehicles,
+      });
+
+      updated++;
+    }
+
+    return { updated, message: `Se actualizaron ${updated} clientes` };
   },
 });
 

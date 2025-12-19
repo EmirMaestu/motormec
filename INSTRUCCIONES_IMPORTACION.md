@@ -102,3 +102,7 @@ Después de importar los datos históricos:
 **Fecha de creación**: Diciembre 2025  
 **Versión**: 1.0
 
+
+
+
+
