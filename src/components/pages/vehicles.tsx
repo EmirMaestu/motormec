@@ -62,6 +62,180 @@ import { CreatableSelect } from "../ui/creatable-select";
 import { WorkTimer, formatWorkTime } from "../ui/work-timer";
 import DateRangeFilter, { type DateRangeValue } from "../ui/date-range-filter";
 
+// Componente para seleccionar cliente
+function CustomerSelector({
+  selectedCustomerId,
+  onCustomerChange,
+  onNewCustomerName,
+  newCustomerName,
+}: {
+  selectedCustomerId?: string;
+  onCustomerChange: (customerId: string, customerData: any) => void;
+  onNewCustomerName?: (name: string) => void;
+  newCustomerName?: string;
+}) {
+  const customers = useQuery(api.customers.getActiveCustomers);
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [isNewCustomerConfirmed, setIsNewCustomerConfirmed] = useState(false);
+
+  const handleCustomerSelect = (customerId: string) => {
+    if (customerId === "new") {
+      setShowNewCustomer(true);
+      setIsNewCustomerConfirmed(false);
+      return;
+    }
+
+    const customer = customers?.find((c: any) => c._id === customerId);
+    if (customer) {
+      onCustomerChange(customerId, customer);
+    }
+  };
+
+  const handleNewCustomerInput = (name: string) => {
+    setIsNewCustomerConfirmed(false);
+    if (onNewCustomerName) {
+      onNewCustomerName(name);
+    }
+  };
+
+  const handleConfirmNewCustomer = () => {
+    if (newCustomerName && newCustomerName.trim()) {
+      setShowNewCustomer(false);
+      setIsNewCustomerConfirmed(true);
+    }
+  };
+
+  const handleCancelNewCustomer = () => {
+    setShowNewCustomer(false);
+    setIsNewCustomerConfirmed(false);
+    if (onNewCustomerName) onNewCustomerName("");
+  };
+
+  // Si se está escribiendo un nuevo cliente (y aún no se ha confirmado)
+  if ((showNewCustomer || newCustomerName) && !isNewCustomerConfirmed) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Nombre del nuevo cliente"
+            value={newCustomerName || ""}
+            onChange={(e) => handleNewCustomerInput(e.target.value)}
+          />
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={handleConfirmNewCustomer}
+            disabled={!newCustomerName || !newCustomerName.trim()}
+          >
+            Crear
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCancelNewCustomer}
+          >
+            Cancelar
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Se creará un cliente nuevo con este nombre
+        </p>
+      </div>
+    );
+  }
+
+  // Si hay un nuevo cliente confirmado
+  if (isNewCustomerConfirmed && newCustomerName) {
+    return (
+      <div className="w-full">
+        <div className="flex h-10 w-full items-center justify-between rounded-md border border-green-500 bg-green-50 px-3 py-2 text-sm ring-offset-background">
+          <span className="font-medium">{newCustomerName}</span>
+          <button
+            type="button"
+            onClick={handleCancelNewCustomer}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            ×
+          </button>
+        </div>
+        <p className="text-xs text-green-600 mt-1">
+          ✓ Nuevo cliente (se creará al guardar)
+        </p>
+      </div>
+    );
+  }
+
+  // Encontrar el nombre del cliente seleccionado
+  const selectedCustomer = customers?.find(
+    (c: any) => c._id === selectedCustomerId
+  );
+
+  return (
+    <div className="relative">
+      {selectedCustomer ? (
+        <div className="w-full">
+          <div className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <span>{selectedCustomer.name}</span>
+            <button
+              type="button"
+              onClick={() => onCustomerChange("", {} as any)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              ×
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {selectedCustomer.phone}
+            {selectedCustomer.totalVehicles
+              ? ` • ${selectedCustomer.totalVehicles} vehículos`
+              : ""}
+          </p>
+        </div>
+      ) : (
+        <Select
+          value={selectedCustomerId || ""}
+          onValueChange={handleCustomerSelect}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Seleccionar cliente..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="new" className="text-blue-600 font-medium">
+              + Crear nuevo cliente
+            </SelectItem>
+            {customers && customers.length > 0 ? (
+              <>
+                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                  Clientes existentes
+                </div>
+                {customers.map((customer: any) => (
+                  <SelectItem key={customer._id} value={customer._id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{customer.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {customer.phone}
+                        {customer.totalVehicles
+                          ? ` • ${customer.totalVehicles} vehículos`
+                          : ""}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </>
+            ) : (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                No hay clientes registrados
+              </div>
+            )}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+}
+
 // Componente para seleccionar responsables
 function ResponsibleSelector({
   responsibles,
@@ -179,48 +353,106 @@ function ResponsibleSelector({
       )}
 
       {availableMembers.length > 0 && (
-        <div className="flex items-center gap-2">
-          <Select value={selectedMember} onValueChange={setSelectedMember}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Seleccionar miembro..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableMembers.map((member) => (
-                <SelectItem
-                  key={member.publicUserData.userId}
-                  value={member.publicUserData.userId}
+        <div className="space-y-2">
+          {selectedMember ? (
+            // Mostrar miembro seleccionado con su nombre
+            <div className="space-y-2">
+              <div className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <div className="flex items-center gap-2">
+                  {orgMembers.find(
+                    (m) => m.publicUserData.userId === selectedMember
+                  )?.role === "org:admin" ? (
+                    <Crown className="h-3 w-3 text-yellow-600" />
+                  ) : (
+                    <User className="h-3 w-3 text-blue-600" />
+                  )}
+                  <span>
+                    {
+                      orgMembers.find(
+                        (m) => m.publicUserData.userId === selectedMember
+                      )?.publicUserData.firstName
+                    }{" "}
+                    {
+                      orgMembers.find(
+                        (m) => m.publicUserData.userId === selectedMember
+                      )?.publicUserData.lastName
+                    }
+                  </span>
+                  {orgMembers.find(
+                    (m) => m.publicUserData.userId === selectedMember
+                  )?.role === "org:admin" && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
+                    >
+                      Admin
+                    </Badge>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMember("")}
+                  className="text-muted-foreground hover:text-foreground"
                 >
-                  <div className="flex items-center gap-2">
-                    {member.role === "org:admin" ? (
-                      <Crown className="h-3 w-3 text-yellow-600" />
-                    ) : (
-                      <User className="h-3 w-3 text-blue-600" />
-                    )}
-                    {member.publicUserData.firstName}{" "}
-                    {member.publicUserData.lastName}
-                    {member.role === "org:admin" && (
-                      <Badge
-                        variant="outline"
-                        className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
-                      >
-                        Admin
-                      </Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button
-            type="button"
-            onClick={addResponsible}
-            size="sm"
-            disabled={!selectedMember}
-            className="h-10 px-3"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+                  ×
+                </button>
+              </div>
+              <Button
+                type="button"
+                onClick={addResponsible}
+                size="sm"
+                className="w-full"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar responsable
+              </Button>
+            </div>
+          ) : (
+            // Mostrar selector
+            <div className="space-y-2">
+              <Select value={selectedMember} onValueChange={setSelectedMember}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Seleccionar miembro..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMembers.map((member) => (
+                    <SelectItem
+                      key={member.publicUserData.userId}
+                      value={member.publicUserData.userId}
+                    >
+                      <div className="flex items-center gap-2">
+                        {member.role === "org:admin" ? (
+                          <Crown className="h-3 w-3 text-yellow-600" />
+                        ) : (
+                          <User className="h-3 w-3 text-blue-600" />
+                        )}
+                        {member.publicUserData.firstName}{" "}
+                        {member.publicUserData.lastName}
+                        {member.role === "org:admin" && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
+                          >
+                            Admin
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                onClick={addResponsible}
+                size="sm"
+                disabled={!selectedMember}
+                className="w-full"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar responsable
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -343,6 +575,7 @@ export default function Vehicles() {
   const startWorkOnVehicle = useMutation(api.vehicles.startWorkOnVehicle);
   const pauseWorkOnVehicle = useMutation(api.vehicles.pauseWorkOnVehicle);
   const completeWorkOnVehicle = useMutation(api.vehicles.completeWorkOnVehicle);
+  const createOrGetCustomer = useMutation(api.customers.createOrGetCustomer);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -358,6 +591,7 @@ export default function Vehicles() {
     year: "",
     owner: "",
     phone: "",
+    customerId: "",
     services: [] as string[],
     cost: "",
     description: "",
@@ -419,6 +653,17 @@ export default function Vehicles() {
           ];
         }
 
+        // Si no hay customerId, crear o buscar el cliente
+        let customerId = newVehicle.customerId;
+        if (!customerId && newVehicle.owner && newVehicle.phone) {
+          // Crear el cliente o devolver el existente si ya existe con ese teléfono
+          const newCustomerId = await createOrGetCustomer({
+            name: newVehicle.owner,
+            phone: newVehicle.phone,
+          });
+          customerId = newCustomerId;
+        }
+
         await createVehicle({
           plate: newVehicle.plate,
           brand: newVehicle.brand,
@@ -426,6 +671,7 @@ export default function Vehicles() {
           year: parseInt(newVehicle.year) || new Date().getFullYear(),
           owner: newVehicle.owner,
           phone: newVehicle.phone,
+          customerId: customerId ? (customerId as any) : undefined,
           status: "Ingresado",
           entryDate: new Date().toISOString(),
           services:
@@ -444,6 +690,7 @@ export default function Vehicles() {
           year: "",
           owner: "",
           phone: "",
+          customerId: "",
           services: [],
           cost: "",
           description: "",
@@ -473,6 +720,17 @@ export default function Vehicles() {
   const handleUpdateVehicle = async () => {
     if (editingVehicle && editingVehicle._id) {
       try {
+        // Si no hay customerId, crear o buscar el cliente
+        let customerId = editingVehicle.customerId;
+        if (!customerId && editingVehicle.owner && editingVehicle.phone) {
+          // Crear el cliente o devolver el existente si ya existe con ese teléfono
+          const newCustomerId = await createOrGetCustomer({
+            name: editingVehicle.owner,
+            phone: editingVehicle.phone,
+          });
+          customerId = newCustomerId;
+        }
+
         await updateVehicle({
           id: editingVehicle._id,
           plate: editingVehicle.plate,
@@ -481,6 +739,7 @@ export default function Vehicles() {
           year: parseInt(editingVehicle.year),
           owner: editingVehicle.owner,
           phone: editingVehicle.phone,
+          customerId: customerId || undefined,
           status: editingVehicle.status,
           services: editingVehicle.services,
           cost: parseFloat(editingVehicle.cost),
@@ -705,16 +964,29 @@ export default function Vehicles() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="owner">Cliente</Label>
-                    <Input
-                      id="owner"
-                      value={newVehicle.owner}
-                      onChange={(e) =>
-                        setNewVehicle({ ...newVehicle, owner: e.target.value })
+                    <Label htmlFor="customer">Cliente</Label>
+                    <CustomerSelector
+                      selectedCustomerId={newVehicle.customerId}
+                      onCustomerChange={(customerId, customerData) => {
+                        setNewVehicle({
+                          ...newVehicle,
+                          customerId: customerId,
+                          owner: customerData.name,
+                          phone: customerData.phone,
+                        });
+                      }}
+                      onNewCustomerName={(name) => {
+                        setNewVehicle({
+                          ...newVehicle,
+                          customerId: "",
+                          owner: name,
+                        });
+                      }}
+                      newCustomerName={
+                        !newVehicle.customerId ? newVehicle.owner : ""
                       }
-                      placeholder="Nombre completo"
                     />
                   </div>
                   {isAdmin && (
@@ -730,7 +1002,13 @@ export default function Vehicles() {
                           })
                         }
                         placeholder="555-0123"
+                        disabled={!!newVehicle.customerId}
                       />
+                      {newVehicle.customerId && (
+                        <p className="text-xs text-muted-foreground">
+                          Teléfono del cliente seleccionado
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -862,17 +1140,28 @@ export default function Vehicles() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-owner">Cliente</Label>
-                    <Input
-                      id="edit-owner"
-                      value={editingVehicle.owner}
-                      onChange={(e) =>
+                    <Label htmlFor="edit-customer">Cliente</Label>
+                    <CustomerSelector
+                      selectedCustomerId={editingVehicle.customerId}
+                      onCustomerChange={(customerId, customerData) => {
                         setEditingVehicle({
                           ...editingVehicle,
-                          owner: e.target.value,
-                        })
+                          customerId: customerId,
+                          owner: customerData.name,
+                          phone: customerData.phone,
+                        });
+                      }}
+                      onNewCustomerName={(name) => {
+                        setEditingVehicle({
+                          ...editingVehicle,
+                          customerId: "",
+                          owner: name,
+                        });
+                      }}
+                      newCustomerName={
+                        !editingVehicle.customerId ? editingVehicle.owner : ""
                       }
                     />
                   </div>
@@ -888,7 +1177,13 @@ export default function Vehicles() {
                             phone: e.target.value,
                           })
                         }
+                        disabled={!!editingVehicle.customerId}
                       />
+                      {editingVehicle.customerId && (
+                        <p className="text-xs text-muted-foreground">
+                          Teléfono del cliente seleccionado
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

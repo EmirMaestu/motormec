@@ -11,10 +11,11 @@ import VehicleHistory from '../components/pages/VehicleHistory';
 import VehicleCostManagement from '../components/pages/VehicleCostManagement';
 import ImportVehicles from '../components/pages/ImportVehicles';
 import Finance from '../components/pages/finance';
-import Reports from '../components/pages/reports';
+import Reports from '../components/pages/reports-new';
 import Partners from '../components/pages/partners';
 import Customers from '../components/pages/customers';
 import StockManagement from '../stock-management';
+import FixCustomerMetrics from '../components/pages/FixCustomerMetrics';
 
 // Ejemplos y demos
 import CarouselCardsDemo from '../examples/CollapsibleCardsDemo';
@@ -65,6 +66,13 @@ const AppRouter: React.FC = () => {
             <Route path="/clientes" element={
               <ProtectedRoute adminOnly={true}>
                 <Customers />
+              </ProtectedRoute>
+            } />
+            
+            {/* Herramientas de administración */}
+            <Route path="/herramientas/recalcular-metricas" element={
+              <ProtectedRoute adminOnly={true}>
+                <FixCustomerMetrics />
               </ProtectedRoute>
             } />
             

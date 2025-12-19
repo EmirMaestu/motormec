@@ -1,8 +1,8 @@
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
-import { Search, Filter, Calendar, CheckCircle, XCircle, ArrowLeft, RotateCcw, MoreHorizontal, Eye } from "lucide-react"
+import { Search, Filter, CheckCircle, XCircle, ArrowLeft, RotateCcw, MoreHorizontal, Eye, ArrowUp } from "lucide-react"
 import { formatDateToDDMMYYYY } from "../../lib/dateUtils"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { Button } from "../ui/button"
@@ -17,6 +17,7 @@ import { DateRangePicker, type DateRange } from "../ui/date-range-picker"
 
 export default function VehicleHistory() {
   const navigate = useNavigate()
+  const tableTopRef = useRef<HTMLDivElement>(null)
   
   // Estado para filtros
   const [searchTerm, setSearchTerm] = useState("")
@@ -26,10 +27,33 @@ export default function VehicleHistory() {
   const [vehicleToReturn, setVehicleToReturn] = useState<any>(null)
   const [detailVehicle, setDetailVehicle] = useState<any>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+  const [showScrollButton, setShowScrollButton] = useState(false)
   
   // Convex hooks
   const vehiclesOutOfTaller = useQuery(api.vehicles.getVehiclesOutOfTaller) ?? []
   const updateVehicle = useMutation(api.vehicles.updateVehicle)
+
+  // Detectar scroll para mostrar/ocultar botón
+  useEffect(() => {
+    const handleScroll = () => {
+      // Mostrar el botón si el usuario ha hecho scroll hacia abajo más de 300px
+      if (window.scrollY > 300) {
+        setShowScrollButton(true)
+      } else {
+        setShowScrollButton(false)
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
 
   // Filtrar vehículos
@@ -160,14 +184,15 @@ export default function VehicleHistory() {
       </div>
 
       {/* Tabla de Historial */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Historial de Vehículos</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            {filteredVehicles.length} vehículo{filteredVehicles.length !== 1 ? 's' : ''} encontrado{filteredVehicles.length !== 1 ? 's' : ''}
-          </p>
-        </CardHeader>
-        <CardContent>
+      <div ref={tableTopRef}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Historial de Vehículos</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {filteredVehicles.length} vehículo{filteredVehicles.length !== 1 ? 's' : ''} encontrado{filteredVehicles.length !== 1 ? 's' : ''}
+            </p>
+          </CardHeader>
+          <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
@@ -198,7 +223,11 @@ export default function VehicleHistory() {
                     null
 
                   return (
-                    <TableRow key={vehicle._id}>
+                    <TableRow 
+                      key={vehicle._id}
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleViewDetail(vehicle)}
+                    >
                       <TableCell>
                         <div>
                           <p className="font-medium">{vehicle.plate}</p>
@@ -238,7 +267,7 @@ export default function VehicleHistory() {
                           {duration ? `${duration} día${duration !== 1 ? 's' : ''}` : "-"}
                         </span>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" className="h-9 w-9 p-0 border border-gray-200 hover:bg-gray-50">
@@ -269,7 +298,8 @@ export default function VehicleHistory() {
             </TableBody>
           </Table>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
 
       {/* Diálogo de Confirmación para Devolver al Taller */}
       <Dialog open={isReturnDialogOpen} onOpenChange={setIsReturnDialogOpen}>
@@ -496,6 +526,18 @@ export default function VehicleHistory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Botón flotante para ir arriba */}
+      {showScrollButton && (
+        <Button
+          variant="default"
+          size="icon"
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 z-50 animate-in fade-in slide-in-from-bottom-2"
+        >
+          <ArrowUp className="h-5 w-5" />
+        </Button>
+      )}
     </div>
   )
 }
