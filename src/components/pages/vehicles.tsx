@@ -576,6 +576,13 @@ export default function Vehicles() {
   const pauseWorkOnVehicle = useMutation(api.vehicles.pauseWorkOnVehicle);
   const completeWorkOnVehicle = useMutation(api.vehicles.completeWorkOnVehicle);
   const createOrGetCustomer = useMutation(api.customers.createOrGetCustomer);
+  
+  // Queries y mutations para servicios
+  // const services = useQuery(api.services.getServices);
+  // const createService = useMutation(api.services.createService);
+  
+  // Convertir servicios de BD a array de strings
+  const serviceOptions: string[] = []; // services?.map((s: { name: string }) => s.name) || [];
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -595,6 +602,7 @@ export default function Vehicles() {
     services: [] as string[],
     cost: "",
     description: "",
+    mileage: "", // Kilometraje
     responsibles: [] as {
       name: string;
       role: string;
@@ -680,6 +688,7 @@ export default function Vehicles() {
               : ["Mantenimiento general"],
           cost: parseFloat(newVehicle.cost) || 0,
           description: newVehicle.description,
+          mileage: newVehicle.mileage ? parseInt(newVehicle.mileage) : undefined,
           responsibles,
         });
 
@@ -694,6 +703,7 @@ export default function Vehicles() {
           services: [],
           cost: "",
           description: "",
+          mileage: "",
           responsibles: [],
         });
         setIsDialogOpen(false);
@@ -736,7 +746,9 @@ export default function Vehicles() {
           plate: editingVehicle.plate,
           brand: editingVehicle.brand,
           model: editingVehicle.model,
-          year: parseInt(editingVehicle.year),
+          year: typeof editingVehicle.year === 'number' 
+            ? editingVehicle.year 
+            : parseInt(editingVehicle.year) || new Date().getFullYear(),
           owner: editingVehicle.owner,
           phone: editingVehicle.phone,
           customerId: customerId || undefined,
@@ -744,6 +756,7 @@ export default function Vehicles() {
           services: editingVehicle.services,
           cost: parseFloat(editingVehicle.cost),
           description: editingVehicle.description,
+          mileage: editingVehicle.mileage,
           responsibles: editingVehicle.responsibles || [],
           parts: editingVehicle.parts || [],
         });
@@ -1019,6 +1032,11 @@ export default function Vehicles() {
                     onChange={(services) =>
                       setNewVehicle({ ...newVehicle, services })
                     }
+                    options={serviceOptions}
+                    onCreateOption={(serviceName) => {
+                      // createService({ name: serviceName });
+                      console.log("Nuevo servicio:", serviceName);
+                    }}
                     placeholder="Seleccionar o agregar servicios..."
                   />
                 </div>
@@ -1059,6 +1077,22 @@ export default function Vehicles() {
                       })
                     }
                     placeholder="Descripción detallada del problema o servicio"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="mileage">Kilometraje</Label>
+                  <Input
+                    id="mileage"
+                    type="number"
+                    value={newVehicle.mileage}
+                    onChange={(e) =>
+                      setNewVehicle({
+                        ...newVehicle,
+                        mileage: e.target.value,
+                      })
+                    }
+                    onFocus={(e) => e.target.select()}
+                    placeholder="150000"
                   />
                 </div>
               </div>
@@ -1237,6 +1271,11 @@ export default function Vehicles() {
                     onChange={(services) =>
                       setEditingVehicle({ ...editingVehicle, services })
                     }
+                    options={serviceOptions}
+                    onCreateOption={(serviceName) => {
+                      // createService({ name: serviceName });
+                      console.log("Nuevo servicio:", serviceName);
+                    }}
                     placeholder="Seleccionar o agregar servicios..."
                   />
                 </div>
@@ -1277,6 +1316,22 @@ export default function Vehicles() {
                         description: e.target.value,
                       })
                     }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-mileage">Kilometraje</Label>
+                  <Input
+                    id="edit-mileage"
+                    type="number"
+                    value={editingVehicle.mileage || ""}
+                    onChange={(e) =>
+                      setEditingVehicle({
+                        ...editingVehicle,
+                        mileage: e.target.value ? parseInt(e.target.value) : undefined,
+                      })
+                    }
+                    onFocus={(e) => e.target.select()}
+                    placeholder="150000"
                   />
                 </div>
 
@@ -1637,6 +1692,16 @@ export default function Vehicles() {
                           {detailVehicle.plate}
                         </p>
                       </div>
+                      {detailVehicle.mileage && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Kilometraje
+                          </label>
+                          <p className="mt-1 text-sm text-gray-900 font-medium">
+                            {detailVehicle.mileage.toLocaleString('es-AR')} km
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 

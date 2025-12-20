@@ -29,6 +29,7 @@ export const createVehicle = mutation({
     services: v.array(v.string()),
     cost: v.number(),
     description: v.optional(v.string()),
+    mileage: v.optional(v.number()),
     responsibles: v.optional(
       v.array(
         v.object({
@@ -134,6 +135,7 @@ export const updateVehicle = mutation({
     services: v.optional(v.array(v.string())),
     cost: v.optional(v.number()),
     description: v.optional(v.string()),
+    mileage: v.optional(v.number()),
     inTaller: v.optional(v.boolean()),
     responsibles: v.optional(
       v.array(
@@ -722,6 +724,58 @@ export const assignVehicleToCustomer = mutation({
       totalSpent: newTotalSpent,
       lastVisit,
       visitCount: newTotalVehicles,
+    });
+
+    return args.vehicleId;
+  },
+});
+
+// Desvincular vehículo de cliente
+export const removeCustomerFromVehicle = mutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+  },
+  handler: async (ctx, args) => {
+    const vehicle = await ctx.db.get(args.vehicleId);
+
+    if (!vehicle) throw new Error("Vehículo no encontrado");
+    if (!vehicle.customerId) throw new Error("El vehículo no tiene cliente asociado");
+
+    const oldCustomerId = vehicle.customerId;
+
+    // Remover customerId del vehículo
+    await ctx.db.patch(args.vehicleId, {
+      customerId: undefined,
+    });
+
+    // Actualizar métricas del cliente anterior
+    const oldCustomerVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_customer", (q) => q.eq("customerId", oldCustomerId))
+      .collect();
+
+    const oldTotalVehicles = oldCustomerVehicles.filter(
+      (v) => v._id !== args.vehicleId
+    ).length;
+    const oldTotalSpent = oldCustomerVehicles
+      .filter((v) => v._id !== args.vehicleId)
+      .reduce((sum, v) => sum + v.cost, 0);
+
+    const lastVisit =
+      oldTotalVehicles > 0
+        ? oldCustomerVehicles
+            .filter((v) => v._id !== args.vehicleId)
+            .sort(
+              (a, b) =>
+                new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+            )[0].entryDate
+        : undefined;
+
+    await ctx.db.patch(oldCustomerId, {
+      totalVehicles: oldTotalVehicles,
+      totalSpent: oldTotalSpent,
+      lastVisit,
+      visitCount: oldTotalVehicles,
     });
 
     return args.vehicleId;
