@@ -8,6 +8,7 @@ interface VehicleHistoryCardsProps {
   deliveredCount: number;
   suspendedCount: number;
   totalEarnings: number;
+  showEarnings?: boolean;
 }
 
 export const VehicleHistoryCards: React.FC<VehicleHistoryCardsProps> = ({
@@ -15,6 +16,7 @@ export const VehicleHistoryCards: React.FC<VehicleHistoryCardsProps> = ({
   deliveredCount,
   suspendedCount,
   totalEarnings,
+  showEarnings = true,
 }) => {
   const cards: CardData[] = [
     {
@@ -42,7 +44,7 @@ export const VehicleHistoryCards: React.FC<VehicleHistoryCardsProps> = ({
       color: "text-red-600",
       borderColor: "border-red-200",
     },
-    {
+    ...(showEarnings ? [{
       id: "totalEarnings",
       title: "Ingresos Totales",
       value: `$${totalEarnings.toLocaleString()}`,
@@ -50,7 +52,7 @@ export const VehicleHistoryCards: React.FC<VehicleHistoryCardsProps> = ({
       icon: DollarSign,
       color: "text-green-600",
       borderColor: "border-green-200",
-    }
+    }] : [])
   ];
 
   return (
