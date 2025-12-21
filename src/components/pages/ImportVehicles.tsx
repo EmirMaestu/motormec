@@ -15,374 +15,217 @@ import {
   XCircle,
   AlertCircle,
   FileText,
+  FileUp,
 } from "lucide-react";
 import { Alert, AlertDescription } from "../ui/alert";
 
-// Datos del cuaderno
-const vehiculosHistoricos = [
-  {
-    fecha: "21/10/2025",
-    marca: "SsangYong",
-    modelo: "Adolfo",
-    placa: "ENK-631",
-    kilometraje: "166240",
-    dueno: "Adolfo",
-    servicios: "Cambio embrague",
-    descripcion: "Cambio bombines embrague originales",
-  },
-  {
-    fecha: "21/10/2025",
-    marca: "Chevrolet",
-    modelo: "Corsa",
-    placa: "ILU-261",
-    kilometraje: "365168",
-    dueno: "Pablo",
-    servicios: "Servicio completo",
-    descripcion:
-      "Bujías cables, bulbo temperatura, codo agua admisión, luces todas, sonda lambda y alfombras",
-  },
-  {
-    fecha: "22/10/2025",
-    marca: "Mercedes-Benz",
-    modelo: "Sprinter 413",
-    placa: "KKA-686",
-    kilometraje: "111016",
-    dueno: "Antonelli",
-    servicios: "Cambio embrague",
-    descripcion: "Cambio de embrague FAG y disco originales usado y crapodina",
-  },
-  {
-    fecha: "21/10/2025",
-    marca: "Ford",
-    modelo: "Ka",
-    placa: "AC-546-DH",
-    kilometraje: "185119",
-    dueno: "Nestor",
-    servicios: "Servicio completo y distribución",
-    descripcion:
-      "Cambio correa y tensor de distribución y bomba de agua. Servicio completo: cambio de filtros, aceite, aire y anticongelante. Cambio tapa de depósito de agua",
-  },
-  {
-    fecha: "21/10/2025",
-    marca: "Mitsubishi",
-    modelo: "L300",
-    placa: "S/P",
-    kilometraje: "",
-    dueno: "Sin datos",
-    servicios: "Motor completo",
-    descripcion:
-      "Cambio 4 biela, metales de biela y bancada. Acta general A2 y rectificación cigüeñal. Cepillado de tapa y cambio de retenes de tapa",
-  },
-  {
-    fecha: "02/11/2025",
-    marca: "Volkswagen",
-    modelo: "Amarok 2.0 Manual",
-    placa: "KDA-221",
-    kilometraje: "176083",
-    dueno: "Peralta",
-    servicios: "Junta tapa válvulas",
-    descripcion:
-      "Cambio junta tapa válvulas, arandelas de inyectores. Cambio pastiador de intercooler bocina",
-  },
-  {
-    fecha: "21/11/2025",
-    marca: "Peugeot",
-    modelo: "Partner",
-    placa: "AE-046-JW",
-    kilometraje: "012917",
-    dueno: "Pedro",
-    servicios: "Reset service",
-    descripcion:
-      "Reset service, colocación adaptador de embrague y lubricación",
-  },
-  {
-    fecha: "25/11/2025",
-    marca: "Mercedes-Benz",
-    modelo: "Sprinter 313",
-    placa: "GAW-STS",
-    kilometraje: "369969",
-    dueno: "Torresilla",
-    servicios: "Cambio inyectores y turbo",
-    descripcion:
-      "Se reparó motor, cambio de inyectores y turbo. Se destapó radiador",
-  },
-  {
-    fecha: "26/11/2025",
-    marca: "Mercedes-Benz",
-    modelo: "Sprinter 26 TYT",
-    placa: "S/P",
-    kilometraje: "",
-    dueno: "Sin datos",
-    servicios: "Mantenimiento completo",
-    descripcion:
-      "Cambio bomba de agua y correo de aire. Cambio pastillas X4, cambio de aceite diferencial y caja, rotación. Limpieza de forzador delantero",
-  },
-  {
-    fecha: "29/11/2025",
-    marca: "Renault",
-    modelo: "Master",
-    placa: "S/P",
-    kilometraje: "",
-    dueno: "Chapini",
-    servicios: "Pata caliper",
-    descripcion: "Se le colocó pata caliper usado del taller",
-  },
-  {
-    fecha: "29/11/2025",
-    marca: "Ford",
-    modelo: "Focus",
-    placa: "DLE-141",
-    kilometraje: "",
-    dueno: "Sin datos",
-    servicios: "Suspensión y frenos",
-    descripcion:
-      "Cambio de amortiguadores delantero y cazoletas. Cambio de pastillas de freno traseros. Cambio de bieletas",
-  },
-  {
-    fecha: "02/12/2025",
-    marca: "Ford",
-    modelo: "Kuga",
-    placa: "DLJ-091",
-    kilometraje: "118503",
-    dueno: "Pedro",
-    servicios: "Cambio bobinas",
-    descripcion: "Cambio de bobinas 1,2,4,5",
-  },
-  {
-    fecha: "03/11/2025",
-    marca: "Ford",
-    modelo: "F100",
-    placa: "WTE-699",
-    kilometraje: "391897",
-    dueno: "Pablo",
-    servicios: "Juntas y service completo",
-    descripcion:
-      "Cambio de juntas admisión y service. Destapar radiador de agua, reparación porta filtro de aire, cambio de junta y aro trasero diferencial, cambio retén calidad diferencial, cambio de aceite diferencial y caja. Service: cambio de aceite y filtros (aire y aceite)",
-  },
-  {
-    fecha: "03/11/2025",
-    marca: "Mercedes-Benz",
-    modelo: "Sprinter",
-    placa: "S/P",
-    kilometraje: "",
-    dueno: "Chapini",
-    servicios: "Cambio junta y turbo",
-    descripcion:
-      "Cambio junta tapa de distribución. Cambio de turbo y inyectores",
-  },
-  {
-    fecha: "08/11/2025",
-    marca: "Renault",
-    modelo: "Master",
-    placa: "EVB-958",
-    kilometraje: "236692",
-    dueno: "Chapini",
-    servicios: "Cambio alternador y mangueras",
-    descripcion:
-      "Cambio buje alternador y polea. Cambio flexible bomba hidráulico y tornillos raccord. Cambio de mangueras de retorno inyectores. Correa de accesorio",
-  },
-  {
-    fecha: "11/11/2025",
-    marca: "Mercedes-Benz",
-    modelo: "Sprinter",
-    placa: "IHI-825",
-    kilometraje: "286796",
-    dueno: "Surioni",
-    servicios: "Cambio metales y encamisado",
-    descripcion:
-      "Se le cambió metales de biela y bancada, se encamisó, cambio inyector 173. Cambio sensor de leva",
-  },
-  {
-    fecha: "12/11/2025",
-    marca: "Mercedes-Benz",
-    modelo: "Sprinter",
-    placa: "AD000-MB",
-    kilometraje: "192028",
-    dueno: "Adolfo",
-    servicios: "Cambio correa y reparaciones",
-    descripcion:
-      "Cambio correa accesorio y ar aire y un ruedita. Limpieza radiadores, cambio de eje y repara refrigerante, cambio de abrazaderas calefacción",
-  },
-  {
-    fecha: "05/12/2025",
-    marca: "Mercedes-Benz",
-    modelo: "Sprinter 515",
-    placa: "AD-633RE",
-    kilometraje: "525550",
-    dueno: "Tysa",
-    servicios: "Programación y cardan",
-    descripcion: "Programación y cambio de centro de cardan",
-  },
-  {
-    fecha: "05/12/2025",
-    marca: "Mercedes-Benz",
-    modelo: "Sprinter 413",
-    placa: "LN-191",
-    kilometraje: "097396",
-    dueno: "Antoniolli",
-    servicios: "Cambio enfriador",
-    descripcion:
-      "Cambio de enfriador de aceite y bomba de agua. Cambio manguera intercooler derecha",
-  },
-  {
-    fecha: "06/12/2025",
-    marca: "Chevrolet",
-    modelo: "Cherry",
-    placa: "LNZ-039",
-    kilometraje: "154124",
-    dueno: "Sin datos",
-    servicios: "Cambio junta tapa válvulas",
-    descripcion: "Cambio junta tapa de válvulas",
-  },
-  {
-    fecha: "07/12/2025",
-    marca: "Toyota",
-    modelo: "Corolla",
-    placa: "AF-510-BK",
-    kilometraje: "53291",
-    dueno: "Beto",
-    servicios: "Cambio pastillas",
-    descripcion: "Cambio pastillas de freno X4",
-  },
-  {
-    fecha: "13/11/2025",
-    marca: "Volkswagen",
-    modelo: "Polo",
-    placa: "HAC-181",
-    kilometraje: "367995",
-    dueno: "Sin datos",
-    servicios: "Cambio crapodina",
-    descripcion:
-      "Se le bajó la caja, cambio de crapodina y buje de horquilla. Se controló embrague",
-  },
-  {
-    fecha: "11/11/2025",
-    marca: "Ford",
-    modelo: "Ranger",
-    placa: "AC-049YV",
-    kilometraje: "199511",
-    dueno: "Beto",
-    servicios: "Service completo y reparaciones",
-    descripcion:
-      "Service completo, cambio de fotos y reparación ramal. En susción: se afineos, balanceo y rotación. Cambio perro buje elástico",
-  },
-  {
-    fecha: "18/11/2025",
-    marca: "Renault",
-    modelo: "Master",
-    placa: "IAB-552",
-    kilometraje: "583103",
-    dueno: "Rossi",
-    servicios: "Cambio bombin emisor",
-    descripcion: "Cambio bombin emisor de embrague marca lux",
-  },
-  {
-    fecha: "19/11/2025",
-    marca: "Toyota",
-    modelo: "Hilux",
-    placa: "KHX-452",
-    kilometraje: "386682",
-    dueno: "Gabriel",
-    servicios: "Cambio embrague",
-    descripcion:
-      "Cambio embrague plato y disco, se mandó a rectificar el volante. Cambio bombinea",
-  },
-  {
-    fecha: "20/11/2025",
-    marca: "Toyota",
-    modelo: "Etios",
-    placa: "AE-311-XV",
-    kilometraje: "282312",
-    dueno: "Pedro",
-    servicios: "Cambio junta",
-    descripcion: "Cambio junta",
-  },
-  {
-    fecha: "21/11/2025",
-    marca: "Chevrolet",
-    modelo: "Tracker",
-    placa: "AD-193HT",
-    kilometraje: "236539",
-    dueno: "Pedro",
-    servicios: "Cambio engranaje y distribución",
-    descripcion:
-      "Cambio engranaje de carcaza y retén. Cambio correa de distribución",
-  },
-];
-
-function convertirFechaAISO(fechaStr: string): string {
-  const [dia, mes, anio] = fechaStr.split("/");
-  return new Date(`${anio}-${mes}-${dia}`).toISOString();
+// Interfaz para los datos del CSV
+interface CSVRow {
+  Fecha: string;
+  PLACA: string;
+  MARCA: string;
+  MODELO: string;
+  CLIENTE: string;
+  "SERVICIOS (Items)": string;
+  KILOMETRAJE: string;
+  "DESCRIPCIÓN COMPLETA": string;
 }
 
-function estimarAnioVehiculo(kilometraje: string): number {
-  const km = parseInt(kilometraje) || 0;
+// Función para parsear CSV
+function parseCSV(csvContent: string): CSVRow[] {
+  const lines = csvContent.split("\n").filter((line) => line.trim());
+  if (lines.length === 0) {
+    return [];
+  }
 
-  if (km === 0) return 2015;
-  if (km < 50000) return 2020;
-  if (km < 100000) return 2018;
-  if (km < 150000) return 2016;
-  if (km < 200000) return 2014;
-  if (km < 300000) return 2012;
-  if (km < 400000) return 2010;
+  const headers = lines[0].split(",").map((h) => h.trim());
+
+  const rows: CSVRow[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Manejar valores entre comillas que pueden contener comas
+    const values: string[] = [];
+    let currentValue = "";
+    let inQuotes = false;
+
+    for (let j = 0; j < line.length; j++) {
+      const char = line[j];
+      const nextChar = j < line.length - 1 ? line[j + 1] : null;
+
+      // Manejar comillas dobles escapadas ("")
+      if (char === '"' && nextChar === '"') {
+        currentValue += '"';
+        j++; // Saltar el siguiente carácter
+      } else if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        values.push(currentValue.trim());
+        currentValue = "";
+      } else {
+        currentValue += char;
+      }
+    }
+    values.push(currentValue.trim()); // Último valor
+
+    // Si el número de valores no coincide con los headers, intentar ajustar
+    if (values.length === headers.length) {
+      const row: any = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || "";
+      });
+      rows.push(row as CSVRow);
+    }
+  }
+
+  return rows;
+}
+
+// Función para convertir fecha DD/MM/YY a ISO
+function convertirFechaAISO(fechaStr: string): string {
+  if (!fechaStr || fechaStr === "N/A" || fechaStr.trim() === "") {
+    return new Date().toISOString();
+  }
+
+  try {
+    const [dia, mes, anio] = fechaStr.split("/");
+    const anioCompleto = anio.length === 2 ? `20${anio}` : anio;
+    const fecha = new Date(
+      `${anioCompleto}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`
+    );
+    return fecha.toISOString();
+  } catch (error) {
+    return new Date().toISOString();
+  }
+}
+
+// Función para parsear kilometraje
+function parseKilometraje(kmStr: string): number | undefined {
+  if (!kmStr || kmStr === "N/A" || kmStr.trim() === "") {
+    return undefined;
+  }
+
+  const kmStrClean = kmStr.replace(/\./g, "");
+  const km = parseFloat(kmStrClean);
+  return isNaN(km) ? undefined : Math.round(km);
+}
+
+// Función para parsear servicios (separados por comas)
+function parseServicios(serviciosStr: string): string[] {
+  if (!serviciosStr || serviciosStr.trim() === "") {
+    return [];
+  }
+
+  return serviciosStr
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+// Función para estimar año del vehículo basado en kilometraje
+function estimarAnioVehiculo(kilometraje?: number): number {
+  if (!kilometraje) return 2015;
+
+  if (kilometraje < 50000) return 2020;
+  if (kilometraje < 100000) return 2018;
+  if (kilometraje < 150000) return 2016;
+  if (kilometraje < 200000) return 2014;
+  if (kilometraje < 300000) return 2012;
+  if (kilometraje < 400000) return 2010;
   return 2008;
 }
 
 export default function ImportVehicles() {
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvData, setCsvData] = useState<CSVRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<{
     exitosos: number;
     fallidos: number;
     mensajes: string[];
+    clientesCreados: number;
+    serviciosCreados: number;
   } | null>(null);
-  const [fixing, setFixing] = useState(false);
-  const [fixResult, setFixResult] = useState<string | null>(null);
 
   const createVehicle = useMutation(api.vehicles.createVehicle);
-  const fixDeliveredVehicles = useMutation(api.vehicles.fixDeliveredVehicles);
+  const createOrGetCustomerByName = useMutation(
+    api.customers.createOrGetCustomerByName
+  );
+  const createService = useMutation(api.services.createService);
 
-  const importarVehiculo = async (
-    vehiculo: (typeof vehiculosHistoricos)[0]
-  ) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === "text/csv") {
+      setCsvFile(file);
+      setCsvData([]);
+      setResults(null);
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        const parsed = parseCSV(content);
+        setCsvData(parsed);
+      };
+      reader.readAsText(file);
+    } else {
+      alert("Por favor, selecciona un archivo CSV válido");
+    }
+  };
+
+  const importarVehiculo = async (row: CSVRow, customerId: string) => {
     try {
-      const entryDate = convertirFechaAISO(vehiculo.fecha);
-      const year = estimarAnioVehiculo(vehiculo.kilometraje);
-      const phone = "Sin teléfono";
-      const owner = vehiculo.dueno || "Sin datos";
+      const entryDate = convertirFechaAISO(row.Fecha);
+      const kilometraje = parseKilometraje(row.KILOMETRAJE);
+      const year = estimarAnioVehiculo(kilometraje);
 
-      const services = vehiculo.servicios
-        ? [vehiculo.servicios]
-        : ["Servicio general"];
+      // Parsear servicios
+      const serviciosNombres = parseServicios(row["SERVICIOS (Items)"]);
+
+      // Crear servicios en la base de datos
+      for (const servicioNombre of serviciosNombres) {
+        await createService({ name: servicioNombre });
+      }
+
+      // Obtener nombres de servicios para el array del vehículo
+      const serviciosNombresArray =
+        serviciosNombres.length > 0 ? serviciosNombres : ["Servicio general"];
 
       const vehicleData = {
-        plate: vehiculo.placa || "S/P",
-        brand: vehiculo.marca,
-        model: vehiculo.modelo,
+        plate: row.PLACA && row.PLACA !== "N/A" ? row.PLACA : "S/P",
+        brand: row.MARCA || "Sin marca",
+        model: row.MODELO && row.MODELO !== "N/A" ? row.MODELO : "Sin modelo",
         year: year,
-        owner: owner,
-        phone: phone,
+        owner: row.CLIENTE || "Sin datos",
+        phone: "Sin teléfono",
+        customerId: customerId as any,
         status: "Entregado",
         entryDate: entryDate,
-        services: services,
+        services: serviciosNombresArray,
         cost: 0,
-        description: vehiculo.descripcion || "",
+        description: row["DESCRIPCIÓN COMPLETA"] || "",
+        mileage: kilometraje,
       };
 
       await createVehicle(vehicleData);
       return {
         exitoso: true,
-        mensaje: `✓ ${vehiculo.marca} ${vehiculo.modelo} - ${vehiculo.placa}`,
+        mensaje: `✓ ${row.MARCA} ${row.MODELO} - ${row.PLACA}`,
       };
     } catch (error) {
       return {
         exitoso: false,
-        mensaje: `✗ ${vehiculo.marca} ${vehiculo.modelo} - Error: ${error}`,
+        mensaje: `✗ ${row.MARCA} ${row.MODELO} - Error: ${error}`,
       };
     }
   };
 
   const iniciarImportacion = async () => {
+    if (csvData.length === 0) {
+      alert("Por favor, primero carga un archivo CSV");
+      return;
+    }
+
     setImporting(true);
     setProgress(0);
     setResults(null);
@@ -390,104 +233,74 @@ export default function ImportVehicles() {
     let exitosos = 0;
     let fallidos = 0;
     const mensajes: string[] = [];
+    const clientesCreados = new Set<string>();
+    const serviciosCreados = new Set<string>();
 
-    for (let i = 0; i < vehiculosHistoricos.length; i++) {
-      const resultado = await importarVehiculo(vehiculosHistoricos[i]);
+    // Cache de IDs de clientes por nombre
+    const clientesCache = new Map<string, string>();
 
-      if (resultado.exitoso) {
-        exitosos++;
-      } else {
+    for (let i = 0; i < csvData.length; i++) {
+      const row = csvData[i];
+
+      try {
+        // Buscar o crear cliente
+        const clienteNombre = row.CLIENTE || "Sin datos";
+        let customerId: string;
+
+        if (clientesCache.has(clienteNombre)) {
+          customerId = clientesCache.get(clienteNombre)!;
+        } else {
+          customerId = await createOrGetCustomerByName({
+            name: clienteNombre,
+          });
+          clientesCache.set(clienteNombre, customerId);
+          clientesCreados.add(clienteNombre);
+        }
+
+        // Parsear servicios y contarlos
+        const serviciosNombres = parseServicios(row["SERVICIOS (Items)"]);
+        serviciosNombres.forEach((s) => serviciosCreados.add(s));
+
+        // Importar vehículo
+        const resultado = await importarVehiculo(row, customerId);
+
+        if (resultado.exitoso) {
+          exitosos++;
+        } else {
+          fallidos++;
+        }
+
+        mensajes.push(resultado.mensaje);
+        setProgress(((i + 1) / csvData.length) * 100);
+
+        // Pequeña pausa para no saturar la API
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch (error) {
         fallidos++;
+        mensajes.push(`✗ Error al procesar fila ${i + 1}: ${error}`);
       }
-
-      mensajes.push(resultado.mensaje);
-      setProgress(((i + 1) / vehiculosHistoricos.length) * 100);
-
-      // Pequeña pausa para no saturar la API
-      await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
-    setResults({ exitosos, fallidos, mensajes });
+    setResults({
+      exitosos,
+      fallidos,
+      mensajes,
+      clientesCreados: clientesCreados.size,
+      serviciosCreados: serviciosCreados.size,
+    });
     setImporting(false);
-  };
-
-  const ejecutarCorreccion = async () => {
-    setFixing(true);
-    setFixResult(null);
-
-    try {
-      const result = await fixDeliveredVehicles();
-      setFixResult(result.message);
-    } catch (error) {
-      setFixResult(`Error: ${error}`);
-    }
-
-    setFixing(false);
   };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Importar Datos del Cuaderno
+          Importar Datos desde CSV
         </h1>
         <p className="text-gray-600">
-          Importa {vehiculosHistoricos.length} registros históricos del cuaderno
-          físico al sistema digital
+          Importa datos de vehículos desde un archivo CSV. Se crearán
+          automáticamente clientes y servicios/items reutilizables.
         </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-blue-600" />
-              Total de Registros
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-blue-600">
-              {vehiculosHistoricos.length}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">Vehículos históricos</p>
-          </CardContent>
-        </Card>
-
-        {results && (
-          <>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  Exitosos
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-green-600">
-                  {results.exitosos}
-                </p>
-                <p className="text-sm text-gray-600 mt-1">
-                  Importados correctamente
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <XCircle className="h-5 w-5 text-red-600" />
-                  Fallidos
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-red-600">
-                  {results.fallidos}
-                </p>
-                <p className="text-sm text-gray-600 mt-1">Con errores</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
       </div>
 
       <Alert className="mb-6">
@@ -500,163 +313,232 @@ export default function ImportVehicles() {
         </AlertDescription>
       </Alert>
 
-      {/* Botón de corrección para vehículos ya importados */}
-      <Card className="mb-6 border-orange-200 bg-orange-50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-orange-800">
-            <AlertCircle className="h-5 w-5" />
-            ¿Ya importaste los vehículos pero no aparecen en "Entregados"?
-          </CardTitle>
-          <CardDescription className="text-orange-700">
-            Si ya ejecutaste la importación antes de esta actualización, usa
-            este botón para corregir el estado de los vehículos entregados.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            onClick={ejecutarCorreccion}
-            disabled={fixing}
-            variant="outline"
-            className="w-full border-orange-300 hover:bg-orange-100"
-          >
-            <CheckCircle2 className="mr-2 h-5 w-5" />
-            {fixing ? "Corrigiendo..." : "Corregir Vehículos Entregados"}
-          </Button>
-
-          {fixResult && (
-            <Alert className="mt-4 border-green-200 bg-green-50">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
-                {fixResult}
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Datos a Importar</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <FileUp className="h-5 w-5 text-blue-600" />
+            Cargar Archivo CSV
+          </CardTitle>
           <CardDescription>
-            Vista previa de los primeros 5 registros
+            Selecciona el archivo CSV con los datos a importar
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                    Fecha
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                    Marca
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                    Modelo
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                    Placa
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                    Dueño
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                    Servicios
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {vehiculosHistoricos.slice(0, 5).map((v, idx) => (
-                  <tr key={idx}>
-                    <td className="px-4 py-2 text-sm text-gray-900">
-                      {v.fecha}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-900">
-                      {v.marca}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-900">
-                      {v.modelo}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-900">
-                      {v.placa}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-900">
-                      {v.dueno}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-900">
-                      {v.servicios}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex items-center gap-4">
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            />
           </div>
-          {vehiculosHistoricos.length > 5 && (
-            <p className="text-sm text-gray-500 mt-2 text-center">
-              ... y {vehiculosHistoricos.length - 5} registros más
-            </p>
+          {csvFile && (
+            <div className="mt-4 p-3 bg-green-50 rounded-md">
+              <p className="text-sm text-green-800">
+                <FileText className="inline h-4 w-4 mr-2" />
+                Archivo cargado: {csvFile.name}
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Iniciar Importación</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Button
-            onClick={iniciarImportacion}
-            disabled={importing || results !== null}
-            className="w-full"
-            size="lg"
-          >
-            <Upload className="mr-2 h-5 w-5" />
-            {importing
-              ? "Importando..."
-              : results
-                ? "Importación Completada"
-                : "Importar Todos los Registros"}
-          </Button>
+      {csvData.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                  Total de Registros
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-blue-600">
+                  {csvData.length}
+                </p>
+                <p className="text-sm text-gray-600 mt-1">Vehículos a importar</p>
+              </CardContent>
+            </Card>
 
-          {importing && (
-            <div className="mt-4">
-              <div className="flex justify-between text-sm text-gray-600 mb-1">
-                <span>Progreso</span>
-                <span>{Math.round(progress)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          )}
+            {results && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      Exitosos
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold text-green-600">
+                      {results.exitosos}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Importados correctamente
+                    </p>
+                  </CardContent>
+                </Card>
 
-          {results && (
-            <div className="mt-6">
-              <h3 className="font-semibold mb-2">
-                Resultados de la Importación
-              </h3>
-              <div className="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
-                {results.mensajes.map((mensaje, idx) => (
-                  <div
-                    key={idx}
-                    className={`text-sm py-1 ${
-                      mensaje.startsWith("✓")
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {mensaje}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <XCircle className="h-5 w-5 text-red-600" />
+                      Fallidos
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold text-red-600">
+                      {results.fallidos}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-1">Con errores</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-purple-600" />
+                      Clientes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold text-purple-600">
+                      {results.clientesCreados}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-1">Clientes únicos</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Vista Previa de Datos</CardTitle>
+              <CardDescription>
+                Primeros 5 registros del archivo CSV
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                        Fecha
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                        Marca
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                        Modelo
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                        Placa
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                        Cliente
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                        Servicios
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {csvData.slice(0, 5).map((row, idx) => (
+                      <tr key={idx}>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {row.Fecha}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {row.MARCA}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {row.MODELO}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {row.PLACA}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {row.CLIENTE}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {row["SERVICIOS (Items)"].substring(0, 50)}
+                          {row["SERVICIOS (Items)"].length > 50 ? "..." : ""}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {csvData.length > 5 && (
+                <p className="text-sm text-gray-500 mt-2 text-center">
+                  ... y {csvData.length - 5} registros más
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Iniciar Importación</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={iniciarImportacion}
+                disabled={importing || results !== null}
+                className="w-full"
+                size="lg"
+              >
+                <Upload className="mr-2 h-5 w-5" />
+                {importing
+                  ? "Importando..."
+                  : results
+                    ? "Importación Completada"
+                    : "Importar Todos los Registros"}
+              </Button>
+
+              {importing && (
+                <div className="mt-4">
+                  <div className="flex justify-between text-sm text-gray-600 mb-1">
+                    <span>Progreso</span>
+                    <span>{Math.round(progress)}%</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {results && (
+                <div className="mt-6">
+                  <h3 className="font-semibold mb-2">
+                    Resultados de la Importación
+                  </h3>
+                  <div className="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
+                    {results.mensajes.map((mensaje, idx) => (
+                      <div
+                        key={idx}
+                        className={`text-sm py-1 ${
+                          mensaje.startsWith("✓")
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {mensaje}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -290,6 +290,47 @@ export const recalculateAllCustomerMetrics = mutation({
   },
 });
 
+// Crear o devolver cliente existente por nombre (útil para importaciones CSV)
+export const createOrGetCustomerByName = mutation({
+  args: {
+    name: v.string(),
+    phone: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.name || args.name.trim() === "" || args.name === "N/A") {
+      args.name = "Sin datos";
+    }
+    
+    // Buscar cliente existente por nombre (case insensitive)
+    const allCustomers = await ctx.db
+      .query("customers")
+      .filter((q) => q.eq(q.field("active"), true))
+      .collect();
+    
+    const existingCustomer = allCustomers.find(
+      (c) => c.name.toLowerCase().trim() === args.name.toLowerCase().trim()
+    );
+
+    // Si existe, devolver su ID
+    if (existingCustomer) {
+      return existingCustomer._id;
+    }
+
+    // Si no existe, crear uno nuevo
+    const customerId = await ctx.db.insert("customers", {
+      name: args.name.trim(),
+      phone: args.phone || "Sin teléfono",
+      createdAt: new Date().toISOString(),
+      active: true,
+      totalVehicles: 0,
+      totalSpent: 0,
+      visitCount: 0,
+    });
+
+    return customerId;
+  },
+});
+
 // Obtener estadísticas generales de clientes
 export const getCustomersStats = query({
   handler: async (ctx) => {

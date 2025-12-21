@@ -11,6 +11,7 @@ import { formatDateToDDMMYYYY } from "../../lib/dateUtils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu"
 import { 
   Users, 
   DollarSign, 
@@ -24,7 +25,10 @@ import {
   Calendar,
   FileText,
   UserPlus,
-  Link as LinkIcon
+  Link as LinkIcon,
+  MoreHorizontal,
+  Unlink,
+  RefreshCcw
 } from "lucide-react"
 import VehicleCustomerAssociation from "../ui/vehicle-customer-association"
 interface Customer {
@@ -77,6 +81,7 @@ export default function Customers() {
   // Mutations
   const createCustomer = useMutation(api.customers.createCustomer)
   const updateCustomer = useMutation(api.customers.updateCustomer)
+  const removeCustomerFromVehicle = useMutation(api.vehicles.removeCustomerFromVehicle)
 
   // Filtrar clientes por término de búsqueda
   const filteredCustomers = customers.filter(customer => 
@@ -132,6 +137,22 @@ export default function Customers() {
       notes: customer.notes || "",
     })
     setIsEditDialogOpen(true)
+  }
+
+  const handleUnlinkVehicle = async (vehicleId: string) => {
+    try {
+      await removeCustomerFromVehicle({
+        vehicleId: vehicleId as any
+      })
+    } catch (error) {
+      console.error("Error unlinking vehicle:", error)
+    }
+  }
+
+  const handleChangeCustomer = (_vehicleId: string) => {
+    // Cerrar el detalle actual y abrir el modal de asociación
+    // El modal permitirá cambiar al cliente
+    setIsAssociationDialogOpen(true)
   }
 
   return (
@@ -559,13 +580,38 @@ export default function Customers() {
                                   </span>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <p className="font-medium">${vehicle.cost.toLocaleString()}</p>
-                                {vehicle.exitDate && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Salida: {formatDateToDDMMYYYY(vehicle.exitDate)}
-                                  </p>
-                                )}
+                              <div className="flex items-center gap-3">
+                                <div className="text-right">
+                                  <p className="font-medium">${vehicle.cost.toLocaleString()}</p>
+                                  {vehicle.exitDate && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Salida: {formatDateToDDMMYYYY(vehicle.exitDate)}
+                                    </p>
+                                  )}
+                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      className="text-red-600 cursor-pointer"
+                                      onClick={() => handleUnlinkVehicle(vehicle._id)}
+                                    >
+                                      <Unlink className="h-4 w-4 mr-2" />
+                                      Desvincular de este cliente
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="cursor-pointer"
+                                      onClick={() => handleChangeCustomer(vehicle._id)}
+                                    >
+                                      <RefreshCcw className="h-4 w-4 mr-2" />
+                                      Cambiar a otro cliente
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             </div>
                           </CardContent>

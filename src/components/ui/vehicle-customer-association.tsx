@@ -17,7 +17,8 @@ import {
   ArrowRight,
   UserPlus,
   Check,
-  X
+  X,
+  Unlink
 } from "lucide-react"
 
 interface VehicleCustomerAssociationProps {
@@ -44,6 +45,7 @@ export default function VehicleCustomerAssociation({
 
   // Mutations
   const assignVehicleToCustomer = useMutation(api.vehicles.assignVehicleToCustomer)
+  const removeCustomerFromVehicle = useMutation(api.vehicles.removeCustomerFromVehicle)
 
   // Filtrar vehículos por término de búsqueda
   const filteredVehiclesWithoutCustomer = vehiclesWithoutCustomer.filter(vehicle => 
@@ -86,6 +88,21 @@ export default function VehicleCustomerAssociation({
       console.error("Error assigning vehicles:", error)
     }
   }
+
+  const handleRemoveCustomer = async (vehicleId: string) => {
+    try {
+      await removeCustomerFromVehicle({
+        vehicleId: vehicleId as any
+      })
+    } catch (error) {
+      console.error("Error removing customer from vehicle:", error)
+    }
+  }
+
+  // Filtrar vehículos del cliente actual
+  const customerVehicles = allVehiclesWithCustomerInfo.filter(
+    v => v.hasCustomer && v.customer?._id === selectedCustomer?._id
+  )
 
   const vehiclesWithoutCustomerCount = vehiclesWithoutCustomer.length
   const vehiclesWithCustomerCount = allVehiclesWithCustomerInfo.filter(v => v.hasCustomer).length
@@ -157,15 +174,84 @@ export default function VehicleCustomerAssociation({
           </div>
 
           {/* Tabs para diferentes vistas */}
-          <Tabs defaultValue="without-customer" className="space-y-4">
-            <TabsList>
+          <Tabs defaultValue="customer-vehicles" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="customer-vehicles">
+                Vehículos del Cliente ({customerVehicles.length})
+              </TabsTrigger>
               <TabsTrigger value="without-customer">
                 Sin Cliente ({vehiclesWithoutCustomerCount})
               </TabsTrigger>
               <TabsTrigger value="all-vehicles">
-                Todos los Vehículos ({allVehiclesWithCustomerInfo.length})
+                Todos ({allVehiclesWithCustomerInfo.length})
               </TabsTrigger>
             </TabsList>
+
+            {/* Tab: Vehículos del cliente actual */}
+            <TabsContent value="customer-vehicles" className="space-y-3 max-h-[400px] overflow-y-auto">
+              {customerVehicles.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Car className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Este cliente no tiene vehículos asociados</p>
+                </div>
+              ) : (
+                customerVehicles.map((vehicle) => (
+                  <Card key={vehicle._id} className="bg-blue-50 border-blue-200">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="font-mono bg-white">
+                              {vehicle.plate}
+                            </Badge>
+                            <span className="font-medium">
+                              {vehicle.brand} {vehicle.model} {vehicle.year}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              <span>{vehicle.owner}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              <span>{vehicle.phone}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              <span>{new Date(vehicle.entryDate).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge className={
+                              vehicle.status === "Entregado" ? "bg-green-100 text-green-800" :
+                              vehicle.status === "Listo" ? "bg-blue-100 text-blue-800" :
+                              vehicle.status === "En Reparación" ? "bg-yellow-100 text-yellow-800" :
+                              "bg-gray-100 text-gray-800"
+                            }>
+                              {vehicle.status}
+                            </Badge>
+                            <div className="flex items-center gap-1 text-sm text-green-600">
+                              <DollarSign className="h-3 w-3" />
+                              <span>${vehicle.cost.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleRemoveCustomer(vehicle._id)}
+                        >
+                          <Unlink className="h-4 w-4 mr-2" />
+                          Desvincular
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </TabsContent>
 
             <TabsContent value="without-customer" className="space-y-3 max-h-[400px] overflow-y-auto">
               {filteredVehiclesWithoutCustomer.length === 0 ? (
@@ -243,56 +329,91 @@ export default function VehicleCustomerAssociation({
                   <p className="text-sm">No se encontraron vehículos</p>
                 </div>
               ) : (
-                filteredAllVehicles.map((vehicle) => (
-                  <Card 
-                    key={vehicle._id} 
-                    className={`transition-all ${
-                      vehicle.hasCustomer 
-                        ? 'bg-gray-50 border-gray-200' 
-                        : selectedVehicles.includes(vehicle._id)
-                          ? 'ring-2 ring-blue-500 bg-blue-50 cursor-pointer' 
-                          : 'hover:border-gray-300 cursor-pointer hover:shadow-md'
-                    }`}
-                    onClick={() => !vehicle.hasCustomer && handleVehicleToggle(vehicle._id)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="font-mono">
-                              {vehicle.plate}
-                            </Badge>
-                            <span className="font-medium">
-                              {vehicle.brand} {vehicle.model} {vehicle.year}
-                            </span>
-                            {vehicle.hasCustomer ? (
-                              <Badge className="bg-green-100 text-green-800 text-xs">
-                                <User className="h-3 w-3 mr-1" />
-                                {vehicle.customer?.name}
+                filteredAllVehicles.map((vehicle) => {
+                  const isOwnedByCurrentCustomer = vehicle.hasCustomer && vehicle.customer?._id === selectedCustomer?._id;
+                  const isOwnedByOtherCustomer = vehicle.hasCustomer && vehicle.customer?._id !== selectedCustomer?._id;
+                  
+                  return (
+                    <Card 
+                      key={vehicle._id} 
+                      className={`transition-all ${
+                        isOwnedByCurrentCustomer
+                          ? 'bg-blue-50 border-blue-200'
+                          : isOwnedByOtherCustomer 
+                            ? 'bg-gray-50 border-gray-200' 
+                            : selectedVehicles.includes(vehicle._id)
+                              ? 'ring-2 ring-blue-500 bg-blue-50 cursor-pointer' 
+                              : 'hover:border-gray-300 cursor-pointer hover:shadow-md'
+                      }`}
+                      onClick={() => !vehicle.hasCustomer && handleVehicleToggle(vehicle._id)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono">
+                                {vehicle.plate}
                               </Badge>
-                            ) : selectedVehicles.includes(vehicle._id) ? (
-                              <Check className="h-4 w-4 text-blue-600" />
-                            ) : null}
+                              <span className="font-medium">
+                                {vehicle.brand} {vehicle.model} {vehicle.year}
+                              </span>
+                              {vehicle.hasCustomer ? (
+                                <Badge className={isOwnedByCurrentCustomer ? "bg-blue-100 text-blue-800 text-xs" : "bg-green-100 text-green-800 text-xs"}>
+                                  <User className="h-3 w-3 mr-1" />
+                                  {vehicle.customer?.name}
+                                </Badge>
+                              ) : selectedVehicles.includes(vehicle._id) ? (
+                                <Check className="h-4 w-4 text-blue-600" />
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                              <div className="flex items-center gap-1">
+                                <User className="h-3 w-3" />
+                                <span>{vehicle.owner}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                <span>{vehicle.phone}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                <span>{new Date(vehicle.entryDate).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge className={
+                                vehicle.status === "Entregado" ? "bg-green-100 text-green-800" :
+                                vehicle.status === "Listo" ? "bg-blue-100 text-blue-800" :
+                                vehicle.status === "En Reparación" ? "bg-yellow-100 text-yellow-800" :
+                                "bg-gray-100 text-gray-800"
+                              }>
+                                {vehicle.status}
+                              </Badge>
+                              <div className="flex items-center gap-1 text-sm text-green-600">
+                                <DollarSign className="h-3 w-3" />
+                                <span>${vehicle.cost.toLocaleString()}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                            <div className="flex items-center gap-1">
-                              <User className="h-3 w-3" />
-                              <span>{vehicle.owner}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              <span>{vehicle.phone}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              <span>{new Date(vehicle.entryDate).toLocaleDateString()}</span>
-                            </div>
-                          </div>
+                          {isOwnedByCurrentCustomer && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleRemoveCustomer(vehicle._id)
+                              }}
+                            >
+                              <Unlink className="h-4 w-4 mr-2" />
+                              Desvincular
+                            </Button>
+                          )}
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                      </CardContent>
+                    </Card>
+                  )
+                })
               )}
             </TabsContent>
           </Tabs>

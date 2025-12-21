@@ -20,6 +20,7 @@ import {
   Pause,
   Square,
   CheckCircle,
+  History,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
@@ -571,19 +572,57 @@ export default function Vehicles() {
   });
 
   const createVehicle = useMutation(api.vehicles.createVehicle);
+  const createNewEntry = useMutation(api.vehicles.createNewEntryForExistingVehicle);
   const updateVehicle = useMutation(api.vehicles.updateVehicle);
   const startWorkOnVehicle = useMutation(api.vehicles.startWorkOnVehicle);
   const pauseWorkOnVehicle = useMutation(api.vehicles.pauseWorkOnVehicle);
   const completeWorkOnVehicle = useMutation(api.vehicles.completeWorkOnVehicle);
   const createOrGetCustomer = useMutation(api.customers.createOrGetCustomer);
+  
+  // Queries y mutations para servicios
+  // const services = useQuery(api.services.getServices);
+  // const createService = useMutation(api.services.createService);
+  
+  // Convertir servicios de BD a array de strings
+  const serviceOptions: string[] = []; // services?.map((s: { name: string }) => s.name) || [];
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isNewEntryDialogOpen, setIsNewEntryDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [isDeliverDialogOpen, setIsDeliverDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
   const [detailVehicle, setDetailVehicle] = useState<any>(null);
   const [vehicleToDeliver, setVehicleToDeliver] = useState<any>(null);
+  const [selectedVehicleForEntry, setSelectedVehicleForEntry] = useState<any>(null);
+  const [newEntryPlate, setNewEntryPlate] = useState("");
+  const [isPlateDropdownOpen, setIsPlateDropdownOpen] = useState(false);
+  const [newEntry, setNewEntry] = useState({
+    services: [] as string[],
+    cost: "",
+    description: "",
+    mileage: "",
+    responsibles: [] as {
+      name: string;
+      role: string;
+      userId?: string;
+      isAdmin?: boolean;
+    }[],
+  });
+
+  // Query para obtener todas las placas disponibles
+  const allVehiclePlates = useQuery(api.vehicles.getAllVehiclePlates) ?? [];
+  
+  // Query para buscar vehículo por placa (debe estar después de la declaración del estado)
+  const searchVehicleByPlate = useQuery(
+    api.vehicles.searchVehicleByPlate,
+    newEntryPlate.length >= 2 ? { plate: newEntryPlate } : "skip"
+  );
+
+  // Filtrar placas para autocompletado
+  const filteredPlates = allVehiclePlates.filter((vehicle) =>
+    vehicle.plate.toLowerCase().includes(newEntryPlate.toLowerCase())
+  ).slice(0, 5); // Limitar a 5 sugerencias
   const [newVehicle, setNewVehicle] = useState({
     plate: "",
     brand: "",
@@ -595,6 +634,7 @@ export default function Vehicles() {
     services: [] as string[],
     cost: "",
     description: "",
+    mileage: "", // Kilometraje
     responsibles: [] as {
       name: string;
       role: string;
@@ -680,6 +720,7 @@ export default function Vehicles() {
               : ["Mantenimiento general"],
           cost: parseFloat(newVehicle.cost) || 0,
           description: newVehicle.description,
+          mileage: newVehicle.mileage ? parseInt(newVehicle.mileage) : undefined,
           responsibles,
         });
 
@@ -694,6 +735,7 @@ export default function Vehicles() {
           services: [],
           cost: "",
           description: "",
+          mileage: "",
           responsibles: [],
         });
         setIsDialogOpen(false);
@@ -736,7 +778,9 @@ export default function Vehicles() {
           plate: editingVehicle.plate,
           brand: editingVehicle.brand,
           model: editingVehicle.model,
-          year: parseInt(editingVehicle.year),
+          year: typeof editingVehicle.year === 'number' 
+            ? editingVehicle.year 
+            : parseInt(editingVehicle.year) || new Date().getFullYear(),
           owner: editingVehicle.owner,
           phone: editingVehicle.phone,
           customerId: customerId || undefined,
@@ -744,6 +788,7 @@ export default function Vehicles() {
           services: editingVehicle.services,
           cost: parseFloat(editingVehicle.cost),
           description: editingVehicle.description,
+          mileage: editingVehicle.mileage,
           responsibles: editingVehicle.responsibles || [],
           parts: editingVehicle.parts || [],
         });
@@ -753,6 +798,96 @@ export default function Vehicles() {
       } catch (error) {
         console.error("Error al actualizar vehículo:", error);
       }
+    }
+  };
+
+  // Efecto para actualizar el vehículo seleccionado cuando se busca por placa
+  useEffect(() => {
+    if (searchVehicleByPlate) {
+      setSelectedVehicleForEntry(searchVehicleByPlate);
+      setIsPlateDropdownOpen(false);
+    } else if (newEntryPlate.length >= 2) {
+      setSelectedVehicleForEntry(null);
+    }
+  }, [searchVehicleByPlate, newEntryPlate]);
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('[data-plate-dropdown]')) {
+        setIsPlateDropdownOpen(false);
+      }
+    };
+
+    if (isPlateDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isPlateDropdownOpen]);
+
+  const handleCreateNewEntry = async () => {
+    if (!selectedVehicleForEntry || !newEntryPlate) {
+      alert("Por favor, selecciona un vehículo existente");
+      return;
+    }
+
+    if (newEntry.services.length === 0) {
+      alert("Por favor, ingresa al menos un servicio");
+      return;
+    }
+
+    if (!newEntry.mileage || newEntry.mileage.trim() === "") {
+      alert("Por favor, ingresa el kilometraje del vehículo");
+      return;
+    }
+
+    try {
+      let responsibles = newEntry.responsibles.map((r) => ({
+        name: r.name,
+        role: r.role,
+        assignedAt: new Date().toISOString(),
+        userId: r.userId,
+        isAdmin: r.isAdmin,
+      }));
+
+      // Si es miembro (no admin) y no se ha asignado responsables, asignarse automáticamente
+      if (!isAdmin && responsibles.length === 0 && user) {
+        responsibles = [
+          {
+            name: `${user.firstName} ${user.lastName}`.trim(),
+            role: "Miembro",
+            assignedAt: new Date().toISOString(),
+            userId: user.id,
+            isAdmin: false,
+          },
+        ];
+      }
+
+      await createNewEntry({
+        plate: newEntryPlate,
+        services: newEntry.services.length > 0 ? newEntry.services : ["Mantenimiento general"],
+        cost: parseFloat(newEntry.cost) || 0,
+        description: newEntry.description,
+        mileage: newEntry.mileage ? parseInt(newEntry.mileage) : undefined,
+        responsibles,
+      });
+
+      // Limpiar formulario
+      setNewEntry({
+        services: [],
+        cost: "",
+        description: "",
+        mileage: "",
+        responsibles: [],
+      });
+      setNewEntryPlate("");
+      setSelectedVehicleForEntry(null);
+      setIsPlateDropdownOpen(false);
+      setIsNewEntryDialogOpen(false);
+    } catch (error: any) {
+      console.error("Error al crear nueva entrada:", error);
+      alert(error.message || "Error al crear nueva entrada");
     }
   };
 
@@ -899,6 +1034,187 @@ export default function Vehicles() {
             <CheckCircle className="h-4 w-4" />
             Vehículos Entregados
           </Button>
+          <Dialog open={isNewEntryDialogOpen} onOpenChange={setIsNewEntryDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Nueva Entrada
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Nueva Entrada - Vehículo Existente</DialogTitle>
+                <DialogDescription>
+                  Agrega un nuevo arreglo para un vehículo que ya existe en el sistema
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="entryPlate">Placa del Vehículo</Label>
+                  <div className="relative" data-plate-dropdown>
+                    <Input
+                      id="entryPlate"
+                      value={newEntryPlate}
+                      onChange={(e) => {
+                        setNewEntryPlate(e.target.value.toUpperCase());
+                        setIsPlateDropdownOpen(true);
+                      }}
+                      onFocus={() => {
+                        if (filteredPlates.length > 0) {
+                          setIsPlateDropdownOpen(true);
+                        }
+                      }}
+                      placeholder="ABC-123"
+                      autoComplete="off"
+                    />
+                    {/* Dropdown de sugerencias */}
+                    {isPlateDropdownOpen && newEntryPlate.length > 0 && filteredPlates.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredPlates.map((vehicle) => (
+                          <button
+                            key={vehicle.plate}
+                            type="button"
+                            onClick={() => {
+                              setNewEntryPlate(vehicle.plate);
+                              setIsPlateDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {vehicle.plate}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {vehicle.vehicleInfo.brand} {vehicle.vehicleInfo.model} {vehicle.vehicleInfo.year} - {vehicle.vehicleInfo.owner}
+                                </p>
+                              </div>
+                              <Badge variant="outline" className="text-xs">
+                                {vehicle.visitCount} visita{vehicle.visitCount !== 1 ? 's' : ''}
+                              </Badge>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {selectedVehicleForEntry && (
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <p className="text-sm font-medium text-blue-900">
+                        {selectedVehicleForEntry.brand} {selectedVehicleForEntry.model} {selectedVehicleForEntry.year}
+                      </p>
+                      <p className="text-xs text-blue-700">
+                        Cliente: {selectedVehicleForEntry.owner} | Tel: {selectedVehicleForEntry.phone}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Visitas anteriores: {selectedVehicleForEntry.visitCount}
+                      </p>
+                    </div>
+                  )}
+                  {newEntryPlate.length >= 2 && !selectedVehicleForEntry && filteredPlates.length === 0 && (
+                    <p className="text-sm text-red-600">
+                      No se encontró ningún vehículo con esta placa
+                    </p>
+                  )}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="entryServices">Servicios</Label>
+                  <CreatableSelect
+                    value={newEntry.services}
+                    onChange={(services) =>
+                      setNewEntry({ ...newEntry, services })
+                    }
+                    options={serviceOptions}
+                    onCreateOption={(serviceName) => {
+                      console.log("Nuevo servicio:", serviceName);
+                    }}
+                    placeholder="Seleccionar o agregar servicios..."
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Responsables</Label>
+                  <ResponsibleSelector
+                    responsibles={newEntry.responsibles}
+                    onChange={(responsibles) =>
+                      setNewEntry({ ...newEntry, responsibles })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="entryMileage">
+                    Kilometraje <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="entryMileage"
+                    type="number"
+                    value={newEntry.mileage}
+                    onChange={(e) =>
+                      setNewEntry({ ...newEntry, mileage: e.target.value })
+                    }
+                    onFocus={(e) => e.target.select()}
+                    placeholder="150000"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Ingresa el kilometraje actual del vehículo en este momento
+                  </p>
+                </div>
+                {isAdmin && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="entryCost">Costo Estimado</Label>
+                    <Input
+                      id="entryCost"
+                      type="number"
+                      step="0.01"
+                      value={newEntry.cost}
+                      onChange={(e) =>
+                        setNewEntry({ ...newEntry, cost: e.target.value })
+                      }
+                      onFocus={(e) => e.target.select()}
+                      placeholder="0.00"
+                    />
+                  </div>
+                )}
+                <div className="grid gap-2">
+                  <Label htmlFor="entryDescription">Descripción</Label>
+                  <Input
+                    id="entryDescription"
+                    value={newEntry.description}
+                    onChange={(e) =>
+                      setNewEntry({ ...newEntry, description: e.target.value })
+                    }
+                    placeholder="Descripción detallada del problema o servicio"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsNewEntryDialogOpen(false);
+                    setNewEntryPlate("");
+                    setSelectedVehicleForEntry(null);
+                    setIsPlateDropdownOpen(false);
+                    setNewEntry({
+                      services: [],
+                      cost: "",
+                      description: "",
+                      mileage: "",
+                      responsibles: [],
+                    });
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleCreateNewEntry}
+                  disabled={!selectedVehicleForEntry || newEntry.services.length === 0}
+                >
+                  Crear Nueva Entrada
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="flex items-center gap-2">
@@ -1019,6 +1335,11 @@ export default function Vehicles() {
                     onChange={(services) =>
                       setNewVehicle({ ...newVehicle, services })
                     }
+                    options={serviceOptions}
+                    onCreateOption={(serviceName) => {
+                      // createService({ name: serviceName });
+                      console.log("Nuevo servicio:", serviceName);
+                    }}
                     placeholder="Seleccionar o agregar servicios..."
                   />
                 </div>
@@ -1059,6 +1380,22 @@ export default function Vehicles() {
                       })
                     }
                     placeholder="Descripción detallada del problema o servicio"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="mileage">Kilometraje</Label>
+                  <Input
+                    id="mileage"
+                    type="number"
+                    value={newVehicle.mileage}
+                    onChange={(e) =>
+                      setNewVehicle({
+                        ...newVehicle,
+                        mileage: e.target.value,
+                      })
+                    }
+                    onFocus={(e) => e.target.select()}
+                    placeholder="150000"
                   />
                 </div>
               </div>
@@ -1237,6 +1574,11 @@ export default function Vehicles() {
                     onChange={(services) =>
                       setEditingVehicle({ ...editingVehicle, services })
                     }
+                    options={serviceOptions}
+                    onCreateOption={(serviceName) => {
+                      // createService({ name: serviceName });
+                      console.log("Nuevo servicio:", serviceName);
+                    }}
                     placeholder="Seleccionar o agregar servicios..."
                   />
                 </div>
@@ -1277,6 +1619,22 @@ export default function Vehicles() {
                         description: e.target.value,
                       })
                     }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-mileage">Kilometraje</Label>
+                  <Input
+                    id="edit-mileage"
+                    type="number"
+                    value={editingVehicle.mileage || ""}
+                    onChange={(e) =>
+                      setEditingVehicle({
+                        ...editingVehicle,
+                        mileage: e.target.value ? parseInt(e.target.value) : undefined,
+                      })
+                    }
+                    onFocus={(e) => e.target.select()}
+                    placeholder="150000"
                   />
                 </div>
 
@@ -1637,6 +1995,16 @@ export default function Vehicles() {
                           {detailVehicle.plate}
                         </p>
                       </div>
+                      {detailVehicle.mileage && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Kilometraje
+                          </label>
+                          <p className="mt-1 text-sm text-gray-900 font-medium">
+                            {detailVehicle.mileage.toLocaleString('es-AR')} km
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2551,6 +2919,15 @@ export default function Vehicles() {
                                     />
                                   </svg>
                                 )}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/vehiculos/${encodeURIComponent(vehicle.plate)}/historial-arreglos`);
+                                }}
+                              >
+                                <History className="mr-2 h-4 w-4" />
+                                Ver Historial de Arreglos
                               </DropdownMenuItem>
                               {isAdmin && (
                                 <DropdownMenuItem

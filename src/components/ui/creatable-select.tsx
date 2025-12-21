@@ -10,6 +10,7 @@ interface CreatableSelectProps {
   options?: string[];
   className?: string;
   disabled?: boolean;
+  onCreateOption?: (option: string) => void; // Callback para crear nueva opción en BD
 }
 
 export const CreatableSelect: React.FC<CreatableSelectProps> = ({
@@ -18,7 +19,8 @@ export const CreatableSelect: React.FC<CreatableSelectProps> = ({
   placeholder = "Seleccionar o agregar...",
   options = [],
   className,
-  disabled = false
+  disabled = false,
+  onCreateOption, // Nuevo prop
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -49,7 +51,11 @@ export const CreatableSelect: React.FC<CreatableSelectProps> = ({
     "Cambio de pastillas de freno"
   ], []);
 
-  const allOptions = useMemo(() => [...defaultOptions, ...options], [defaultOptions, options]);
+  const allOptions = useMemo(() => {
+    // Eliminar duplicados y combinar opciones de BD con las predefinidas
+    const combined = [...options, ...defaultOptions];
+    return Array.from(new Set(combined));
+  }, [defaultOptions, options]);
 
   const filteredOptions = useMemo(() => {
     if (inputValue) {
@@ -93,7 +99,14 @@ export const CreatableSelect: React.FC<CreatableSelectProps> = ({
 
   const addService = (service: string) => {
     if (service.trim() && !value.includes(service.trim())) {
-      onChange([...value, service.trim()]);
+      const trimmedService = service.trim();
+      
+      // Si hay un callback para crear la opción en BD, llamarlo
+      if (onCreateOption && !allOptions.some(opt => opt.toLowerCase() === trimmedService.toLowerCase())) {
+        onCreateOption(trimmedService);
+      }
+      
+      onChange([...value, trimmedService]);
       setInputValue("");
       setIsOpen(false);
     }

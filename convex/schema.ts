@@ -75,6 +75,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     inTaller: v.optional(v.boolean()),
     lastUpdated: v.optional(v.string()),
+    mileage: v.optional(v.number()), // Kilometraje del vehículo
     // Campo para responsibles del vehículo
     responsibles: v.optional(v.array(v.object({
       name: v.string(),
@@ -255,6 +256,14 @@ export default defineSchema({
     type: v.string(), // "product", "transaction", "vehicle_status", etc.
     active: v.boolean(),
   }),
+
+  // Servicios del taller
+  services: defineTable({
+    name: v.string(),
+    active: v.boolean(),
+    createdAt: v.string(),
+    usageCount: v.optional(v.number()), // Contador de cuántas veces se ha usado
+  }).index("by_name", ["name"]),
 
   // Items del dashboard original
   dashboardItems: defineTable({

@@ -29,6 +29,7 @@ export const createVehicle = mutation({
     services: v.array(v.string()),
     cost: v.number(),
     description: v.optional(v.string()),
+    mileage: v.optional(v.number()),
     responsibles: v.optional(
       v.array(
         v.object({
@@ -134,6 +135,7 @@ export const updateVehicle = mutation({
     services: v.optional(v.array(v.string())),
     cost: v.optional(v.number()),
     description: v.optional(v.string()),
+    mileage: v.optional(v.number()),
     inTaller: v.optional(v.boolean()),
     responsibles: v.optional(
       v.array(
@@ -728,6 +730,58 @@ export const assignVehicleToCustomer = mutation({
   },
 });
 
+// Desvincular vehículo de cliente
+export const removeCustomerFromVehicle = mutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+  },
+  handler: async (ctx, args) => {
+    const vehicle = await ctx.db.get(args.vehicleId);
+
+    if (!vehicle) throw new Error("Vehículo no encontrado");
+    if (!vehicle.customerId) throw new Error("El vehículo no tiene cliente asociado");
+
+    const oldCustomerId = vehicle.customerId;
+
+    // Remover customerId del vehículo
+    await ctx.db.patch(args.vehicleId, {
+      customerId: undefined,
+    });
+
+    // Actualizar métricas del cliente anterior
+    const oldCustomerVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_customer", (q) => q.eq("customerId", oldCustomerId))
+      .collect();
+
+    const oldTotalVehicles = oldCustomerVehicles.filter(
+      (v) => v._id !== args.vehicleId
+    ).length;
+    const oldTotalSpent = oldCustomerVehicles
+      .filter((v) => v._id !== args.vehicleId)
+      .reduce((sum, v) => sum + v.cost, 0);
+
+    const lastVisit =
+      oldTotalVehicles > 0
+        ? oldCustomerVehicles
+            .filter((v) => v._id !== args.vehicleId)
+            .sort(
+              (a, b) =>
+                new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+            )[0].entryDate
+        : undefined;
+
+    await ctx.db.patch(oldCustomerId, {
+      totalVehicles: oldTotalVehicles,
+      totalSpent: oldTotalSpent,
+      lastVisit,
+      visitCount: oldTotalVehicles,
+    });
+
+    return args.vehicleId;
+  },
+});
+
 // Obtener vehículos sin cliente asignado
 export const getVehiclesWithoutCustomer = query({
   handler: async (ctx) => {
@@ -888,6 +942,278 @@ export const fixDeliveredVehicles = mutation({
     return {
       updated,
       message: `Se actualizaron ${updated} vehículos entregados/suspendidos`,
+    };
+  },
+});
+
+// Obtener historial completo de un vehículo por placa
+// Esto incluye todas las veces que el vehículo ha ingresado al taller
+export const getVehicleHistoryByPlate = query({
+  args: {
+    plate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Buscar todos los vehículos con la misma placa
+    const allVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_plate", (q) => q.eq("plate", args.plate))
+      .collect();
+
+    if (allVehicles.length === 0) {
+      return null;
+    }
+
+    // Ordenar por fecha de ingreso (más reciente primero)
+    const sortedVehicles = allVehicles.sort(
+      (a, b) =>
+        new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+    );
+
+    // Obtener información del cliente si existe
+    const firstVehicle = sortedVehicles[0];
+    const customer = firstVehicle.customerId
+      ? await ctx.db.get(firstVehicle.customerId)
+      : null;
+
+    // Calcular estadísticas del historial
+    const totalVisits = sortedVehicles.length;
+    const totalSpent = sortedVehicles.reduce((sum, v) => sum + v.cost, 0);
+    const deliveredVisits = sortedVehicles.filter(
+      (v) => v.status === "Entregado"
+    ).length;
+
+    return {
+      plate: args.plate,
+      vehicleInfo: {
+        brand: firstVehicle.brand,
+        model: firstVehicle.model,
+        year: firstVehicle.year,
+        owner: firstVehicle.owner,
+        phone: firstVehicle.phone,
+        customer,
+      },
+      visits: sortedVehicles.map((vehicle) => ({
+        id: vehicle._id,
+        entryDate: vehicle.entryDate,
+        exitDate: vehicle.exitDate,
+        status: vehicle.status,
+        services: vehicle.services,
+        cost: vehicle.cost,
+        mileage: vehicle.mileage,
+        description: vehicle.description,
+        inTaller: vehicle.inTaller,
+        lastUpdated: vehicle.lastUpdated,
+        costs: vehicle.costs,
+        parts: vehicle.parts,
+        responsibles: vehicle.responsibles,
+        duration: vehicle.exitDate
+          ? Math.ceil(
+              (new Date(vehicle.exitDate).getTime() -
+                new Date(vehicle.entryDate).getTime()) /
+                (1000 * 60 * 60 * 24)
+            )
+          : null,
+      })),
+      statistics: {
+        totalVisits,
+        totalSpent,
+        deliveredVisits,
+        averageCost: totalVisits > 0 ? totalSpent / totalVisits : 0,
+        firstVisit: sortedVehicles[sortedVehicles.length - 1]?.entryDate,
+        lastVisit: sortedVehicles[0]?.entryDate,
+      },
+    };
+  },
+});
+
+// Obtener todas las placas únicas con sus vehículos
+export const getAllVehiclePlates = query({
+  args: {},
+  handler: async (ctx) => {
+    const allVehicles = await ctx.db.query("vehicles").collect();
+    
+    // Agrupar por placa
+    const platesMap = new Map<string, any[]>();
+    
+    for (const vehicle of allVehicles) {
+      if (!platesMap.has(vehicle.plate)) {
+        platesMap.set(vehicle.plate, []);
+      }
+      platesMap.get(vehicle.plate)!.push(vehicle);
+    }
+
+    // Convertir a array y calcular estadísticas
+    const plates = Array.from(platesMap.entries()).map(([plate, vehicles]) => {
+      const sortedVehicles = vehicles.sort(
+        (a, b) =>
+          new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+      );
+      const latestVehicle = sortedVehicles[0];
+      
+      return {
+        plate,
+        vehicleInfo: {
+          brand: latestVehicle.brand,
+          model: latestVehicle.model,
+          year: latestVehicle.year,
+          owner: latestVehicle.owner,
+        },
+        visitCount: vehicles.length,
+        totalSpent: vehicles.reduce((sum, v) => sum + v.cost, 0),
+        lastVisit: latestVehicle.entryDate,
+        isInTaller: latestVehicle.inTaller || false,
+      };
+    });
+
+    return plates.sort(
+      (a, b) =>
+        new Date(b.lastVisit).getTime() - new Date(a.lastVisit).getTime()
+    );
+  },
+});
+
+// Crear una nueva entrada para un vehículo existente
+// Busca el vehículo más reciente con esa placa y crea un nuevo registro
+export const createNewEntryForExistingVehicle = mutation({
+  args: {
+    plate: v.string(),
+    services: v.array(v.string()),
+    cost: v.number(),
+    description: v.optional(v.string()),
+    mileage: v.optional(v.number()),
+    entryDate: v.optional(v.string()),
+    responsibles: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          assignedAt: v.string(),
+          role: v.optional(v.string()),
+          userId: v.optional(v.string()),
+          isAdmin: v.optional(v.boolean()),
+          isWorking: v.optional(v.boolean()),
+          workStartedAt: v.optional(v.string()),
+          totalWorkTime: v.optional(v.number()),
+          workSessions: v.optional(
+            v.array(
+              v.object({
+                startTime: v.string(),
+                endTime: v.optional(v.string()),
+                duration: v.optional(v.number()),
+              })
+            )
+          ),
+        })
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    // Buscar el vehículo más reciente con esa placa
+    const existingVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_plate", (q) => q.eq("plate", args.plate))
+      .collect();
+
+    if (existingVehicles.length === 0) {
+      throw new Error(`No se encontró ningún vehículo con la placa ${args.plate}`);
+    }
+
+    // Ordenar por fecha de ingreso (más reciente primero)
+    const sortedVehicles = existingVehicles.sort(
+      (a, b) =>
+        new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+    );
+
+    const latestVehicle = sortedVehicles[0];
+
+    // Crear nuevo registro con los mismos datos básicos pero nueva fecha de ingreso
+    const entryDate = args.entryDate || new Date().toISOString();
+    const isInTaller = true; // Siempre está en taller cuando se crea nueva entrada
+
+    const vehicleId = await ctx.db.insert("vehicles", {
+      plate: latestVehicle.plate,
+      brand: latestVehicle.brand,
+      model: latestVehicle.model,
+      year: latestVehicle.year,
+      owner: latestVehicle.owner,
+      phone: latestVehicle.phone,
+      customerId: latestVehicle.customerId,
+      status: "Ingresado",
+      entryDate,
+      services: args.services,
+      cost: args.cost,
+      description: args.description,
+      mileage: args.mileage,
+      inTaller: isInTaller,
+      exitDate: undefined,
+      lastUpdated: entryDate,
+      responsibles: args.responsibles,
+    });
+
+    // Actualizar métricas del cliente si existe
+    if (latestVehicle.customerId) {
+      const customerVehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_customer", (q) => q.eq("customerId", latestVehicle.customerId))
+        .collect();
+
+      const totalVehicles = customerVehicles.length;
+      const totalSpent = customerVehicles.reduce(
+        (sum, vehicle) => sum + vehicle.cost,
+        0
+      );
+
+      await ctx.db.patch(latestVehicle.customerId, {
+        totalVehicles,
+        totalSpent,
+        lastVisit: entryDate,
+        visitCount: totalVehicles,
+      });
+    }
+
+    return vehicleId;
+  },
+});
+
+// Buscar vehículo por placa (para autocompletar)
+export const searchVehicleByPlate = query({
+  args: {
+    plate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (!args.plate || args.plate.length < 2) {
+      return null;
+    }
+
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_plate", (q) => q.eq("plate", args.plate))
+      .collect();
+
+    if (vehicles.length === 0) {
+      return null;
+    }
+
+    // Retornar el vehículo más reciente con esa placa
+    const sortedVehicles = vehicles.sort(
+      (a, b) =>
+        new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+    );
+
+    const latestVehicle = sortedVehicles[0];
+    const customer = latestVehicle.customerId
+      ? await ctx.db.get(latestVehicle.customerId)
+      : null;
+
+    return {
+      plate: latestVehicle.plate,
+      brand: latestVehicle.brand,
+      model: latestVehicle.model,
+      year: latestVehicle.year,
+      owner: latestVehicle.owner,
+      phone: latestVehicle.phone,
+      customerId: latestVehicle.customerId,
+      customer,
+      visitCount: vehicles.length,
     };
   },
 });
