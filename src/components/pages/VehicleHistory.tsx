@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useQuery, useMutation } from "convex/react"
+import { useOrganization } from "@clerk/clerk-react"
 import { api } from "../../../convex/_generated/api"
 import { Search, Filter, CheckCircle, XCircle, ArrowLeft, RotateCcw, MoreHorizontal, Eye, ArrowUp, History } from "lucide-react"
 import { formatDateToDDMMYYYY } from "../../lib/dateUtils"
@@ -18,6 +19,8 @@ import { DateRangePicker, type DateRange } from "../ui/date-range-picker"
 export default function VehicleHistory() {
   const navigate = useNavigate()
   const tableTopRef = useRef<HTMLDivElement>(null)
+  const { membership } = useOrganization()
+  const isAdmin = membership?.role === "org:admin"
   
   // Estado para filtros
   const [searchTerm, setSearchTerm] = useState("")
@@ -149,7 +152,8 @@ export default function VehicleHistory() {
         totalVehicles={filteredVehicles.length}
         deliveredCount={deliveredCount}
         suspendedCount={suspendedCount}
-        totalEarnings={totalEarnings}
+        totalEarnings={isAdmin ? totalEarnings : 0}
+        showEarnings={isAdmin}
       />
 
       {/* Filtros */}
@@ -200,7 +204,7 @@ export default function VehicleHistory() {
                 <TableHead>Cliente</TableHead>
                 <TableHead>Servicios</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Costo</TableHead>
+                {isAdmin && <TableHead>Costo</TableHead>}
                 <TableHead>Ingreso</TableHead>
                 <TableHead>Salida</TableHead>
                 <TableHead>Duración</TableHead>
@@ -210,7 +214,7 @@ export default function VehicleHistory() {
             <TableBody>
               {filteredVehicles.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     No se encontraron vehículos en el historial
                   </TableCell>
                 </TableRow>
@@ -251,9 +255,11 @@ export default function VehicleHistory() {
                         </div>
                       </TableCell>
                       <TableCell>{getStatusBadge(vehicle.status)}</TableCell>
-                      <TableCell>
-                        <span className="font-medium">${vehicle.cost.toLocaleString()}</span>
-                      </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          <span className="font-medium">${vehicle.cost.toLocaleString()}</span>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <span className="text-sm">{formatDateToDDMMYYYY(vehicle.entryDate)}</span>
                       </TableCell>
@@ -472,44 +478,46 @@ export default function VehicleHistory() {
               </div>
 
               {/* Costo */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-2">Información Financiera</h3>
-                {detailVehicle.costs ? (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <p className="text-xs text-blue-600 font-medium">Mano de Obra</p>
-                        <p className="text-lg font-bold text-blue-900">
-                          ${detailVehicle.costs.laborCost?.toLocaleString() || '0'}
-                        </p>
+              {isAdmin && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">Información Financiera</h3>
+                  {detailVehicle.costs ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-blue-50 p-3 rounded-lg">
+                          <p className="text-xs text-blue-600 font-medium">Mano de Obra</p>
+                          <p className="text-lg font-bold text-blue-900">
+                            ${detailVehicle.costs.laborCost?.toLocaleString() || '0'}
+                          </p>
+                        </div>
+                        <div className="bg-purple-50 p-3 rounded-lg">
+                          <p className="text-xs text-purple-600 font-medium">Repuestos</p>
+                          <p className="text-lg font-bold text-purple-900">
+                            ${detailVehicle.costs.partsCost?.toLocaleString() || '0'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="bg-purple-50 p-3 rounded-lg">
-                        <p className="text-xs text-purple-600 font-medium">Repuestos</p>
-                        <p className="text-lg font-bold text-purple-900">
-                          ${detailVehicle.costs.partsCost?.toLocaleString() || '0'}
-                        </p>
+                      <div className="bg-green-50 p-4 rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-green-900">Costo Total:</span>
+                          <span className="text-xl font-bold text-green-900">
+                            ${detailVehicle.costs.totalCost?.toLocaleString() || '0'}
+                          </span>
+                        </div>
                       </div>
                     </div>
+                  ) : (
                     <div className="bg-green-50 p-4 rounded-lg">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium text-green-900">Costo Total:</span>
-                        <span className="text-xl font-bold text-green-900">
-                          ${detailVehicle.costs.totalCost?.toLocaleString() || '0'}
+                        <span className="text-lg font-bold text-green-900">
+                          ${detailVehicle.cost?.toLocaleString() || '0'}
                         </span>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-green-900">Costo Total:</span>
-                      <span className="text-lg font-bold text-green-900">
-                        ${detailVehicle.cost?.toLocaleString() || '0'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               {/* Descripción */}
               {detailVehicle.description && (

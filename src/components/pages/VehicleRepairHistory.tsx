@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
+import { useOrganization } from "@clerk/clerk-react";
 import { api } from "../../../convex/_generated/api";
 import {
   ArrowLeft,
@@ -22,10 +23,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 
+interface Responsible {
+  name: string;
+  role?: string;
+  userId?: string;
+  isAdmin?: boolean;
+  totalWorkTime?: number;
+}
+
 export default function VehicleRepairHistory() {
   const navigate = useNavigate();
   const { plate } = useParams<{ plate: string }>();
   const [expandedVisit, setExpandedVisit] = useState<string | null>(null);
+  const { membership } = useOrganization();
+  const isAdmin = membership?.role === "org:admin";
 
   const vehicleHistory = useQuery(
     api.vehicles.getVehicleHistoryByPlate,
@@ -184,7 +195,7 @@ export default function VehicleRepairHistory() {
       </Card>
 
       {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${isAdmin ? 'md:grid-cols-4' : 'md:grid-cols-2'}`}>
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -198,36 +209,40 @@ export default function VehicleRepairHistory() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Total Gastado
-                </p>
-                <p className="text-2xl font-bold">
-                  ${statistics.totalSpent.toLocaleString()}
-                </p>
+        {isAdmin && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Total Gastado
+                  </p>
+                  <p className="text-2xl font-bold">
+                    ${statistics.totalSpent.toLocaleString()}
+                  </p>
+                </div>
+                <DollarSign className="h-8 w-8 text-green-500" />
               </div>
-              <DollarSign className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Promedio por Visita
-                </p>
-                <p className="text-2xl font-bold">
-                  ${Math.round(statistics.averageCost).toLocaleString()}
-                </p>
+            </CardContent>
+          </Card>
+        )}
+        {isAdmin && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Promedio por Visita
+                  </p>
+                  <p className="text-2xl font-bold">
+                    ${Math.round(statistics.averageCost).toLocaleString()}
+                  </p>
+                </div>
+                <DollarSign className="h-8 w-8 text-purple-500" />
               </div>
-              <DollarSign className="h-8 w-8 text-purple-500" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -284,7 +299,7 @@ export default function VehicleRepairHistory() {
                             </Badge>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+                        <div className={`grid gap-4 mt-4 ${isAdmin ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-4'}`}>
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-gray-500" />
                             <div>
@@ -336,17 +351,19 @@ export default function VehicleRepairHistory() {
                               </div>
                             </div>
                           )}
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-gray-500" />
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Costo
-                              </p>
-                              <p className="text-sm font-bold">
-                                ${visit.cost.toLocaleString()}
-                              </p>
+                          {isAdmin && (
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4 text-gray-500" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  Costo
+                                </p>
+                                <p className="text-sm font-bold">
+                                  ${visit.cost.toLocaleString()}
+                                </p>
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -393,7 +410,7 @@ export default function VehicleRepairHistory() {
                         )}
 
                         {/* Costos Detallados */}
-                        {visit.costs && (
+                        {isAdmin && visit.costs && (
                           <div>
                             <div className="flex items-center gap-2 mb-2">
                               <DollarSign className="h-4 w-4 text-gray-500" />
@@ -449,7 +466,7 @@ export default function VehicleRepairHistory() {
                               {visit.parts.map((part, idx) => (
                                 <div
                                   key={idx}
-                                  className="flex justify-between items-center p-2 bg-gray-50 rounded"
+                                  className={`flex items-center p-2 bg-gray-50 rounded ${isAdmin ? 'justify-between' : ''}`}
                                 >
                                   <div>
                                     <p className="text-sm font-medium">
@@ -462,10 +479,12 @@ export default function VehicleRepairHistory() {
                                         : "Comprado"}
                                     </p>
                                   </div>
-                                  <p className="text-sm font-bold">
-                                    $
-                                    {(part.price * part.quantity).toLocaleString()}
-                                  </p>
+                                  {isAdmin && (
+                                    <p className="text-sm font-bold">
+                                      $
+                                      {(part.price * part.quantity).toLocaleString()}
+                                    </p>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -499,7 +518,7 @@ export default function VehicleRepairHistory() {
                               </div>
                               <div className="space-y-2">
                                 {visit.responsibles.map(
-                                  (responsible: any, idx: number) => (
+                                  (responsible: Responsible, idx: number) => (
                                     <div
                                       key={idx}
                                       className="flex items-center justify-between p-2 bg-gray-50 rounded"

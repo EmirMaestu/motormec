@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useQuery, useMutation } from "convex/react"
+import { useOrganization } from "@clerk/clerk-react"
 import { api } from "../../../convex/_generated/api"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog"
 import { Button } from "./button"
@@ -38,6 +39,8 @@ export default function VehicleCustomerAssociation({
 }: VehicleCustomerAssociationProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([])
+  const { membership } = useOrganization()
+  const isAdmin = membership?.role === "org:admin"
 
   // Queries
   const vehiclesWithoutCustomer = useQuery(api.vehicles.getVehiclesWithoutCustomer) || []
@@ -231,10 +234,12 @@ export default function VehicleCustomerAssociation({
                             }>
                               {vehicle.status}
                             </Badge>
-                            <div className="flex items-center gap-1 text-sm text-green-600">
-                              <DollarSign className="h-3 w-3" />
-                              <span>${vehicle.cost.toLocaleString()}</span>
-                            </div>
+                            {isAdmin && (
+                              <div className="flex items-center gap-1 text-sm text-green-600">
+                                <DollarSign className="h-3 w-3" />
+                                <span>${vehicle.cost.toLocaleString()}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <Button
@@ -309,10 +314,12 @@ export default function VehicleCustomerAssociation({
                             }>
                               {vehicle.status}
                             </Badge>
-                            <div className="flex items-center gap-1 text-sm text-green-600">
-                              <DollarSign className="h-3 w-3" />
-                              <span>${vehicle.cost.toLocaleString()}</span>
-                            </div>
+                            {isAdmin && (
+                              <div className="flex items-center gap-1 text-sm text-green-600">
+                                <DollarSign className="h-3 w-3" />
+                                <span>${vehicle.cost.toLocaleString()}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -389,10 +396,12 @@ export default function VehicleCustomerAssociation({
                               }>
                                 {vehicle.status}
                               </Badge>
-                              <div className="flex items-center gap-1 text-sm text-green-600">
-                                <DollarSign className="h-3 w-3" />
-                                <span>${vehicle.cost.toLocaleString()}</span>
-                              </div>
+                              {isAdmin && (
+                                <div className="flex items-center gap-1 text-sm text-green-600">
+                                  <DollarSign className="h-3 w-3" />
+                                  <span>${vehicle.cost.toLocaleString()}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           {isOwnedByCurrentCustomer && (
