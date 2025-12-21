@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
-import { Search, Filter, CheckCircle, XCircle, ArrowLeft, RotateCcw, MoreHorizontal, Eye, ArrowUp } from "lucide-react"
+import { Search, Filter, CheckCircle, XCircle, ArrowLeft, RotateCcw, MoreHorizontal, Eye, ArrowUp, History } from "lucide-react"
 import { formatDateToDDMMYYYY } from "../../lib/dateUtils"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { Button } from "../ui/button"
@@ -275,10 +275,19 @@ export default function VehicleHistory() {
                               <MoreHorizontal className="h-5 w-5" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuContent align="end" className="w-56">
                             <DropdownMenuItem onClick={() => handleViewDetail(vehicle)}>
                               <Eye className="mr-2 h-4 w-4" />
                               Ver detalle
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/vehiculos/${encodeURIComponent(vehicle.plate)}/historial-arreglos`);
+                              }}
+                            >
+                              <History className="mr-2 h-4 w-4" />
+                              Ver Historial de Arreglos
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
@@ -516,6 +525,16 @@ export default function VehicleHistory() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>
               Cerrar
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => {
+                setIsDetailDialogOpen(false);
+                navigate(`/vehiculos/${encodeURIComponent(detailVehicle.plate)}/historial-arreglos`);
+              }}
+            >
+              <History className="mr-2 h-4 w-4" />
+              Ver Historial de Arreglos
             </Button>
             <Button onClick={() => {
               setIsDetailDialogOpen(false)

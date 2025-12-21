@@ -8,6 +8,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import Dashboard from '../components/pages/dashboard';
 import Vehicles from '../components/pages/vehicles';
 import VehicleHistory from '../components/pages/VehicleHistory';
+import VehicleRepairHistory from '../components/pages/VehicleRepairHistory';
 import VehicleCostManagement from '../components/pages/VehicleCostManagement';
 import ImportVehicles from '../components/pages/ImportVehicles';
 import Finance from '../components/pages/finance';
@@ -35,6 +36,7 @@ const AppRouter: React.FC = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/vehiculos" element={<Vehicles />} />
             <Route path="/vehiculos/historial" element={<VehicleHistory />} />
+            <Route path="/vehiculos/:plate/historial-arreglos" element={<VehicleRepairHistory />} />
             <Route path="/vehiculos/importar" element={
               <ProtectedRoute adminOnly={true}>
                 <ImportVehicles />
