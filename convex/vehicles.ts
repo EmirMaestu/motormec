@@ -277,6 +277,46 @@ export const deleteVehicle = mutation({
     id: v.id("vehicles"),
   },
   handler: async (ctx, args) => {
+    const vehicle = await ctx.db.get(args.id);
+    
+    if (!vehicle) {
+      throw new Error("Vehículo no encontrado");
+    }
+
+    // Si el vehículo tiene un cliente asociado, actualizar sus métricas
+    if (vehicle.customerId) {
+      const customerVehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_customer", (q) => q.eq("customerId", vehicle.customerId))
+        .collect();
+
+      // Filtrar el vehículo que se va a eliminar
+      const remainingVehicles = customerVehicles.filter(
+        (v) => v._id !== args.id
+      );
+
+      const totalVehicles = remainingVehicles.length;
+      const totalSpent = remainingVehicles.reduce((sum, v) => sum + v.cost, 0);
+
+      // Encontrar la fecha más reciente de los vehículos restantes
+      const lastVisit =
+        totalVehicles > 0
+          ? remainingVehicles.sort(
+              (a, b) =>
+                new Date(b.entryDate).getTime() -
+                new Date(a.entryDate).getTime()
+            )[0].entryDate
+          : undefined;
+
+      await ctx.db.patch(vehicle.customerId, {
+        totalVehicles,
+        totalSpent,
+        lastVisit,
+        visitCount: totalVehicles,
+      });
+    }
+
+    // Eliminar el vehículo
     await ctx.db.delete(args.id);
     return args.id;
   },
@@ -827,19 +867,41 @@ export const getVehiclesByDateRange = query({
   handler: async (ctx, args) => {
     let vehicles = await ctx.db.query("vehicles").collect();
 
-    // Filtrar por rango de fechas (fecha de ingreso)
-    // Agregar tiempo al final del día para incluir todas las horas del endDate
-    const endDatePlusOne = new Date(args.endDate);
-    endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
-    const endDateStr = endDatePlusOne.toISOString();
+    // Normalizar las fechas para comparación correcta
+    const startDateNormalized = args.startDate.split('T')[0]; // Asegurar formato YYYY-MM-DD
+    const endDateNormalized = args.endDate.split('T')[0]; // Asegurar formato YYYY-MM-DD
 
+    // Filtrar por rango de fechas (fecha de ingreso)
     vehicles = vehicles.filter((vehicle) => {
-      const entryDate = vehicle.entryDate;
-      return entryDate >= args.startDate && entryDate < endDateStr;
+      if (!vehicle.entryDate) return false;
+      
+      try {
+        // Normalizar entryDate: puede venir como ISO string completo o solo fecha
+        let entryDateStr: string;
+        if (typeof vehicle.entryDate === 'string') {
+          // Si es string, extraer solo la parte de la fecha (YYYY-MM-DD)
+          entryDateStr = vehicle.entryDate.split('T')[0];
+        } else {
+          // Si es otro tipo, intentar convertir a string primero
+          entryDateStr = new Date(vehicle.entryDate).toISOString().split('T')[0];
+        }
+        
+        // Validar que la fecha tenga el formato correcto (YYYY-MM-DD)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDateStr)) {
+          return false;
+        }
+        
+        // Comparar fechas normalizadas: la fecha debe estar entre startDate y endDate (inclusive)
+        return entryDateStr >= startDateNormalized && entryDateStr <= endDateNormalized;
+      } catch (error) {
+        // Si hay error al procesar la fecha, excluir el vehículo
+        return false;
+      }
     });
 
     // Si no es admin, filtrar solo vehículos asignados al usuario o sin asignar
-    if (args.userId && !args.isAdmin) {
+    // Si isAdmin es true o undefined, mostrar todos los vehículos del rango de fechas
+    if (args.userId && args.isAdmin === false) {
       vehicles = vehicles.filter((vehicle) => {
         // Sin responsables asignados (está libre para tomar)
         if (!vehicle.responsibles || vehicle.responsibles.length === 0) {
@@ -869,14 +931,18 @@ export const getVehicleStatsByDateRange = query({
     const allVehicles = await ctx.db.query("vehicles").collect();
 
     // Filtrar por rango de fechas (fecha de ingreso)
-    // Agregar tiempo al final del día para incluir todas las horas del endDate
-    const endDatePlusOne = new Date(args.endDate);
-    endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
-    const endDateStr = endDatePlusOne.toISOString();
+    // Normalizar las fechas para comparación correcta
+    const startDateNormalized = args.startDate.split('T')[0]; // Asegurar formato YYYY-MM-DD
+    const endDateNormalized = args.endDate.split('T')[0]; // Asegurar formato YYYY-MM-DD
 
     const vehicles = allVehicles.filter((vehicle) => {
-      const entryDate = vehicle.entryDate;
-      return entryDate >= args.startDate && entryDate < endDateStr;
+      if (!vehicle.entryDate) return false;
+      
+      // Extraer solo la fecha (YYYY-MM-DD) del entryDate (puede ser ISO completo o solo fecha)
+      const entryDateStr = vehicle.entryDate.split('T')[0];
+      
+      // Comparar fechas normalizadas: la fecha debe estar entre startDate y endDate (inclusive)
+      return entryDateStr >= startDateNormalized && entryDateStr <= endDateNormalized;
     });
 
     return {

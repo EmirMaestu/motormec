@@ -206,26 +206,19 @@ export default function VehicleHistory() {
                 <TableHead>Estado</TableHead>
                 {isAdmin && <TableHead>Costo</TableHead>}
                 <TableHead>Ingreso</TableHead>
-                <TableHead>Salida</TableHead>
-                <TableHead>Duración</TableHead>
+                <TableHead>KM</TableHead>
                 <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredVehicles.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-8 text-muted-foreground">
                     No se encontraron vehículos en el historial
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredVehicles.map((vehicle) => {
-                  const entryDate = new Date(vehicle.entryDate)
-                  const exitDate = vehicle.exitDate ? new Date(vehicle.exitDate) : null
-                  const duration = exitDate ? 
-                    Math.ceil((exitDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)) : 
-                    null
-
                   return (
                     <TableRow 
                       key={vehicle._id}
@@ -264,13 +257,8 @@ export default function VehicleHistory() {
                         <span className="text-sm">{formatDateToDDMMYYYY(vehicle.entryDate)}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm">
-                          {vehicle.exitDate ? formatDateToDDMMYYYY(vehicle.exitDate) : "-"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">
-                          {duration ? `${duration} día${duration !== 1 ? 's' : ''}` : "-"}
+                        <span className="text-sm font-medium">
+                          {vehicle.mileage ? vehicle.mileage.toLocaleString() : '-'}
                         </span>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -379,7 +367,7 @@ export default function VehicleHistory() {
 
       {/* Diálogo de Detalle (reutilizamos el mismo componente que en vehicles.tsx) */}
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalle del Vehículo</DialogTitle>
             <DialogDescription>
@@ -387,89 +375,98 @@ export default function VehicleHistory() {
             </DialogDescription>
           </DialogHeader>
           {detailVehicle && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* Información del Vehículo */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-2">Información del Vehículo</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Placa:</span>
-                        <span className="text-sm font-medium">{detailVehicle.plate}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Marca:</span>
-                        <span className="text-sm font-medium">{detailVehicle.brand}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Modelo:</span>
-                        <span className="text-sm font-medium">{detailVehicle.model}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Año:</span>
-                        <span className="text-sm font-medium">{detailVehicle.year}</span>
-                      </div>
-                    </div>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                  <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs mr-2">🚗</span>
+                  Información del Vehículo
+                </h3>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-gray-600 font-medium">Placa:</span>
+                    <span className="text-sm font-bold text-gray-900 bg-white px-3 py-1 rounded-md">{detailVehicle.plate}</span>
                   </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-2">Información del Cliente</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Cliente:</span>
-                        <span className="text-sm font-medium">{detailVehicle.owner}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Teléfono:</span>
-                        <span className="text-sm font-medium">{detailVehicle.phone}</span>
-                      </div>
-                    </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-gray-600 font-medium">Marca:</span>
+                    <span className="text-sm font-semibold text-gray-900">{detailVehicle.brand}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-gray-600 font-medium">Modelo:</span>
+                    <span className="text-sm font-semibold text-gray-900">{detailVehicle.model}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-gray-600 font-medium">Año:</span>
+                    <span className="text-sm font-semibold text-gray-900">{detailVehicle.year}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Estado y Fechas */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">Estado</h3>
-                  <div className="flex items-center space-x-2">
-                    {getStatusBadge(detailVehicle.status)}
+              {/* Información del Cliente */}
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-100">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                  <span className="bg-purple-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs mr-2">👤</span>
+                  Información del Cliente
+                </h3>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-gray-600 font-medium">Cliente:</span>
+                    <span className="text-sm font-semibold text-gray-900">{detailVehicle.owner}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-gray-600 font-medium">Teléfono:</span>
+                    <span className="text-sm font-semibold text-gray-900">{detailVehicle.phone}</span>
                   </div>
                 </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">Fechas</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Ingreso:</span>
-                      <span className="text-sm font-medium">
-                        {formatDateToDDMMYYYY(detailVehicle.entryDate)}
+              </div>
+
+              {/* Estado */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-100">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                  <span className="bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs mr-2">✓</span>
+                  Estado
+                </h3>
+                <div className="flex items-center justify-center">
+                  {getStatusBadge(detailVehicle.status)}
+                </div>
+              </div>
+
+              {/* Fechas */}
+              <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-4 rounded-lg border border-orange-100">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                  <span className="bg-orange-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs mr-2">📅</span>
+                  Fechas
+                </h3>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-gray-600 font-medium">Ingreso:</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {formatDateToDDMMYYYY(detailVehicle.entryDate)}
+                    </span>
+                  </div>
+                  {detailVehicle.exitDate && (
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-sm text-gray-600 font-medium">Salida:</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {formatDateToDDMMYYYY(detailVehicle.exitDate)}
                       </span>
                     </div>
-                    {detailVehicle.exitDate && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Salida:</span>
-                        <span className="text-sm font-medium">
-                          {formatDateToDDMMYYYY(detailVehicle.exitDate)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
 
               {/* Servicios */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-2">Servicios</h3>
+              <div className="bg-gradient-to-r from-cyan-50 to-sky-50 p-4 rounded-lg border border-cyan-100">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                  <span className="bg-cyan-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs mr-2">🔧</span>
+                  Servicios
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {detailVehicle.services?.map((service: string, index: number) => (
                     <Badge 
                       key={index} 
                       variant="secondary" 
-                      className="bg-blue-100 text-blue-800"
+                      className="bg-blue-100 text-blue-800 border border-blue-200"
                     >
                       {service}
                     </Badge>
@@ -479,38 +476,41 @@ export default function VehicleHistory() {
 
               {/* Costo */}
               {isAdmin && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">Información Financiera</h3>
+                <div className="bg-gradient-to-r from-green-50 to-teal-50 p-4 rounded-lg border border-green-200">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                    <span className="bg-green-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs mr-2">💰</span>
+                    Información Financiera
+                  </h3>
                   {detailVehicle.costs ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-blue-50 p-3 rounded-lg">
-                          <p className="text-xs text-blue-600 font-medium">Mano de Obra</p>
+                        <div className="bg-white p-3 rounded-lg border border-blue-200 shadow-sm">
+                          <p className="text-xs text-blue-600 font-semibold mb-1">Mano de Obra</p>
                           <p className="text-lg font-bold text-blue-900">
                             ${detailVehicle.costs.laborCost?.toLocaleString() || '0'}
                           </p>
                         </div>
-                        <div className="bg-purple-50 p-3 rounded-lg">
-                          <p className="text-xs text-purple-600 font-medium">Repuestos</p>
+                        <div className="bg-white p-3 rounded-lg border border-purple-200 shadow-sm">
+                          <p className="text-xs text-purple-600 font-semibold mb-1">Repuestos</p>
                           <p className="text-lg font-bold text-purple-900">
                             ${detailVehicle.costs.partsCost?.toLocaleString() || '0'}
                           </p>
                         </div>
                       </div>
-                      <div className="bg-green-50 p-4 rounded-lg">
+                      <div className="bg-gradient-to-r from-green-100 to-emerald-100 p-4 rounded-lg border-2 border-green-300 shadow-sm">
                         <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium text-green-900">Costo Total:</span>
-                          <span className="text-xl font-bold text-green-900">
+                          <span className="text-sm font-bold text-green-900">Costo Total:</span>
+                          <span className="text-2xl font-bold text-green-900">
                             ${detailVehicle.costs.totalCost?.toLocaleString() || '0'}
                           </span>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="bg-gradient-to-r from-green-100 to-emerald-100 p-4 rounded-lg border-2 border-green-300 shadow-sm">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-green-900">Costo Total:</span>
-                        <span className="text-lg font-bold text-green-900">
+                        <span className="text-sm font-bold text-green-900">Costo Total:</span>
+                        <span className="text-2xl font-bold text-green-900">
                           ${detailVehicle.cost?.toLocaleString() || '0'}
                         </span>
                       </div>
@@ -521,17 +521,22 @@ export default function VehicleHistory() {
 
               {/* Descripción */}
               {detailVehicle.description && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">Descripción</h3>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-700">{detailVehicle.description}</p>
-                  </div>
+                <div className="bg-gradient-to-r from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                    <span className="bg-gray-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs mr-2">📝</span>
+                    Descripción
+                  </h3>
+                  <p className="text-sm text-gray-700 leading-relaxed">{detailVehicle.description}</p>
                 </div>
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsDetailDialogOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cerrar
             </Button>
             <Button 
@@ -540,14 +545,18 @@ export default function VehicleHistory() {
                 setIsDetailDialogOpen(false);
                 navigate(`/vehiculos/${encodeURIComponent(detailVehicle.plate)}/historial-arreglos`);
               }}
+              className="w-full sm:w-auto"
             >
               <History className="mr-2 h-4 w-4" />
               Ver Historial de Arreglos
             </Button>
-            <Button onClick={() => {
-              setIsDetailDialogOpen(false)
-              handleReturnToTaller(detailVehicle)
-            }}>
+            <Button 
+              onClick={() => {
+                setIsDetailDialogOpen(false)
+                handleReturnToTaller(detailVehicle)
+              }}
+              className="w-full sm:w-auto"
+            >
               Devolver al Taller
             </Button>
           </DialogFooter>

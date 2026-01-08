@@ -21,6 +21,10 @@ import {
   Square,
   CheckCircle,
   History,
+  ChevronDown,
+  Car,
+  FilePlus,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
@@ -48,7 +52,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "../ui/dialog";
 import {
   DropdownMenu,
@@ -497,34 +500,24 @@ export default function Vehicles() {
   });
 
   // Convex hooks - obtener vehículos según el rol del usuario y filtros de fecha
-  const allVehiclesDefault =
-    useQuery(
-      api.vehicles.getVehiclesForUser,
-      currentUserId && typeof isAdmin === "boolean"
-        ? { userId: currentUserId, isAdmin }
-        : "skip"
-    ) ?? [];
-
+  // Siempre usar getVehiclesByDateRange cuando hay fechas definidas (incluyendo "thisMonth")
   const filteredVehiclesByDate =
     useQuery(
       api.vehicles.getVehiclesByDateRange,
-      dateFilter.type !== "thisMonth" &&
-        currentUserId &&
-        typeof isAdmin === "boolean"
+      dateFilter.startDate &&
+        dateFilter.endDate &&
+        currentUserId !== undefined
         ? {
-            startDate: dateFilter.startDate!,
-            endDate: dateFilter.endDate!,
-            userId: currentUserId,
-            isAdmin,
+            startDate: dateFilter.startDate,
+            endDate: dateFilter.endDate,
+            userId: currentUserId || undefined,
+            isAdmin: isAdmin === true, // Asegurar que sea boolean explícito
           }
         : "skip"
     ) ?? [];
 
-  // Usar datos filtrados o datos generales según el filtro activo
-  const allVehicles =
-    dateFilter.type !== "thisMonth"
-      ? filteredVehiclesByDate
-      : allVehiclesDefault;
+  // Usar datos filtrados por fecha
+  const allVehicles = filteredVehiclesByDate;
 
   // Aplicar filtros localmente
   const vehiclesInTaller = allVehicles.filter((vehicle) => {
@@ -574,6 +567,7 @@ export default function Vehicles() {
   const createVehicle = useMutation(api.vehicles.createVehicle);
   const createNewEntry = useMutation(api.vehicles.createNewEntryForExistingVehicle);
   const updateVehicle = useMutation(api.vehicles.updateVehicle);
+  const deleteVehicle = useMutation(api.vehicles.deleteVehicle);
   const startWorkOnVehicle = useMutation(api.vehicles.startWorkOnVehicle);
   const pauseWorkOnVehicle = useMutation(api.vehicles.pauseWorkOnVehicle);
   const completeWorkOnVehicle = useMutation(api.vehicles.completeWorkOnVehicle);
@@ -591,9 +585,11 @@ export default function Vehicles() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [isDeliverDialogOpen, setIsDeliverDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
   const [detailVehicle, setDetailVehicle] = useState<any>(null);
   const [vehicleToDeliver, setVehicleToDeliver] = useState<any>(null);
+  const [vehicleToDelete, setVehicleToDelete] = useState<any>(null);
   const [selectedVehicleForEntry, setSelectedVehicleForEntry] = useState<any>(null);
   const [newEntryPlate, setNewEntryPlate] = useState("");
   const [isPlateDropdownOpen, setIsPlateDropdownOpen] = useState(false);
@@ -952,6 +948,30 @@ export default function Vehicles() {
     );
   };
 
+  const handleDeleteVehicle = (vehicle: any) => {
+    // Solo los admins pueden eliminar vehículos
+    if (!isAdmin) {
+      alert("Solo los administradores pueden eliminar vehículos.");
+      return;
+    }
+
+    setVehicleToDelete(vehicle);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteVehicle = async () => {
+    if (!vehicleToDelete) return;
+
+    try {
+      await deleteVehicle({ id: vehicleToDelete._id });
+      setIsDeleteDialogOpen(false);
+      setVehicleToDelete(null);
+    } catch (error) {
+      console.error("Error al eliminar vehículo:", error);
+      alert("Error al eliminar el vehículo. Por favor intenta de nuevo.");
+    }
+  };
+
   const handleDeliverVehicle = (vehicle: any) => {
     // Los miembros no-admin solo pueden entregar vehículos donde estén asignados o sin asignar
     if (!isAdmin && !canEditVehicle(vehicle)) {
@@ -1034,13 +1054,27 @@ export default function Vehicles() {
             <CheckCircle className="h-4 w-4" />
             Vehículos Entregados
           </Button>
-          <Dialog open={isNewEntryDialogOpen} onOpenChange={setIsNewEntryDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
-                Nueva Entrada
+                Nuevo
+                <ChevronDown className="h-4 w-4" />
               </Button>
-            </DialogTrigger>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
+                <Car className="h-4 w-4 mr-2" />
+                Nuevo Vehículo
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setIsNewEntryDialogOpen(true)}>
+                <FilePlus className="h-4 w-4 mr-2" />
+                Nueva Entrada
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Dialog open={isNewEntryDialogOpen} onOpenChange={setIsNewEntryDialogOpen}>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Nueva Entrada - Vehículo Existente</DialogTitle>
@@ -1216,12 +1250,6 @@ export default function Vehicles() {
             </DialogContent>
           </Dialog>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Nuevo Vehículo
-              </Button>
-            </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Ingresar Nuevo Vehículo</DialogTitle>
@@ -2488,6 +2516,86 @@ export default function Vehicles() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Diálogo de Confirmación de Eliminación */}
+        <Dialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+        >
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Confirmar Eliminación</DialogTitle>
+              <DialogDescription>
+                ¿Estás seguro de que deseas eliminar este vehículo? Esta acción no se puede deshacer.
+              </DialogDescription>
+            </DialogHeader>
+            {vehicleToDelete && (
+              <div className="space-y-4">
+                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium text-red-900">
+                        {vehicleToDelete.plate} - {vehicleToDelete.brand}{" "}
+                        {vehicleToDelete.model}
+                      </h3>
+                      <p className="text-sm text-red-700">
+                        Cliente: {vehicleToDelete.owner}
+                      </p>
+                      <p className="text-sm text-red-700">
+                        Estado: {vehicleToDelete.status}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-shrink-0">
+                      <svg
+                        className="h-5 w-5 text-yellow-600"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-yellow-800">
+                        Advertencia
+                      </h3>
+                      <p className="text-sm text-yellow-700 mt-1">
+                        Esta acción eliminará permanentemente el vehículo y toda su información asociada. 
+                        Esta acción no se puede deshacer.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsDeleteDialogOpen(false);
+                  setVehicleToDelete(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmDeleteVehicle}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Eliminar Vehículo
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Cards de Estadísticas Colapsables - Ocultas en móvil */}
@@ -2641,7 +2749,7 @@ export default function Vehicles() {
                     Responsables
                   </TableHead>
                   <TableHead className="min-w-[80px]">Estado</TableHead>
-                  <TableHead className="min-w-[120px]">Trabajo</TableHead>
+                  <TableHead className="min-w-[80px]">KM</TableHead>
                   {isAdmin && (
                     <TableHead className="min-w-[80px] hidden sm:table-cell">
                       Costo
@@ -2657,8 +2765,8 @@ export default function Vehicles() {
                 {vehiclesInTaller.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
-                      className="text-center py-8 sm:colSpan-9"
+                      colSpan={isAdmin ? 9 : 8}
+                      className="text-center py-8"
                     >
                       <div className="flex flex-col items-center gap-2">
                         <Search className="h-8 w-8 text-muted-foreground" />
@@ -2794,57 +2902,9 @@ export default function Vehicles() {
                       </TableCell>
                       <TableCell>{getStatusBadge(vehicle.status)}</TableCell>
                       <TableCell>
-                        <div className="flex flex-col gap-1">
-                          {isUserWorking(vehicle) ? (
-                            <div className="flex flex-col gap-1">
-                              <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
-                                🔧 Trabajando
-                              </Badge>
-                              {user && (
-                                <WorkTimer
-                                  userId={user.id}
-                                  vehicle={vehicle}
-                                  isWorking={true}
-                                  className="justify-start"
-                                />
-                              )}
-                            </div>
-                          ) : isUserAssigned(vehicle) ? (
-                            <div className="flex flex-col gap-1">
-                              <Badge variant="outline" className="text-xs">
-                                📋 Asignado
-                              </Badge>
-                              {user && (
-                                <WorkTimer
-                                  userId={user.id}
-                                  vehicle={vehicle}
-                                  isWorking={false}
-                                  className="justify-start"
-                                />
-                              )}
-                            </div>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="text-xs text-gray-500"
-                            >
-                              ⏸️ Disponible
-                            </Badge>
-                          )}
-                          {/* Mostrar otros responsables que están trabajando */}
-                          {vehicle.responsibles
-                            ?.filter(
-                              (r: any) => r.isWorking && r.userId !== user?.id
-                            )
-                            .map((r: any) => (
-                              <span
-                                key={r.userId}
-                                className="text-xs text-green-600"
-                              >
-                                {r.name} trabajando
-                              </span>
-                            ))}
-                        </div>
+                        <span className="text-sm font-medium">
+                          {vehicle.mileage ? vehicle.mileage.toLocaleString() : '-'}
+                        </span>
                       </TableCell>
                       {isAdmin && (
                         <TableCell className="hidden sm:table-cell">
@@ -3052,6 +3112,20 @@ export default function Vehicles() {
                                     </DropdownMenuItem>
                                   </>
                                 )}
+
+                              {/* Opción de eliminar - solo para admins */}
+                              {isAdmin && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteVehicle(vehicle)}
+                                    className="text-red-600 focus:text-red-600"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Eliminar
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
