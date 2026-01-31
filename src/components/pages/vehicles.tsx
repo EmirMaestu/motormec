@@ -19,7 +19,6 @@ import {
   Play,
   Pause,
   Square,
-  CheckCircle,
   History,
   ChevronDown,
   Car,
@@ -79,76 +78,24 @@ function CustomerSelector({
   newCustomerName?: string;
 }) {
   const customers = useQuery(api.customers.getActiveCustomers);
-  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isNewCustomerConfirmed, setIsNewCustomerConfirmed] = useState(false);
 
-  const handleCustomerSelect = (customerId: string) => {
-    if (customerId === "new") {
-      setShowNewCustomer(true);
-      setIsNewCustomerConfirmed(false);
-      return;
-    }
-
-    const customer = customers?.find((c: any) => c._id === customerId);
-    if (customer) {
-      onCustomerChange(customerId, customer);
-    }
-  };
-
-  const handleNewCustomerInput = (name: string) => {
-    setIsNewCustomerConfirmed(false);
-    if (onNewCustomerName) {
-      onNewCustomerName(name);
-    }
-  };
-
-  const handleConfirmNewCustomer = () => {
-    if (newCustomerName && newCustomerName.trim()) {
-      setShowNewCustomer(false);
-      setIsNewCustomerConfirmed(true);
-    }
-  };
+  const filteredCustomers = (customers ?? []).filter((c: any) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      (c.phone && c.phone.toLowerCase().includes(q))
+    );
+  });
 
   const handleCancelNewCustomer = () => {
-    setShowNewCustomer(false);
     setIsNewCustomerConfirmed(false);
+    setSearchQuery("");
     if (onNewCustomerName) onNewCustomerName("");
   };
-
-  // Si se está escribiendo un nuevo cliente (y aún no se ha confirmado)
-  if ((showNewCustomer || newCustomerName) && !isNewCustomerConfirmed) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Nombre del nuevo cliente"
-            value={newCustomerName || ""}
-            onChange={(e) => handleNewCustomerInput(e.target.value)}
-          />
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            onClick={handleConfirmNewCustomer}
-            disabled={!newCustomerName || !newCustomerName.trim()}
-          >
-            Crear
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCancelNewCustomer}
-          >
-            Cancelar
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Se creará un cliente nuevo con este nombre
-        </p>
-      </div>
-    );
-  }
 
   // Si hay un nuevo cliente confirmado
   if (isNewCustomerConfirmed && newCustomerName) {
@@ -165,7 +112,7 @@ function CustomerSelector({
           </button>
         </div>
         <p className="text-xs text-green-600 mt-1">
-          ✓ Nuevo cliente (se creará al guardar)
+          Nuevo cliente (se creará al guardar)
         </p>
       </div>
     );
@@ -176,65 +123,91 @@ function CustomerSelector({
     (c: any) => c._id === selectedCustomerId
   );
 
+  if (selectedCustomer) {
+    return (
+      <div className="w-full">
+        <div className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <span>{selectedCustomer.name}</span>
+          <button
+            type="button"
+            onClick={() => {
+              onCustomerChange("", {} as any);
+              setSearchQuery("");
+            }}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            ×
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          {selectedCustomer.phone}
+          {selectedCustomer.totalVehicles
+            ? ` · ${selectedCustomer.totalVehicles} vehículos`
+            : ""}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
-      {selectedCustomer ? (
-        <div className="w-full">
-          <div className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-            <span>{selectedCustomer.name}</span>
-            <button
-              type="button"
-              onClick={() => onCustomerChange("", {} as any)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              ×
-            </button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {selectedCustomer.phone}
-            {selectedCustomer.totalVehicles
-              ? ` • ${selectedCustomer.totalVehicles} vehículos`
-              : ""}
-          </p>
+      <Input
+        placeholder="Buscar cliente por nombre o teléfono..."
+        value={searchQuery}
+        onChange={(e) => {
+          setSearchQuery(e.target.value);
+          setIsDropdownOpen(true);
+        }}
+        onFocus={() => setIsDropdownOpen(true)}
+        onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+        autoComplete="off"
+      />
+      {isDropdownOpen && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-52 overflow-y-auto">
+          <button
+            type="button"
+            className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm text-blue-600 font-medium border-b"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              if (searchQuery.trim()) {
+                if (onNewCustomerName) onNewCustomerName(searchQuery.trim());
+                setIsNewCustomerConfirmed(true);
+              } else {
+                if (onNewCustomerName) onNewCustomerName("");
+              }
+              setIsDropdownOpen(false);
+            }}
+          >
+            + Crear nuevo cliente{searchQuery.trim() ? `: "${searchQuery.trim()}"` : ""}
+          </button>
+          {filteredCustomers.length > 0 ? (
+            filteredCustomers.slice(0, 8).map((customer: any) => (
+              <button
+                key={customer._id}
+                type="button"
+                className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onCustomerChange(customer._id, customer);
+                  setSearchQuery("");
+                  setIsDropdownOpen(false);
+                }}
+              >
+                <span className="font-medium">{customer.name}</span>
+                <span className="text-muted-foreground ml-2 text-xs">
+                  {customer.phone}
+                  {customer.totalVehicles
+                    ? ` · ${customer.totalVehicles} vehículos`
+                    : ""}
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-muted-foreground">
+              No se encontraron clientes
+            </div>
+          )}
         </div>
-      ) : (
-        <Select
-          value={selectedCustomerId || ""}
-          onValueChange={handleCustomerSelect}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Seleccionar cliente..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="new" className="text-blue-600 font-medium">
-              + Crear nuevo cliente
-            </SelectItem>
-            {customers && customers.length > 0 ? (
-              <>
-                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                  Clientes existentes
-                </div>
-                {customers.map((customer: any) => (
-                  <SelectItem key={customer._id} value={customer._id}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{customer.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {customer.phone}
-                        {customer.totalVehicles
-                          ? ` • ${customer.totalVehicles} vehículos`
-                          : ""}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </>
-            ) : (
-              <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                No hay clientes registrados
-              </div>
-            )}
-          </SelectContent>
-        </Select>
       )}
     </div>
   );
@@ -489,35 +462,46 @@ export default function Vehicles() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [responsibleFilter, setResponsibleFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateRangeValue>({
-    type: "thisMonth",
-    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-      .toISOString()
-      .split("T")[0],
-    endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
-      .toISOString()
-      .split("T")[0],
-    label: "Este Mes",
+    type: "all",
+    label: "Todos",
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   // Convex hooks - obtener vehículos según el rol del usuario y filtros de fecha
-  // Siempre usar getVehiclesByDateRange cuando hay fechas definidas (incluyendo "thisMonth")
-  const filteredVehiclesByDate =
-    useQuery(
-      api.vehicles.getVehiclesByDateRange,
-      dateFilter.startDate &&
-        dateFilter.endDate &&
-        currentUserId !== undefined
-        ? {
-            startDate: dateFilter.startDate,
-            endDate: dateFilter.endDate,
-            userId: currentUserId || undefined,
-            isAdmin: isAdmin === true, // Asegurar que sea boolean explícito
-          }
-        : "skip"
-    ) ?? [];
+  const allVehiclesRaw = useQuery(
+    api.vehicles.getVehicles,
+    dateFilter.type === "all" ? {} : "skip"
+  ) ?? [];
 
-  // Usar datos filtrados por fecha
-  const allVehicles = filteredVehiclesByDate;
+  const filteredVehiclesByDate = useQuery(
+    api.vehicles.getVehiclesByDateRange,
+    dateFilter.startDate && dateFilter.endDate && dateFilter.type !== "all" && currentUserId !== undefined
+      ? {
+          startDate: dateFilter.startDate,
+          endDate: dateFilter.endDate,
+          userId: currentUserId || undefined,
+          isAdmin: isAdmin === true,
+        }
+      : "skip"
+  ) ?? [];
+
+  // Usar datos según el filtro activo, aplicando filtro de rol para no-admin
+  const allVehiclesUnsorted = dateFilter.type === "all"
+    ? (isAdmin === true
+        ? allVehiclesRaw
+        : allVehiclesRaw.filter((v: any) =>
+            !v.responsibles || v.responsibles.length === 0 ||
+            v.responsibles.some((r: any) => r.userId === currentUserId)
+          ))
+    : filteredVehiclesByDate;
+
+  // Ordenar por fecha de ingreso descendente (más recientes primero)
+  const allVehicles = [...allVehiclesUnsorted].sort(
+    (a, b) =>
+      new Date(b.lastUpdated || b.entryDate).getTime() -
+      new Date(a.lastUpdated || a.entryDate).getTime()
+  );
 
   // Aplicar filtros localmente
   const vehiclesInTaller = allVehicles.filter((vehicle) => {
@@ -563,6 +547,18 @@ export default function Vehicles() {
 
     return true;
   });
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, responsibleFilter, dateFilter]);
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(vehiclesInTaller.length / ITEMS_PER_PAGE));
+  const paginatedVehicles = vehiclesInTaller.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const createVehicle = useMutation(api.vehicles.createVehicle);
   const createNewEntry = useMutation(api.vehicles.createNewEntryForExistingVehicle);
@@ -638,6 +634,15 @@ export default function Vehicles() {
       isAdmin?: boolean;
     }[],
   });
+  const [isExistingPlate, setIsExistingPlate] = useState(false);
+  const [showPlateDropdown, setShowPlateDropdown] = useState(false);
+
+  // Filtrar placas para autocompletado en el diálogo de nuevo vehículo
+  const filteredNewVehiclePlates = newVehicle.plate.length >= 1
+    ? allVehiclePlates.filter((v) =>
+        v.plate.toLowerCase().includes(newVehicle.plate.toLowerCase())
+      ).slice(0, 5)
+    : [];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -700,25 +705,41 @@ export default function Vehicles() {
           customerId = newCustomerId;
         }
 
-        await createVehicle({
-          plate: newVehicle.plate,
-          brand: newVehicle.brand,
-          model: newVehicle.model,
-          year: parseInt(newVehicle.year) || new Date().getFullYear(),
-          owner: newVehicle.owner,
-          phone: newVehicle.phone,
-          customerId: customerId ? (customerId as any) : undefined,
-          status: "Ingresado",
-          entryDate: new Date().toISOString(),
-          services:
-            newVehicle.services.length > 0
-              ? newVehicle.services
-              : ["Mantenimiento general"],
-          cost: parseFloat(newVehicle.cost) || 0,
-          description: newVehicle.description,
-          mileage: newVehicle.mileage ? parseInt(newVehicle.mileage) : undefined,
-          responsibles,
-        });
+        if (isExistingPlate) {
+          // Crear nueva entrada para vehículo existente
+          await createNewEntry({
+            plate: newVehicle.plate,
+            services:
+              newVehicle.services.length > 0
+                ? newVehicle.services
+                : ["Mantenimiento general"],
+            cost: parseFloat(newVehicle.cost) || 0,
+            description: newVehicle.description,
+            mileage: newVehicle.mileage ? parseInt(newVehicle.mileage) : undefined,
+            entryDate: new Date().toISOString(),
+            responsibles: responsibles.length > 0 ? responsibles : undefined,
+          });
+        } else {
+          await createVehicle({
+            plate: newVehicle.plate,
+            brand: newVehicle.brand,
+            model: newVehicle.model,
+            year: parseInt(newVehicle.year) || new Date().getFullYear(),
+            owner: newVehicle.owner,
+            phone: newVehicle.phone,
+            customerId: customerId ? (customerId as any) : undefined,
+            status: "Ingresado",
+            entryDate: new Date().toISOString(),
+            services:
+              newVehicle.services.length > 0
+                ? newVehicle.services
+                : ["Mantenimiento general"],
+            cost: parseFloat(newVehicle.cost) || 0,
+            description: newVehicle.description,
+            mileage: newVehicle.mileage ? parseInt(newVehicle.mileage) : undefined,
+            responsibles,
+          });
+        }
 
         setNewVehicle({
           plate: "",
@@ -734,6 +755,8 @@ export default function Vehicles() {
           mileage: "",
           responsibles: [],
         });
+        setIsExistingPlate(false);
+        setShowPlateDropdown(false);
         setIsDialogOpen(false);
       } catch (error) {
         console.error("Error al crear vehículo:", error);
@@ -1046,14 +1069,6 @@ export default function Vehicles() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => navigate("/vehiculos/historial")}
-            className="flex items-center gap-2"
-          >
-            <CheckCircle className="h-4 w-4" />
-            Vehículos Entregados
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button className="flex items-center gap-2">
@@ -1252,23 +1267,77 @@ export default function Vehicles() {
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Ingresar Nuevo Vehículo</DialogTitle>
+                <DialogTitle>{isExistingPlate ? "Nueva Entrada para Vehículo Existente" : "Ingresar Nuevo Vehículo"}</DialogTitle>
                 <DialogDescription>
-                  Registra un nuevo vehículo en el taller
+                  {isExistingPlate
+                    ? "Se creará una nueva entrada para este vehículo"
+                    : "Registra un nuevo vehículo en el taller"}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
+                  <div className="grid gap-2 relative">
                     <Label htmlFor="plate">Placa</Label>
                     <Input
                       id="plate"
                       value={newVehicle.plate}
-                      onChange={(e) =>
-                        setNewVehicle({ ...newVehicle, plate: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setNewVehicle({ ...newVehicle, plate: val });
+                        setShowPlateDropdown(val.length >= 1);
+                        if (isExistingPlate) {
+                          setIsExistingPlate(false);
+                          setNewVehicle((prev) => ({
+                            ...prev,
+                            plate: val,
+                            brand: "",
+                            model: "",
+                            year: "",
+                            owner: "",
+                            phone: "",
+                            customerId: "",
+                          }));
+                        }
+                      }}
+                      onFocus={() => setShowPlateDropdown(newVehicle.plate.length >= 1)}
+                      onBlur={() => setTimeout(() => setShowPlateDropdown(false), 200)}
                       placeholder="ABC-123"
+                      autoComplete="off"
                     />
+                    {isExistingPlate && (
+                      <p className="text-xs text-blue-600">
+                        Placa existente — se creará una nueva entrada
+                      </p>
+                    )}
+                    {showPlateDropdown && filteredNewVehiclePlates.length > 0 && !isExistingPlate && (
+                      <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                        {filteredNewVehiclePlates.map((v) => (
+                          <button
+                            key={v.plate}
+                            type="button"
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between items-center"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setNewVehicle((prev) => ({
+                                ...prev,
+                                plate: v.plate,
+                                brand: v.vehicleInfo.brand,
+                                model: v.vehicleInfo.model,
+                                year: String(v.vehicleInfo.year),
+                                owner: v.vehicleInfo.owner,
+                              }));
+                              setIsExistingPlate(true);
+                              setShowPlateDropdown(false);
+                            }}
+                          >
+                            <span className="font-medium">{v.plate}</span>
+                            <span className="text-muted-foreground text-xs">
+                              {v.vehicleInfo.brand} {v.vehicleInfo.model} — {v.vehicleInfo.owner}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="year">Año</Label>
@@ -1281,6 +1350,7 @@ export default function Vehicles() {
                       }
                       onFocus={(e) => e.target.select()}
                       placeholder="2024"
+                      disabled={isExistingPlate}
                     />
                   </div>
                 </div>
@@ -1294,6 +1364,7 @@ export default function Vehicles() {
                         setNewVehicle({ ...newVehicle, brand: e.target.value })
                       }
                       placeholder="Toyota"
+                      disabled={isExistingPlate}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -1305,34 +1376,42 @@ export default function Vehicles() {
                         setNewVehicle({ ...newVehicle, model: e.target.value })
                       }
                       placeholder="Corolla"
+                      disabled={isExistingPlate}
                     />
                   </div>
                 </div>
                 <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="customer">Cliente</Label>
-                    <CustomerSelector
-                      selectedCustomerId={newVehicle.customerId}
-                      onCustomerChange={(customerId, customerData) => {
-                        setNewVehicle({
-                          ...newVehicle,
-                          customerId: customerId,
-                          owner: customerData.name,
-                          phone: customerData.phone,
-                        });
-                      }}
-                      onNewCustomerName={(name) => {
-                        setNewVehicle({
-                          ...newVehicle,
-                          customerId: "",
-                          owner: name,
-                        });
-                      }}
-                      newCustomerName={
-                        !newVehicle.customerId ? newVehicle.owner : ""
-                      }
-                    />
-                  </div>
+                  {isExistingPlate ? (
+                    <div className="grid gap-2">
+                      <Label>Cliente</Label>
+                      <Input value={newVehicle.owner} disabled />
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      <Label htmlFor="customer">Cliente</Label>
+                      <CustomerSelector
+                        selectedCustomerId={newVehicle.customerId}
+                        onCustomerChange={(customerId, customerData) => {
+                          setNewVehicle({
+                            ...newVehicle,
+                            customerId: customerId,
+                            owner: customerData.name,
+                            phone: customerData.phone,
+                          });
+                        }}
+                        onNewCustomerName={(name) => {
+                          setNewVehicle({
+                            ...newVehicle,
+                            customerId: "",
+                            owner: name,
+                          });
+                        }}
+                        newCustomerName={
+                          !newVehicle.customerId ? newVehicle.owner : ""
+                        }
+                      />
+                    </div>
+                  )}
                   {isAdmin && (
                     <div className="grid gap-2">
                       <Label htmlFor="phone">Teléfono</Label>
@@ -2804,7 +2883,7 @@ export default function Vehicles() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  vehiclesInTaller.map((vehicle) => (
+                  paginatedVehicles.map((vehicle) => (
                     <TableRow
                       key={vehicle._id}
                       className="cursor-pointer hover:bg-gray-50 transition-colors group"
@@ -3136,6 +3215,35 @@ export default function Vehicles() {
               </TableBody>
             </Table>
           </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, vehiclesInTaller.length)} de {vehiclesInTaller.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Página {currentPage} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

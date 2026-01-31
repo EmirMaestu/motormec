@@ -15,7 +15,7 @@ import {
 } from "lucide-react"
 
 export interface DateRangeValue {
-  type: 'today' | 'yesterday' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'last30Days' | 'last90Days' | 'custom'
+  type: 'all' | 'today' | 'yesterday' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'last30Days' | 'last90Days' | 'custom'
   startDate?: string
   endDate?: string
   label?: string
@@ -30,8 +30,16 @@ interface DateRangeFilterProps {
 }
 
 const DATE_PRESETS = [
-  { 
-    type: 'today' as const, 
+  {
+    type: 'all' as const,
+    label: 'Todos',
+    icon: Filter,
+    getDateRange: () => {
+      return { startDate: undefined, endDate: undefined }
+    }
+  },
+  {
+    type: 'today' as const,
     label: 'Hoy',
     icon: Clock,
     getDateRange: () => {

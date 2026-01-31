@@ -7,7 +7,6 @@ import ProtectedRoute from '../components/ProtectedRoute';
 // Páginas principales
 import Dashboard from '../components/pages/dashboard';
 import Vehicles from '../components/pages/vehicles';
-import VehicleHistory from '../components/pages/VehicleHistory';
 import VehicleRepairHistory from '../components/pages/VehicleRepairHistory';
 import VehicleCostManagement from '../components/pages/VehicleCostManagement';
 import ImportVehicles from '../components/pages/ImportVehicles';
@@ -35,8 +34,7 @@ const AppRouter: React.FC = () => {
             {/* Páginas principales del sistema */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/vehiculos" element={<Vehicles />} />
-            <Route path="/vehiculos/historial" element={<VehicleHistory />} />
-            <Route path="/vehiculos/:plate/historial-arreglos" element={<VehicleRepairHistory />} />
+<Route path="/vehiculos/:plate/historial-arreglos" element={<VehicleRepairHistory />} />
             <Route path="/vehiculos/importar" element={
               <ProtectedRoute adminOnly={true}>
                 <ImportVehicles />
