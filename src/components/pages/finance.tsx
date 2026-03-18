@@ -99,8 +99,10 @@ export default function Finance() {
     } : "skip"
   )
 
-  // Usar datos filtrados o datos generales según el filtro activo
-  const allTransactionsData = dateFilter.type === 'all' ? allTransactions : (filteredTransactions ?? [])
+  // Usar datos filtrados o datos generales según el filtro activo, ordenados por fecha desc
+  const allTransactionsData = (dateFilter.type === 'all' ? allTransactions : (filteredTransactions ?? []))
+    .slice()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   const financialSummary = dateFilter.type === 'all' ? allFinancialSummary : filteredFinancialSummary
   const serviceStats = dateFilter.type === 'all' ? allServiceStats : (filteredServiceStats ?? [])
 
