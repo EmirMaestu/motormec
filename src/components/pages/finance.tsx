@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { DollarSign, TrendingUp, TrendingDown, Plus, Edit3, Trash2, MoreHorizontal } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { Badge } from "../ui/badge"
@@ -51,44 +51,65 @@ export default function Finance() {
   
   // Estado para el filtro de fechas
   const [dateFilter, setDateFilter] = useState<DateRangeValue>({
-    type: 'thisMonth',
-    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
-    label: 'Este Mes'
+    type: 'all',
+    label: 'Todos'
   })
-  
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 10
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [dateFilter])
+
   // Usar queries filtradas o no filtradas dependiendo del tipo de filtro
-  const allTransactions = useQuery(api.transactions.getActiveTransactions) ?? []
+  const allTransactions = useQuery(
+    api.transactions.getActiveTransactions,
+    dateFilter.type === 'all' ? {} : "skip"
+  ) ?? []
   const filteredTransactions = useQuery(
     api.transactions.getTransactionsByDateRange,
-    dateFilter.type !== 'thisMonth' ? {
-      startDate: dateFilter.startDate!,
-      endDate: dateFilter.endDate!
+    dateFilter.type !== 'all' && dateFilter.startDate && dateFilter.endDate ? {
+      startDate: dateFilter.startDate,
+      endDate: dateFilter.endDate
     } : "skip"
   )
-  
-  const allFinancialSummary = useQuery(api.transactions.getFinancialSummary)
+
+  const allFinancialSummary = useQuery(
+    api.transactions.getFinancialSummary,
+    dateFilter.type === 'all' ? {} : "skip"
+  )
   const filteredFinancialSummary = useQuery(
     api.transactions.getFinancialSummaryByDateRange,
-    dateFilter.type !== 'thisMonth' ? {
-      startDate: dateFilter.startDate!,
-      endDate: dateFilter.endDate!
+    dateFilter.type !== 'all' && dateFilter.startDate && dateFilter.endDate ? {
+      startDate: dateFilter.startDate,
+      endDate: dateFilter.endDate
     } : "skip"
   )
-  
-  const allServiceStats = useQuery(api.transactions.getServiceStats) ?? []
+
+  const allServiceStats = useQuery(
+    api.transactions.getServiceStats,
+    dateFilter.type === 'all' ? {} : "skip"
+  ) ?? []
   const filteredServiceStats = useQuery(
     api.transactions.getServiceStatsByDateRange,
-    dateFilter.type !== 'thisMonth' ? {
-      startDate: dateFilter.startDate!,
-      endDate: dateFilter.endDate!
+    dateFilter.type !== 'all' && dateFilter.startDate && dateFilter.endDate ? {
+      startDate: dateFilter.startDate,
+      endDate: dateFilter.endDate
     } : "skip"
   )
-  
+
   // Usar datos filtrados o datos generales según el filtro activo
-  const transactions = dateFilter.type !== 'thisMonth' ? (filteredTransactions ?? []) : allTransactions
-  const financialSummary = dateFilter.type !== 'thisMonth' ? filteredFinancialSummary : allFinancialSummary
-  const serviceStats = dateFilter.type !== 'thisMonth' ? (filteredServiceStats ?? []) : allServiceStats
+  const allTransactionsData = dateFilter.type === 'all' ? allTransactions : (filteredTransactions ?? [])
+  const financialSummary = dateFilter.type === 'all' ? allFinancialSummary : filteredFinancialSummary
+  const serviceStats = dateFilter.type === 'all' ? allServiceStats : (filteredServiceStats ?? [])
+
+  // Paginación
+  const totalPages = Math.max(1, Math.ceil(allTransactionsData.length / ITEMS_PER_PAGE))
+  const transactions = allTransactionsData.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  )
   
   const categories = useQuery(api.transactions.getCategories)
   const usedCategories = useQuery(api.transactions.getUsedCategories) ?? []
@@ -362,7 +383,7 @@ export default function Finance() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {dateFilter.type === 'thisMonth' ? 'Resumen Mensual' : `Resumen - ${dateFilter.label}`}
+              {dateFilter.type === 'all' ? 'Resumen General' : `Resumen - ${dateFilter.label}`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -397,7 +418,7 @@ export default function Finance() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {dateFilter.type === 'thisMonth' ? 'Servicios Más Rentables' : `Servicios Más Rentables - ${dateFilter.label}`}
+              {dateFilter.type === 'all' ? 'Servicios Más Rentables' : `Servicios Más Rentables - ${dateFilter.label}`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -436,8 +457,8 @@ export default function Finance() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle>Transacciones Recientes</CardTitle>
-              {dateFilter.type !== 'thisMonth' && (
+              <CardTitle>Transacciones</CardTitle>
+              {dateFilter.type !== 'all' && (
                 <p className="text-sm text-muted-foreground mt-1">
                   Periodo: {dateFilter.label}
                 </p>
@@ -923,6 +944,34 @@ export default function Finance() {
                 )}
               </TableBody>
             </Table>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, allTransactionsData.length)} de {allTransactionsData.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            )}
         </CardContent>
       </Card>
     </div>
