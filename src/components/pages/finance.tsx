@@ -99,8 +99,10 @@ export default function Finance() {
     } : "skip"
   )
 
-  // Usar datos filtrados o datos generales según el filtro activo
-  const allTransactionsData = dateFilter.type === 'all' ? allTransactions : (filteredTransactions ?? [])
+  // Usar datos filtrados o datos generales según el filtro activo, ordenados por fecha desc
+  const allTransactionsData = (dateFilter.type === 'all' ? allTransactions : (filteredTransactions ?? []))
+    .slice()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   const financialSummary = dateFilter.type === 'all' ? allFinancialSummary : filteredFinancialSummary
   const serviceStats = dateFilter.type === 'all' ? allServiceStats : (filteredServiceStats ?? [])
 
@@ -905,32 +907,26 @@ export default function Finance() {
                     </TableCell>
                     <TableCell>{getStatusBadge(transaction.active !== false)}</TableCell>
                     <TableCell>
-                      {!transaction.description.includes("🚗") && !transaction.description.includes("Cliente:") ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditTransaction(transaction)}>
-                              <Edit3 className="mr-2 h-4 w-4" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleSuspendTransaction(transaction._id)}
-                              className="text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Suspender
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <div className="text-xs text-gray-400 text-center">
-                          Auto
-                        </div>
-                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEditTransaction(transaction)}>
+                            <Edit3 className="mr-2 h-4 w-4" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleSuspendTransaction(transaction._id)}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Suspender
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
