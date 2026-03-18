@@ -46,7 +46,8 @@ export default function VehicleCostManagement() {
   // Cargar datos del vehículo
   useEffect(() => {
     if (vehicle) {
-      setLaborCost(vehicle.costs?.laborCost || 0)
+      // Si ya se gestionaron costos, usar laborCost guardado; si no, usar el costo inicial del vehículo
+      setLaborCost(vehicle.costs !== undefined ? (vehicle.costs.laborCost ?? 0) : (vehicle.cost ?? 0))
       setParts(vehicle.parts || [])
     }
   }, [vehicle])
