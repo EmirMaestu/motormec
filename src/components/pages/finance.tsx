@@ -16,6 +16,7 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { useUser } from "@clerk/clerk-react"
 import DateRangeFilter, { type DateRangeValue } from "../ui/date-range-filter"
+import { getLocalDateString } from "../../lib/dateUtils"
 
 // Componente para campos con errores (fuera del componente principal)
 const FormField = ({ 
@@ -125,7 +126,7 @@ export default function Finance() {
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [newTransaction, setNewTransaction] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateString(),
     description: "",
     type: "Ingreso" as "Ingreso" | "Egreso",
     category: "",
@@ -221,7 +222,7 @@ export default function Finance() {
 
       // Resetear formulario
       setNewTransaction({
-        date: new Date().toISOString().split('T')[0],
+        date: getLocalDateString(),
         description: "",
         type: "Ingreso",
         category: "",
@@ -244,7 +245,7 @@ export default function Finance() {
 
   const resetNewTransaction = () => {
     setNewTransaction({
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateString(),
       description: "",
       type: "Ingreso",
       category: "",

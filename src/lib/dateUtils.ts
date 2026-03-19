@@ -55,6 +55,18 @@ export function formatDateTimeToLocal(isoDate: string | undefined | null): strin
 }
 
 /**
+ * Devuelve una fecha en formato YYYY-MM-DD usando la hora local (no UTC).
+ * Si no se pasa argumento, usa la fecha de hoy.
+ */
+export function getLocalDateString(date?: Date): string {
+  const d = date ?? new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Obtiene la fecha actual en formato DD/MM/YYYY
  */
 export function getTodayDDMMYYYY(): string {

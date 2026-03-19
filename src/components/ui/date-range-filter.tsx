@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { getLocalDateString } from "../../lib/dateUtils"
 import { Card, CardContent, CardHeader, CardTitle } from "./card"
 import { Button } from "./button"
 import { Input } from "./input"
@@ -43,24 +44,23 @@ const DATE_PRESETS = [
     label: 'Hoy',
     icon: Clock,
     getDateRange: () => {
-      const today = new Date()
-      const todayStr = today.toISOString().split('T')[0]
+      const todayStr = getLocalDateString()
       return { startDate: todayStr, endDate: todayStr }
     }
   },
-  { 
-    type: 'yesterday' as const, 
+  {
+    type: 'yesterday' as const,
     label: 'Ayer',
     icon: Clock,
     getDateRange: () => {
       const yesterday = new Date()
       yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayStr = yesterday.toISOString().split('T')[0]
+      const yesterdayStr = getLocalDateString(yesterday)
       return { startDate: yesterdayStr, endDate: yesterdayStr }
     }
   },
-  { 
-    type: 'thisWeek' as const, 
+  {
+    type: 'thisWeek' as const,
     label: 'Esta Semana',
     icon: CalendarDays,
     getDateRange: () => {
@@ -69,14 +69,14 @@ const DATE_PRESETS = [
       monday.setDate(now.getDate() - now.getDay() + 1)
       const sunday = new Date(monday)
       sunday.setDate(monday.getDate() + 6)
-      return { 
-        startDate: monday.toISOString().split('T')[0], 
-        endDate: sunday.toISOString().split('T')[0] 
+      return {
+        startDate: getLocalDateString(monday),
+        endDate: getLocalDateString(sunday)
       }
     }
   },
-  { 
-    type: 'lastWeek' as const, 
+  {
+    type: 'lastWeek' as const,
     label: 'Semana Pasada',
     icon: CalendarDays,
     getDateRange: () => {
@@ -85,79 +85,79 @@ const DATE_PRESETS = [
       lastMonday.setDate(now.getDate() - now.getDay() - 6)
       const lastSunday = new Date(lastMonday)
       lastSunday.setDate(lastMonday.getDate() + 6)
-      return { 
-        startDate: lastMonday.toISOString().split('T')[0], 
-        endDate: lastSunday.toISOString().split('T')[0] 
+      return {
+        startDate: getLocalDateString(lastMonday),
+        endDate: getLocalDateString(lastSunday)
       }
     }
   },
-  { 
-    type: 'thisMonth' as const, 
+  {
+    type: 'thisMonth' as const,
     label: 'Este Mes',
     icon: CalendarIcon,
     getDateRange: () => {
       const now = new Date()
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      return { 
-        startDate: firstDay.toISOString().split('T')[0], 
-        endDate: lastDay.toISOString().split('T')[0] 
+      return {
+        startDate: getLocalDateString(firstDay),
+        endDate: getLocalDateString(lastDay)
       }
     }
   },
-  { 
-    type: 'lastMonth' as const, 
+  {
+    type: 'lastMonth' as const,
     label: 'Mes Pasado',
     icon: CalendarIcon,
     getDateRange: () => {
       const now = new Date()
       const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       const lastDay = new Date(now.getFullYear(), now.getMonth(), 0)
-      return { 
-        startDate: firstDay.toISOString().split('T')[0], 
-        endDate: lastDay.toISOString().split('T')[0] 
+      return {
+        startDate: getLocalDateString(firstDay),
+        endDate: getLocalDateString(lastDay)
       }
     }
   },
-  { 
-    type: 'thisYear' as const, 
+  {
+    type: 'thisYear' as const,
     label: 'Este Año',
     icon: CalendarIcon,
     getDateRange: () => {
       const now = new Date()
       const firstDay = new Date(now.getFullYear(), 0, 1)
       const lastDay = new Date(now.getFullYear(), 11, 31)
-      return { 
-        startDate: firstDay.toISOString().split('T')[0], 
-        endDate: lastDay.toISOString().split('T')[0] 
+      return {
+        startDate: getLocalDateString(firstDay),
+        endDate: getLocalDateString(lastDay)
       }
     }
   },
-  { 
-    type: 'last30Days' as const, 
+  {
+    type: 'last30Days' as const,
     label: 'Últimos 30 Días',
     icon: CalendarDays,
     getDateRange: () => {
       const now = new Date()
       const thirtyDaysAgo = new Date(now)
       thirtyDaysAgo.setDate(now.getDate() - 30)
-      return { 
-        startDate: thirtyDaysAgo.toISOString().split('T')[0], 
-        endDate: now.toISOString().split('T')[0] 
+      return {
+        startDate: getLocalDateString(thirtyDaysAgo),
+        endDate: getLocalDateString(now)
       }
     }
   },
-  { 
-    type: 'last90Days' as const, 
+  {
+    type: 'last90Days' as const,
     label: 'Últimos 90 Días',
     icon: CalendarDays,
     getDateRange: () => {
       const now = new Date()
       const ninetyDaysAgo = new Date(now)
       ninetyDaysAgo.setDate(now.getDate() - 90)
-      return { 
-        startDate: ninetyDaysAgo.toISOString().split('T')[0], 
-        endDate: now.toISOString().split('T')[0] 
+      return {
+        startDate: getLocalDateString(ninetyDaysAgo),
+        endDate: getLocalDateString(now)
       }
     }
   }
