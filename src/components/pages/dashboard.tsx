@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { DashboardCards } from "../module-cards"
 import { useUser } from "@clerk/clerk-react"
@@ -5,7 +6,7 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "../ui/button"
 import { Badge } from "../ui/badge"
-import { Car, Clock, Play, Square, Pause, DollarSign, TrendingUp, Users, Wrench, Plus } from "lucide-react"
+import { Car, Clock, Play, Square, Pause, DollarSign, TrendingUp, Users, Wrench, Plus, ChevronDown } from "lucide-react"
 import { WorkTimer } from "../ui/work-timer"
 import { useNavigate } from "react-router-dom"
 import { formatDateToDDMMYYYY } from "../../lib/dateUtils"
@@ -16,6 +17,12 @@ export default function Dashboard() {
 
   // Determinar si el usuario es admin
   const isAdmin = user?.organizationMemberships?.[0]?.role === "org:admin"
+
+  // Estado de colapso de las secciones del dashboard
+  const [openVehiculos, setOpenVehiculos] = useState(true)
+  const [openTransacciones, setOpenTransacciones] = useState(true)
+  const [openRendimiento, setOpenRendimiento] = useState(false)
+  const [openEstado, setOpenEstado] = useState(false)
   
   // Obtener vehículos específicos para el usuario
   const vehicles = useQuery(api.vehicles.getVehiclesForUser, {
@@ -442,94 +449,126 @@ export default function Dashboard() {
       {/* Vehículos recientes y transacciones */}
       <div className="grid gap-4 md:grid-cols-2">
         {/* Vehículos en taller */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Vehículos en Taller</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/vehiculos")}>
+        <Card className="flex flex-col">
+          <CardHeader
+            className="flex flex-row items-center justify-between pb-3 cursor-pointer select-none"
+            onClick={() => setOpenVehiculos(o => !o)}
+          >
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${openVehiculos ? "" : "-rotate-90"}`} />
+              Vehículos en Taller
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={(e) => { e.stopPropagation(); navigate("/vehiculos") }}>
               Ver todos
             </Button>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {allVehiclesAdmin?.slice(0, 5).map((vehicle) => (
-              <div key={vehicle._id} className="flex items-center justify-between border-b border-gray-100 pb-2">
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{vehicle.plate} - {vehicle.brand} {vehicle.model}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant={
-                      vehicle.status === "Listo" ? "default" : 
-                      vehicle.status === "En Reparación" ? "secondary" : "outline"
-                    } className="text-xs">
-                      {vehicle.status}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{vehicle.owner}</span>
+          {openVehiculos && <CardContent className="flex-1 p-0">
+            <div className="divide-y divide-gray-100">
+              {allVehiclesAdmin?.slice(0, 5).map((vehicle) => (
+                <div key={vehicle._id} className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50/50 transition-colors">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50">
+                    <Car className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{vehicle.plate} · {vehicle.brand} {vehicle.model}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Badge variant={
+                        vehicle.status === "Listo" ? "default" :
+                        vehicle.status === "En Reparación" ? "secondary" : "outline"
+                      } className="text-[10px] h-4 px-1.5 py-0">
+                        {vehicle.status}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground truncate">{vehicle.owner}</span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold">${vehicle.cost.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground">{formatDateToDDMMYYYY(vehicle.entryDate)}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium">${vehicle.cost.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDateToDDMMYYYY(vehicle.entryDate)}
-                  </p>
+              ))}
+              {(!allVehiclesAdmin || allVehiclesAdmin.length === 0) && (
+                <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                  <Car className="h-8 w-8 mb-2 opacity-40" />
+                  <p className="text-sm">No hay vehículos en el taller</p>
                 </div>
-              </div>
-            ))}
-            {(!allVehiclesAdmin || allVehiclesAdmin.length === 0) && (
-              <div className="text-center py-4 text-gray-500">
-                <Car className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No hay vehículos en el taller</p>
-              </div>
-            )}
-          </CardContent>
+              )}
+            </div>
+          </CardContent>}
         </Card>
 
         {/* Transacciones recientes */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Transacciones Recientes</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/finanzas")}>
+        <Card className="flex flex-col">
+          <CardHeader
+            className="flex flex-row items-center justify-between pb-3 cursor-pointer select-none"
+            onClick={() => setOpenTransacciones(o => !o)}
+          >
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${openTransacciones ? "" : "-rotate-90"}`} />
+              Transacciones Recientes
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={(e) => { e.stopPropagation(); navigate("/finanzas") }}>
               Ver todas
             </Button>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {recentTransactions?.slice(0, 5).map((transaction) => (
-              <div key={transaction._id} className="flex items-center justify-between border-b border-gray-100 pb-2">
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{transaction.description}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant={transaction.type === "Ingreso" ? "default" : "destructive"} className="text-xs">
-                      {transaction.type}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{transaction.category}</span>
+          {openTransacciones && <CardContent className="flex-1 p-0">
+            <div className="divide-y divide-gray-100">
+              {recentTransactions?.slice(0, 5).map((transaction) => {
+                // Tomar solo la primera parte antes de " - Cliente:" para no repetir info
+                const shortDesc = transaction.description.split(" - Cliente:")[0];
+                return (
+                  <div key={transaction._id} className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50/50 transition-colors">
+                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                      transaction.type === "Ingreso" ? "bg-green-50" : "bg-red-50"
+                    }`}>
+                      <DollarSign className={`h-4 w-4 ${
+                        transaction.type === "Ingreso" ? "text-green-600" : "text-red-600"
+                      }`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{shortDesc}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <Badge variant={transaction.type === "Ingreso" ? "default" : "destructive"} className="text-[10px] h-4 px-1.5 py-0">
+                          {transaction.type}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground truncate">{transaction.category}</span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={`text-sm font-semibold ${
+                        transaction.type === "Ingreso" ? "text-green-600" : "text-red-600"
+                      }`}>
+                        {transaction.type === "Egreso" ? "-" : "+"}${Math.abs(transaction.amount).toLocaleString()}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">{formatDateToDDMMYYYY(transaction.date)}</p>
+                    </div>
                   </div>
+                );
+              })}
+              {(!recentTransactions || recentTransactions.length === 0) && (
+                <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                  <DollarSign className="h-8 w-8 mb-2 opacity-40" />
+                  <p className="text-sm">No hay transacciones registradas</p>
                 </div>
-                <div className="text-right">
-                  <p className={`text-sm font-medium ${
-                    transaction.type === "Ingreso" ? "text-green-600" : "text-red-600"
-                  }`}>
-                    ${Math.abs(transaction.amount).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDateToDDMMYYYY(transaction.date)}
-                  </p>
-                </div>
-              </div>
-            ))}
-            {(!recentTransactions || recentTransactions.length === 0) && (
-              <div className="text-center py-4 text-gray-500">
-                <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No hay transacciones registradas</p>
-              </div>
-            )}
-          </CardContent>
+              )}
+            </div>
+          </CardContent>}
         </Card>
       </div>
 
       {/* Métricas de rendimiento */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader>
-            <CardTitle>Rendimiento del Equipo</CardTitle>
+          <CardHeader
+            className="cursor-pointer select-none"
+            onClick={() => setOpenRendimiento(o => !o)}
+          >
+            <CardTitle className="flex items-center gap-2">
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${openRendimiento ? "" : "-rotate-90"}`} />
+              Rendimiento del Equipo
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          {openRendimiento && <CardContent>
             <div className="space-y-4">
               {allVehiclesAdmin && (
                 <>
@@ -563,14 +602,20 @@ export default function Dashboard() {
                 </>
               )}
             </div>
-          </CardContent>
+          </CardContent>}
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Estado General</CardTitle>
+          <CardHeader
+            className="cursor-pointer select-none"
+            onClick={() => setOpenEstado(o => !o)}
+          >
+            <CardTitle className="flex items-center gap-2">
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${openEstado ? "" : "-rotate-90"}`} />
+              Estado General
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          {openEstado && <CardContent>
             <div className="space-y-4">
               {allVehiclesAdmin && (
                 <>
@@ -597,7 +642,7 @@ export default function Dashboard() {
                 </>
               )}
             </div>
-          </CardContent>
+          </CardContent>}
         </Card>
       </div>
     </div>
