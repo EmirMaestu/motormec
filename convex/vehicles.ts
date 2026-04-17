@@ -1129,27 +1129,46 @@ export const getVehicleHistoryByPlate = query({
         phone: firstVehicle.phone,
         customer,
       },
-      visits: sortedVehicles.map((vehicle) => ({
-        id: vehicle._id,
-        entryDate: vehicle.entryDate,
-        exitDate: vehicle.exitDate,
-        status: vehicle.status,
-        services: vehicle.services,
-        cost: vehicle.cost,
-        mileage: vehicle.mileage,
-        description: vehicle.description,
-        inTaller: vehicle.inTaller,
-        lastUpdated: vehicle.lastUpdated,
-        costs: vehicle.costs,
-        parts: vehicle.parts,
-        responsibles: vehicle.responsibles,
-        duration: vehicle.exitDate
-          ? Math.ceil(
-              (new Date(vehicle.exitDate).getTime() -
-                new Date(vehicle.entryDate).getTime()) /
-                (1000 * 60 * 60 * 24)
-            )
-          : null,
+      visits: await Promise.all(sortedVehicles.map(async (vehicle) => {
+        // Buscar fotos del historial de WhatsApp para esta visita
+        const historialEntry = await ctx.db
+          .query("historial_taller")
+          .withIndex("by_vehicle", (q) => q.eq("vehicleId", vehicle._id))
+          .first();
+
+        const fotoUrls: string[] = [];
+        if (historialEntry && historialEntry.fotoIds.length > 0) {
+          const urls = await Promise.all(
+            historialEntry.fotoIds.map((id) => ctx.storage.getUrl(id))
+          );
+          for (const url of urls) {
+            if (url) fotoUrls.push(url);
+          }
+        }
+
+        return {
+          id: vehicle._id,
+          entryDate: vehicle.entryDate,
+          exitDate: vehicle.exitDate,
+          status: vehicle.status,
+          services: vehicle.services,
+          cost: vehicle.cost,
+          mileage: vehicle.mileage,
+          description: vehicle.description,
+          inTaller: vehicle.inTaller,
+          lastUpdated: vehicle.lastUpdated,
+          costs: vehicle.costs,
+          parts: vehicle.parts,
+          responsibles: vehicle.responsibles,
+          fotoUrls,
+          duration: vehicle.exitDate
+            ? Math.ceil(
+                (new Date(vehicle.exitDate).getTime() -
+                  new Date(vehicle.entryDate).getTime()) /
+                  (1000 * 60 * 60 * 24)
+              )
+            : null,
+        };
       })),
       statistics: {
         totalVisits,

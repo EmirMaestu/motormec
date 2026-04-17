@@ -274,10 +274,10 @@ export default function VehicleHistory() {
                               <Eye className="mr-2 h-4 w-4" />
                               Ver detalle
                             </DropdownMenuItem>
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/vehiculos/${encodeURIComponent(vehicle.plate)}/historial-arreglos`);
+                                navigate(`/vehiculos/${encodeURIComponent(vehicle.plate)}/detalle`);
                               }}
                             >
                               <History className="mr-2 h-4 w-4" />
@@ -539,11 +539,11 @@ export default function VehicleHistory() {
             >
               Cerrar
             </Button>
-            <Button 
+            <Button
               variant="outline"
               onClick={() => {
                 setIsDetailDialogOpen(false);
-                navigate(`/vehiculos/${encodeURIComponent(detailVehicle.plate)}/historial-arreglos`);
+                navigate(`/vehiculos/${encodeURIComponent(detailVehicle.plate)}/detalle`);
               }}
               className="w-full sm:w-auto"
             >

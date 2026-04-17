@@ -322,5 +322,6 @@ export default defineSchema({
     .index("by_patente", ["patente"])
     .index("by_phone", ["whatsappFrom"])
     .index("by_status", ["status"])
-    .index("by_message_id", ["whatsappMessageId"]),
+    .index("by_message_id", ["whatsappMessageId"])
+    .index("by_vehicle", ["vehicleId"]),
 });

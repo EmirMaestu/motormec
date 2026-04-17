@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { useOrganization } from "@clerk/clerk-react";
 import { api } from "../../../convex/_generated/api";
 import {
@@ -17,11 +17,20 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  Camera,
+  X,
+  Edit3,
+  Save,
 } from "lucide-react";
 import { formatDateToDDMMYYYY } from "../../lib/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 interface Responsible {
   name: string;
@@ -35,6 +44,10 @@ export default function VehicleRepairHistory() {
   const navigate = useNavigate();
   const { plate } = useParams<{ plate: string }>();
   const [expandedVisit, setExpandedVisit] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [editingVisit, setEditingVisit] = useState<any>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [isSaving, setIsSaving] = useState(false);
   const { membership } = useOrganization();
   const isAdmin = membership?.role === "org:admin";
 
@@ -42,6 +55,8 @@ export default function VehicleRepairHistory() {
     api.vehicles.getVehicleHistoryByPlate,
     plate ? { plate: decodeURIComponent(plate) } : "skip"
   );
+
+  const updateVehicle = useMutation(api.vehicles.updateVehicle);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -82,6 +97,30 @@ export default function VehicleRepairHistory() {
         );
       default:
         return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingVisit) return;
+    setIsSaving(true);
+    try {
+      const services = typeof editForm.services === 'string'
+        ? editForm.services.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : editForm.services || [];
+      await updateVehicle({
+        id: editingVisit.id,
+        status: editForm.status,
+        services,
+        mileage: editForm.mileage ? parseInt(String(editForm.mileage).replace(/\D/g, '')) || undefined : undefined,
+        description: editForm.description || undefined,
+        cost: editForm.cost !== undefined ? parseFloat(String(editForm.cost)) || 0 : 0,
+      });
+      setEditingVisit(null);
+    } catch (err) {
+      console.error('Error al guardar:', err);
+      alert('Error al guardar los cambios');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -140,7 +179,7 @@ export default function VehicleRepairHistory() {
         </Button>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            Historial de Arreglos
+            Detalle del Vehículo
           </h1>
           <p className="text-muted-foreground">
             Historial completo de todas las visitas del vehículo
@@ -298,6 +337,25 @@ export default function VehicleRepairHistory() {
                               En Taller
                             </Badge>
                           )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="ml-auto"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingVisit(visit);
+                              setEditForm({
+                                status: visit.status,
+                                services: visit.services?.join(', ') || '',
+                                mileage: visit.mileage || '',
+                                description: visit.description || '',
+                                cost: visit.cost || 0,
+                              });
+                            }}
+                          >
+                            <Edit3 className="h-3 w-3 mr-1" />
+                            Editar
+                          </Button>
                         </div>
                         <div className={`grid gap-4 mt-4 ${isAdmin ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-4'}`}>
                           <div className="flex items-center gap-2">
@@ -506,6 +564,39 @@ export default function VehicleRepairHistory() {
                           </div>
                         )}
 
+                        {/* Fotos del ingreso */}
+                        {visit.fotoUrls && visit.fotoUrls.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Camera className="h-4 w-4 text-gray-500" />
+                              <h4 className="text-sm font-semibold">
+                                Fotos del Ingreso
+                              </h4>
+                              <span className="text-xs text-muted-foreground">
+                                ({visit.fotoUrls.length} foto{visit.fotoUrls.length !== 1 ? "s" : ""})
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                              {visit.fotoUrls.map((url, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLightboxUrl(url);
+                                  }}
+                                  className="aspect-square rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                >
+                                  <img
+                                    src={url}
+                                    alt={`Foto ${idx + 1} del ingreso`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Responsables */}
                         {visit.responsibles &&
                           visit.responsibles.length > 0 && (
@@ -555,6 +646,76 @@ export default function VehicleRepairHistory() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialog de edición */}
+      <Dialog open={!!editingVisit} onOpenChange={(open) => !open && setEditingVisit(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Editar Visita</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>Estado</Label>
+              <Select value={editForm.status} onValueChange={(v) => setEditForm({...editForm, status: v})}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Ingresado">Ingresado</SelectItem>
+                  <SelectItem value="En Reparación">En Reparación</SelectItem>
+                  <SelectItem value="Listo">Listo</SelectItem>
+                  <SelectItem value="Entregado">Entregado</SelectItem>
+                  <SelectItem value="Suspendido">Suspendido</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Servicios (separados por coma)</Label>
+              <Input value={editForm.services} onChange={(e) => setEditForm({...editForm, services: e.target.value})} placeholder="Ej: cambio de aceite, revisión frenos" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Kilometraje</Label>
+              <Input type="number" value={editForm.mileage} onChange={(e) => setEditForm({...editForm, mileage: e.target.value})} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Descripción</Label>
+              <Textarea value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} rows={3} />
+            </div>
+            {isAdmin && (
+              <div className="grid gap-2">
+                <Label>Costo</Label>
+                <Input type="number" value={editForm.cost} onChange={(e) => setEditForm({...editForm, cost: e.target.value})} />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingVisit(null)}>Cancelar</Button>
+            <Button onClick={handleSaveEdit} disabled={isSaving}>
+              <Save className="h-4 w-4 mr-2" />
+              {isSaving ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox de fotos */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white bg-black/40 rounded-full p-2 hover:bg-black/60 transition-colors"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Foto del vehículo"
+            className="max-w-full max-h-[90vh] rounded-lg shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

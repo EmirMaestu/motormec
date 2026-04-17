@@ -35,7 +35,7 @@ const AppRouter: React.FC = () => {
             {/* Páginas principales del sistema */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/vehiculos" element={<Vehicles />} />
-<Route path="/vehiculos/:plate/historial-arreglos" element={<VehicleRepairHistory />} />
+<Route path="/vehiculos/:plate/detalle" element={<VehicleRepairHistory />} />
             <Route path="/vehiculos/importar" element={
               <ProtectedRoute adminOnly={true}>
                 <ImportVehicles />
