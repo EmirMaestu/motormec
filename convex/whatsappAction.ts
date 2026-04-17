@@ -553,12 +553,10 @@ async function manejarRespuesta(
 
 // ─── Llamar a la IA del VPS (Ollama) ──────────────────────────────────────
 async function procesarConIA(texto: string): Promise<DatosVehiculo> {
-  const vpsUrl = process.env.VPS_URL;
-  const vpsApiKey = process.env.VPS_API_KEY;
-  const modelo = process.env.VPS_MODEL ?? "llama3";
+  const groqApiKey = process.env.GROQ_API_KEY;
 
-  if (!vpsUrl) {
-    throw new Error("VPS_URL no configurada en las variables de entorno de Convex");
+  if (!groqApiKey) {
+    throw new Error("GROQ_API_KEY no configurada en las variables de entorno de Convex");
   }
 
   const systemPrompt = `Eres un extractor de datos para un taller mecánico argentino.
@@ -580,29 +578,30 @@ REGLAS IMPORTANTES:
 - Si un campo no aparece en el mensaje, usá cadena vacía "". NO inventes datos.`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 90_000);
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
   try {
-    const response = await fetch(`${vpsUrl}/v1/chat/completions`, {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(vpsApiKey ? { "X-API-Key": vpsApiKey } : {}),
+        "Authorization": `Bearer ${groqApiKey}`,
       },
       body: JSON.stringify({
-        model: modelo,
+        model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: texto },
         ],
         temperature: 0.1,
-        stream: false,
+        max_tokens: 300,
       }),
       signal: controller.signal,
     });
 
     if (!response.ok) {
-      throw new Error(`VPS respondió con status ${response.status}`);
+      const err = await response.text();
+      throw new Error(`Groq respondió con status ${response.status}: ${err}`);
     }
 
     const data = await response.json();
