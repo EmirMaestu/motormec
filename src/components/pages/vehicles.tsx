@@ -2062,11 +2062,11 @@ export default function Vehicles() {
                   </div>
                 </div>
 
-                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <div className="bg-amber-50 dark:bg-amber-950/30 p-4 rounded-lg border border-amber-200 dark:border-amber-900/50">
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
                       <svg
-                        className="h-5 w-5 text-yellow-600"
+                        className="h-5 w-5 text-amber-600 dark:text-amber-400"
                         fill="currentColor"
                         viewBox="0 0 20 20"
                       >
@@ -2078,10 +2078,10 @@ export default function Vehicles() {
                       </svg>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-yellow-800">
+                      <h3 className="text-sm font-medium text-amber-800 dark:text-amber-300">
                         Importante
                       </h3>
-                      <p className="text-sm text-yellow-700 mt-1">
+                      <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
                         Una vez marcado como entregado, el vehículo se moverá al
                         historial y no podrá ser modificado sin cambiar su
                         estado.
@@ -2452,7 +2452,7 @@ export default function Vehicles() {
                         <div className="max-w-64">
                           <div className="flex flex-wrap gap-1 mb-1">
                             {vehicle.services.length > 0 && (
-                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 border border-gray-200 dark:border-zinc-700">
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 border border-gray-200 dark:border-zinc-700 max-w-[180px] truncate block">
                                 {vehicle.services[0]}
                               </span>
                             )}
