@@ -1,4 +1,4 @@
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 // ─── Mutation interna: guardar nuevo registro (idempotente por whatsappMessageId) ─
@@ -118,6 +118,70 @@ export const obtenerConFotos = query({
     );
 
     return { ...registro, urlsFotos };
+  },
+});
+
+// ─── Mutation pública: generar URL firmada para subir foto ───────────────
+export const generarUrlSubida = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+// ─── Mutation pública: agregar fotos a un registro por vehicleId ─────────
+// Si no existe registro para ese vehículo, crea uno nuevo de tipo "manual"
+export const agregarFotosPorVehiculo = mutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+    storageIds: v.array(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    // Buscar registro existente para este vehículo
+    const existente = await ctx.db
+      .query("historial_taller")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.vehicleId))
+      .first();
+
+    if (existente) {
+      // Agregar las nuevas fotos a las existentes
+      const fotoIds = [...existente.fotoIds, ...args.storageIds];
+      await ctx.db.patch(existente._id, { fotoIds });
+      return existente._id;
+    } else {
+      // Crear nuevo registro manual para este vehículo
+      const now = new Date().toISOString();
+      return await ctx.db.insert("historial_taller", {
+        whatsappMessageId: `manual_${args.vehicleId}_${Date.now()}`,
+        whatsappFrom: "manual",
+        whatsappTimestamp: now,
+        vehicleId: args.vehicleId,
+        fotoIds: args.storageIds,
+        status: "linked",
+        createdAt: now,
+      });
+    }
+  },
+});
+
+// ─── Mutation pública: eliminar una foto de un registro ──────────────────
+export const eliminarFoto = mutation({
+  args: {
+    vehicleId: v.id("vehicles"),
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    const registro = await ctx.db
+      .query("historial_taller")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.vehicleId))
+      .first();
+
+    if (!registro) return;
+
+    const fotoIds = registro.fotoIds.filter((id) => id !== args.storageId);
+    await ctx.db.patch(registro._id, { fotoIds });
+    // También eliminar el archivo del storage
+    await ctx.storage.delete(args.storageId);
   },
 });
 

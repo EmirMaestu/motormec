@@ -24,7 +24,10 @@ import {
   Plus,
   Trash2,
   Calculator,
+  Upload,
+  ImagePlus,
 } from "lucide-react";
+import { useRef } from "react";
 import { formatDateToDDMMYYYY } from "../../lib/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
@@ -60,6 +63,11 @@ export default function VehicleRepairHistory() {
   const [editForm, setEditForm] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
 
+  // Estados para subida de fotos
+  const [uploadingVisitId, setUploadingVisitId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Estados para gestión de costos
   const [costVisit, setCostVisit] = useState<any>(null);
   const [laborCost, setLaborCost] = useState(0);
@@ -75,6 +83,9 @@ export default function VehicleRepairHistory() {
   );
 
   const updateVehicle = useMutation(api.vehicles.updateVehicle);
+  const generarUrlSubida = useMutation(api.historialTaller.generarUrlSubida);
+  const agregarFotos = useMutation(api.historialTaller.agregarFotosPorVehiculo);
+  const eliminarFoto = useMutation(api.historialTaller.eliminarFoto);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -139,6 +150,48 @@ export default function VehicleRepairHistory() {
       alert('Error al guardar los cambios');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // ── Fotos ─────────────────────────────────────────────────────────────────
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length || !uploadingVisitId) return;
+
+    setIsUploading(true);
+    try {
+      const storageIds: string[] = [];
+      for (const file of files) {
+        const uploadUrl = await generarUrlSubida({});
+        const res = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!res.ok) throw new Error(`Error al subir imagen: ${res.status}`);
+        const { storageId } = await res.json();
+        storageIds.push(storageId);
+      }
+      await agregarFotos({
+        vehicleId: uploadingVisitId as any,
+        storageIds: storageIds as any,
+      });
+    } catch (err) {
+      console.error("Error subiendo fotos:", err);
+      alert("Error al subir las fotos. Intentá de nuevo.");
+    } finally {
+      setIsUploading(false);
+      setUploadingVisitId(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteFoto = async (visitId: string, storageId: string) => {
+    if (!confirm("¿Eliminar esta foto?")) return;
+    try {
+      await eliminarFoto({ vehicleId: visitId as any, storageId: storageId as any });
+    } catch (err) {
+      console.error("Error eliminando foto:", err);
     }
   };
 
@@ -636,37 +689,71 @@ export default function VehicleRepairHistory() {
                         )}
 
                         {/* Fotos del ingreso */}
-                        {visit.fotoUrls && visit.fotoUrls.length > 0 && (
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <Camera className="h-4 w-4 text-gray-500" />
-                              <h4 className="text-sm font-semibold">
-                                Fotos del Ingreso
-                              </h4>
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Camera className="h-4 w-4 text-gray-500" />
+                            <h4 className="text-sm font-semibold">Fotos del Vehículo</h4>
+                            {visit.fotoUrls && visit.fotoUrls.length > 0 && (
                               <span className="text-xs text-muted-foreground">
                                 ({visit.fotoUrls.length} foto{visit.fotoUrls.length !== 1 ? "s" : ""})
                               </span>
-                            </div>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="ml-auto h-7 text-xs border-blue-200 text-blue-700 hover:bg-blue-50"
+                              disabled={isUploading && uploadingVisitId === visit.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setUploadingVisitId(visit.id);
+                                fileInputRef.current?.click();
+                              }}
+                            >
+                              {isUploading && uploadingVisitId === visit.id ? (
+                                <><Upload className="h-3 w-3 mr-1 animate-bounce" />Subiendo...</>
+                              ) : (
+                                <><ImagePlus className="h-3 w-3 mr-1" />Agregar fotos</>
+                              )}
+                            </Button>
+                          </div>
+
+                          {visit.fotoUrls && visit.fotoUrls.length > 0 ? (
                             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                               {visit.fotoUrls.map((url, idx) => (
-                                <button
-                                  key={idx}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setLightboxUrl(url);
-                                  }}
-                                  className="aspect-square rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                >
-                                  <img
-                                    src={url}
-                                    alt={`Foto ${idx + 1} del ingreso`}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </button>
+                                <div key={idx} className="relative group aspect-square">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setLightboxUrl(url);
+                                    }}
+                                    className="w-full h-full rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                  >
+                                    <img
+                                      src={url}
+                                      alt={`Foto ${idx + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </button>
+                                  {/* Botón eliminar foto */}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const storageId = visit.fotoStorageIds?.[idx];
+                                      if (storageId) handleDeleteFoto(visit.id, storageId);
+                                    }}
+                                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
                               ))}
                             </div>
-                          </div>
-                        )}
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                              Sin fotos — usá el botón para agregar
+                            </p>
+                          )}
+                        </div>
 
                         {/* Responsables */}
                         {visit.responsibles &&
@@ -890,6 +977,16 @@ export default function VehicleRepairHistory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Input oculto para subir fotos */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleFileChange}
+      />
 
       {/* Lightbox de fotos */}
       {lightboxUrl && (

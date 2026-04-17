@@ -1137,12 +1137,16 @@ export const getVehicleHistoryByPlate = query({
           .first();
 
         const fotoUrls: string[] = [];
+        const fotoStorageIds: string[] = [];
         if (historialEntry && historialEntry.fotoIds.length > 0) {
           const urls = await Promise.all(
             historialEntry.fotoIds.map((id) => ctx.storage.getUrl(id))
           );
-          for (const url of urls) {
-            if (url) fotoUrls.push(url);
+          for (let i = 0; i < urls.length; i++) {
+            if (urls[i]) {
+              fotoUrls.push(urls[i]!);
+              fotoStorageIds.push(historialEntry.fotoIds[i]);
+            }
           }
         }
 
@@ -1161,6 +1165,7 @@ export const getVehicleHistoryByPlate = query({
           parts: vehicle.parts,
           responsibles: vehicle.responsibles,
           fotoUrls,
+          fotoStorageIds,
           duration: vehicle.exitDate
             ? Math.ceil(
                 (new Date(vehicle.exitDate).getTime() -
