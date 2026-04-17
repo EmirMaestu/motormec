@@ -159,6 +159,13 @@ function esNegativo(texto: string): boolean {
   return ["no", "n", "nop", "nope", "cancelar", "cancel"].some((w) => t === w || t.startsWith(w + " "));
 }
 
+function esListo(texto: string): boolean {
+  const t = texto.trim().toLowerCase();
+  return ["listo", "ya", "fin", "terminar", "terminé", "termine", "guardar", "no mas", "no más", "ya está", "ya esta"].some(
+    (w) => t === w || t.startsWith(w + " ")
+  );
+}
+
 // ─── Procesar un mensaje individual ───────────────────────────────────────
 async function procesarMensaje(
   ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
@@ -192,7 +199,7 @@ async function procesarMensaje(
       // Conversación expirada — limpiar y procesar como nueva
       await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
     } else {
-      await manejarRespuesta(ctx, convActiva, textoOriginal, from, phoneNumberId, accessToken);
+      await manejarRespuesta(ctx, convActiva, msg, textoOriginal, from, phoneNumberId, accessToken);
       return;
     }
   }
@@ -359,6 +366,7 @@ async function manejarRespuesta(
     historialId?: string;
     [key: string]: unknown;
   },
+  msg: WhatsAppMessage,
   texto: string,
   from: string,
   phoneNumberId: string,
@@ -368,8 +376,9 @@ async function manejarRespuesta(
   const datos = conv.datos as DatosConversacion;
 
   // ── Cancelación global en cualquier etapa ──────────────────────────────
-  if (esNegativo(texto) && etapa !== "verificando_cliente") {
+  if (esNegativo(texto) && etapa !== "verificando_cliente" && etapa !== "pidiendo_fotos") {
     // En verificando_cliente el "no" significa "ese no es el cliente", no cancelar
+    // En pidiendo_fotos el "no" significa "no quiero fotos", no cancelar
     await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
     await enviarMensaje(
       from,
@@ -472,59 +481,18 @@ async function manejarRespuesta(
   // ── ETAPA: confirmando ─────────────────────────────────────────────────
   if (etapa === "confirmando") {
     if (esAfirmativo(texto)) {
-      // Crear el vehículo en la base de datos
-      try {
-        const [marcaParte, ...modeloPartes] = (datos.marca_modelo ?? "").split(" ");
-        const marca = marcaParte || "Desconocida";
-        const modelo = modeloPartes.join(" ") || "Desconocido";
-        const ano = parseInt(datos.ano ?? "0") || new Date().getFullYear();
-
-        const vehicleId = await ctx.runMutation(
-          internal.vehicles.crearVehiculo,
-          {
-            plate: (datos.patente ?? "").toUpperCase(),
-            brand: marca,
-            model: modelo,
-            year: ano,
-            owner: datos.cliente || "Sin nombre",
-            phone: from,
-            customerId: datos.customerId as any,
-            status: "Ingresado",
-            entryDate: new Date().toISOString().split("T")[0],
-            services: datos.tarea ? [datos.tarea] : [],
-            cost: 0,
-            mileage: datos.kilometraje ? parseInt(datos.kilometraje.replace(/\D/g, "")) || undefined : undefined,
-          }
-        );
-
-        // Actualizar el historial con el vehicleId y status linked
-        if (conv.historialId) {
-          await ctx.runMutation(internal.historialTaller.vincular, {
-            id: conv.historialId as any,
-            vehicleId: vehicleId as any,
-            customerId: datos.customerId as any,
-          });
-        }
-
-        // Limpiar conversación
-        await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
-
-        await enviarMensaje(
-          from,
-          `✅ *¡Vehículo registrado!*\n\n${datos.marca_modelo} ${datos.ano} — ${datos.patente}\nYa aparece en el sistema como *Ingresado*. 🔧`,
-          phoneNumberId,
-          accessToken
-        );
-      } catch (err) {
-        console.error("[WhatsApp] Error al crear vehículo:", err);
-        await enviarMensaje(
-          from,
-          `❌ Hubo un error al registrar el vehículo. Por favor intentá nuevamente o cargalo de forma manual.`,
-          phoneNumberId,
-          accessToken
-        );
-        await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
-      }
+      // Pasar a etapa de fotos antes de crear el vehículo
+      await ctx.runMutation(internal.conversaciones.actualizar, {
+        phone: from,
+        etapa: "pidiendo_fotos",
+        datos,
+      });
+      await enviarMensaje(
+        from,
+        `📸 ¿Querés agregar fotos del vehículo?\nEnviá las imágenes directamente o respondé *no* para omitir.`,
+        phoneNumberId,
+        accessToken
+      );
     } else if (esNegativo(texto)) {
       // Cancelar
       await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
@@ -544,6 +512,107 @@ async function manejarRespuesta(
         accessToken
       );
     }
+    return;
+  }
+
+  // ── ETAPA: pidiendo_fotos ──────────────────────────────────────────────
+  if (etapa === "pidiendo_fotos") {
+    // Si llega una imagen, guardarla
+    if (msg.type === "image" && msg.image?.id) {
+      try {
+        const storageId = await descargarYGuardarFoto(ctx, msg.image.id, accessToken);
+        const nuevosFotoIds = [...(datos.fotoIds ?? []), storageId];
+        await ctx.runMutation(internal.conversaciones.actualizar, {
+          phone: from,
+          datos: { ...datos, fotoIds: nuevosFotoIds },
+        });
+        await enviarMensaje(
+          from,
+          `📸 Foto ${nuevosFotoIds.length} guardada. Enviá más o respondé *listo* para registrar el vehículo.`,
+          phoneNumberId,
+          accessToken
+        );
+      } catch (err) {
+        console.error("[WhatsApp] Error al guardar foto:", err);
+        await enviarMensaje(from, `⚠️ No pude guardar la foto, intentá de nuevo.`, phoneNumberId, accessToken);
+      }
+      return;
+    }
+
+    // Si dice "listo", "no" o similar → crear el vehículo
+    const proceder = esListo(texto) || esNegativo(texto) || esAfirmativo(texto);
+    if (proceder || texto === "") {
+      try {
+        const [marcaParte, ...modeloPartes] = (datos.marca_modelo ?? "").split(" ");
+        const marca = marcaParte || "Desconocida";
+        const modelo = modeloPartes.join(" ") || "Desconocido";
+        const ano = parseInt(datos.ano ?? "0") || new Date().getFullYear();
+        const fotoIds = datos.fotoIds ?? [];
+
+        const vehicleId = await ctx.runMutation(
+          internal.vehicles.crearVehiculo,
+          {
+            plate: (datos.patente ?? "").toUpperCase(),
+            brand: marca,
+            model: modelo,
+            year: ano,
+            owner: datos.cliente || "Sin nombre",
+            phone: from,
+            customerId: datos.customerId as any,
+            status: "Ingresado",
+            entryDate: new Date().toISOString().split("T")[0],
+            services: datos.tarea ? [datos.tarea] : [],
+            cost: 0,
+            mileage: datos.kilometraje ? parseInt(datos.kilometraje.replace(/\D/g, "")) || undefined : undefined,
+          }
+        );
+
+        // Actualizar historial con vehicleId, customerId y fotos acumuladas
+        if (conv.historialId) {
+          await ctx.runMutation(internal.historialTaller.vincular, {
+            id: conv.historialId as any,
+            vehicleId: vehicleId as any,
+            customerId: datos.customerId as any,
+          });
+          if (fotoIds.length > 0) {
+            await ctx.runMutation(internal.historialTaller.actualizar, {
+              id: conv.historialId as any,
+              fotoIds: fotoIds as any,
+              status: "linked",
+            });
+          }
+        }
+
+        // Limpiar conversación
+        await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
+
+        const fotoMsg = fotoIds.length > 0 ? `\n📸 ${fotoIds.length} foto${fotoIds.length > 1 ? "s" : ""} adjunta${fotoIds.length > 1 ? "s" : ""}.` : "";
+        await enviarMensaje(
+          from,
+          `✅ *¡Vehículo registrado!*\n\n${datos.marca_modelo} ${datos.ano} — ${datos.patente}\nYa aparece en el sistema como *Ingresado*. 🔧${fotoMsg}`,
+          phoneNumberId,
+          accessToken
+        );
+      } catch (err) {
+        console.error("[WhatsApp] Error al crear vehículo:", err);
+        await enviarMensaje(
+          from,
+          `❌ Hubo un error al registrar el vehículo. Por favor intentá nuevamente o cargalo de forma manual.`,
+          phoneNumberId,
+          accessToken
+        );
+        await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
+      }
+      return;
+    }
+
+    // Respuesta no reconocida
+    await enviarMensaje(
+      from,
+      `Enviá fotos directamente, o respondé *listo* para guardar el vehículo sin fotos.`,
+      phoneNumberId,
+      accessToken
+    );
     return;
   }
 
