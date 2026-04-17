@@ -1,4 +1,4 @@
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 
 export const getVehicles = query({
@@ -1376,5 +1376,96 @@ export const searchVehicleByPlate = query({
       customer,
       visitCount: vehicles.length,
     };
+  },
+});
+
+// ─── Uso interno del bot de WhatsApp ──────────────────────────────────────
+
+// Buscar el vehículo más reciente por patente normalizada (sin espacios ni guiones)
+export const buscarPorPatente = internalQuery({
+  args: { plate: v.string() },
+  handler: async (ctx, { plate }) => {
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_plate", (q) => q.eq("plate", plate))
+      .collect();
+
+    if (vehicles.length === 0) return null;
+
+    const latest = vehicles.sort(
+      (a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+    )[0];
+
+    const customer = latest.customerId ? await ctx.db.get(latest.customerId) : null;
+
+    return {
+      plate: latest.plate,
+      brand: latest.brand,
+      model: latest.model,
+      owner: latest.owner,
+      phone: latest.phone,
+      customerId: latest.customerId,
+      customer,
+      visitCount: vehicles.length,
+    };
+  },
+});
+
+// Crear nueva entrada para un vehículo existente (uso interno del bot)
+export const crearNuevaEntrada = internalMutation({
+  args: {
+    plate: v.string(),
+    services: v.array(v.string()),
+    cost: v.number(),
+    mileage: v.optional(v.number()),
+    entryDate: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_plate", (q) => q.eq("plate", args.plate))
+      .collect();
+
+    if (vehicles.length === 0) {
+      throw new Error(`No se encontró vehículo con placa ${args.plate}`);
+    }
+
+    const latest = vehicles.sort(
+      (a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+    )[0];
+
+    const entryDate = args.entryDate || new Date().toISOString().split("T")[0];
+
+    const vehicleId = await ctx.db.insert("vehicles", {
+      plate: latest.plate,
+      brand: latest.brand,
+      model: latest.model,
+      year: latest.year,
+      owner: latest.owner,
+      phone: latest.phone,
+      customerId: latest.customerId,
+      status: "Ingresado",
+      entryDate,
+      services: args.services,
+      cost: args.cost,
+      mileage: args.mileage,
+      inTaller: true,
+      lastUpdated: new Date().toISOString(),
+    });
+
+    // Actualizar métricas del cliente
+    if (latest.customerId) {
+      const allVehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_customer", (q) => q.eq("customerId", latest.customerId!))
+        .collect();
+      await ctx.db.patch(latest.customerId, {
+        totalVehicles: allVehicles.length,
+        lastVisit: entryDate,
+        visitCount: allVehicles.length,
+      });
+    }
+
+    return vehicleId;
   },
 });
