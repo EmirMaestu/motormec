@@ -525,7 +525,13 @@ export default function Vehicles() {
 
     // Filtro de estado
     if (statusFilter !== "all") {
-      if (statusFilter !== vehicle.status) return false;
+      if (statusFilter === "delivered") {
+        // "Entregados" - only include vehicles with status "Entregado"
+        if (vehicle.status !== "Entregado") return false;
+      } else if (statusFilter === "not_delivered") {
+        // "No entregados" - include all statuses except "Entregado"
+        if (vehicle.status === "Entregado") return false;
+      }
     }
 
     // Filtro de responsable
@@ -2710,16 +2716,19 @@ export default function Vehicles() {
           <SelectTrigger className="w-full sm:w-[180px]">
             <Filter className="h-4 w-4 mr-2" />
             <SelectValue>
-              {statusFilter === "all" ? "Todos los estados" : statusFilter}
+              {statusFilter === "all"
+                ? "Todos los estados"
+                : statusFilter === "delivered"
+                  ? "Entregados"
+                  : statusFilter === "not_delivered"
+                    ? "No entregados"
+                    : "Todos los estados"}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los estados</SelectItem>
-            <SelectItem value="Ingresado">Ingresado</SelectItem>
-            <SelectItem value="En Reparación">En Reparación</SelectItem>
-            <SelectItem value="Listo">Listo</SelectItem>
-            <SelectItem value="Entregado">Entregado</SelectItem>
-            <SelectItem value="Suspendido">Suspendido</SelectItem>
+            <SelectItem value="not_delivered">No entregados</SelectItem>
+            <SelectItem value="delivered">Entregados</SelectItem>
           </SelectContent>
         </Select>
 
