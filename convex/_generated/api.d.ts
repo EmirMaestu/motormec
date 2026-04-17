@@ -17,8 +17,11 @@ import type * as appConfig from "../appConfig.js";
 import type * as categories from "../categories.js";
 import type * as chartData from "../chartData.js";
 import type * as clearData from "../clearData.js";
+import type * as conversaciones from "../conversaciones.js";
 import type * as customers from "../customers.js";
 import type * as dashboard from "../dashboard.js";
+import type * as historialTaller from "../historialTaller.js";
+import type * as http from "../http.js";
 import type * as initCustomers from "../initCustomers.js";
 import type * as metrics from "../metrics.js";
 import type * as migrateServices from "../migrateServices.js";
@@ -33,6 +36,7 @@ import type * as services from "../services.js";
 import type * as transactions from "../transactions.js";
 import type * as vehicles from "../vehicles.js";
 import type * as vehicles_simplified from "../vehicles_simplified.js";
+import type * as whatsappAction from "../whatsappAction.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -47,8 +51,11 @@ declare const fullApi: ApiFromModules<{
   categories: typeof categories;
   chartData: typeof chartData;
   clearData: typeof clearData;
+  conversaciones: typeof conversaciones;
   customers: typeof customers;
   dashboard: typeof dashboard;
+  historialTaller: typeof historialTaller;
+  http: typeof http;
   initCustomers: typeof initCustomers;
   metrics: typeof metrics;
   migrateServices: typeof migrateServices;
@@ -63,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   transactions: typeof transactions;
   vehicles: typeof vehicles;
   vehicles_simplified: typeof vehicles_simplified;
+  whatsappAction: typeof whatsappAction;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

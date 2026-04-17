@@ -16,6 +16,7 @@ import Partners from '../components/pages/partners';
 import Customers from '../components/pages/customers';
 import StockManagement from '../stock-management';
 import FixCustomerMetrics from '../components/pages/FixCustomerMetrics';
+import WhatsAppBot from '../components/pages/WhatsAppBot';
 
 // Ejemplos y demos
 import CarouselCardsDemo from '../examples/CollapsibleCardsDemo';
@@ -66,6 +67,11 @@ const AppRouter: React.FC = () => {
             <Route path="/clientes" element={
               <ProtectedRoute adminOnly={true}>
                 <Customers />
+              </ProtectedRoute>
+            } />
+            <Route path="/whatsapp-bot" element={
+              <ProtectedRoute adminOnly={true}>
+                <WhatsAppBot />
               </ProtectedRoute>
             } />
             

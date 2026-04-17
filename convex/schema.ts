@@ -274,4 +274,52 @@ export default defineSchema({
     limit: v.string(),
     reviewer: v.string(),
   }),
+
+  // Conversaciones activas del bot de WhatsApp (estado de cada flujo)
+  conversaciones: defineTable({
+    phone: v.string(),                                    // número WhatsApp del cliente
+    etapa: v.string(),                                    // 'verificando_cliente' | 'pidiendo_ano' | 'confirmando'
+    datos: v.any(),                                       // datos parciales recolectados
+    candidatoClienteId: v.optional(v.id("customers")),   // cliente candidato encontrado
+    candidatoClienteNombre: v.optional(v.string()),
+    historialId: v.optional(v.id("historial_taller")),   // registro historial asociado
+    updatedAt: v.string(),
+    createdAt: v.string(),
+  }).index("by_phone", ["phone"]),
+
+  // Historial del taller (ingresos vía WhatsApp bot)
+  historial_taller: defineTable({
+    // Metadata de WhatsApp
+    whatsappMessageId: v.string(),
+    whatsappFrom: v.string(),        // número de teléfono del que envía
+    whatsappTimestamp: v.string(),
+    rawMessage: v.optional(v.string()), // texto original recibido
+
+    // Campos extraídos por la IA
+    marca_modelo: v.optional(v.string()),
+    kilometraje: v.optional(v.string()),
+    patente: v.optional(v.string()),
+    tarea: v.optional(v.string()),
+    cliente: v.optional(v.string()),
+
+    // Fotos guardadas en Convex Storage
+    fotoIds: v.array(v.id("_storage")),
+
+    // Referencias opcionales a tablas existentes
+    vehicleId: v.optional(v.id("vehicles")),
+    customerId: v.optional(v.id("customers")),
+
+    // Estado del procesamiento
+    status: v.union(
+      v.literal("pending"),     // recibido, esperando procesamiento IA
+      v.literal("processed"),   // IA procesó correctamente
+      v.literal("error"),       // error en IA o procesamiento
+      v.literal("linked"),      // vinculado a vehículo/cliente existente
+    ),
+    errorMessage: v.optional(v.string()),
+    createdAt: v.string(),
+  })
+    .index("by_patente", ["patente"])
+    .index("by_phone", ["whatsappFrom"])
+    .index("by_status", ["status"]),
 });

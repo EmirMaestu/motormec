@@ -10,6 +10,7 @@ import {
   FileText,
   Users,
   UserCheck,
+  MessageSquare,
   ChevronLeft,
   Menu,
   X,
@@ -63,6 +64,13 @@ const navigationItems = [
     icon: Users,
     path: "/socios",
     color: "text-indigo-600",
+    adminOnly: true,
+  },
+  {
+    title: "Bot WhatsApp",
+    icon: MessageSquare,
+    path: "/whatsapp-bot",
+    color: "text-green-600",
     adminOnly: true,
   },
 ];

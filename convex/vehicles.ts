@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
 export const getVehicles = query({
@@ -112,6 +112,77 @@ export const createVehicle = mutation({
         totalSpent,
         lastVisit: args.entryDate,
         visitCount: totalVehicles,
+      });
+    }
+
+    return vehicleId;
+  },
+});
+
+// ─── Mutation interna: crear vehículo desde el bot de WhatsApp ────────────
+export const crearVehiculo = internalMutation({
+  args: {
+    plate: v.string(),
+    brand: v.string(),
+    model: v.string(),
+    year: v.number(),
+    owner: v.string(),
+    phone: v.string(),
+    customerId: v.optional(v.id("customers")),
+    status: v.string(),
+    entryDate: v.string(),
+    services: v.array(v.string()),
+    cost: v.number(),
+    description: v.optional(v.string()),
+    mileage: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    let customerId = args.customerId;
+
+    // Si no hay customerId, buscar o crear cliente por teléfono
+    if (!customerId && args.phone) {
+      const existingCustomer = await ctx.db
+        .query("customers")
+        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
+        .filter((q) => q.eq(q.field("active"), true))
+        .first();
+
+      if (existingCustomer) {
+        customerId = existingCustomer._id;
+      } else {
+        customerId = await ctx.db.insert("customers", {
+          name: args.owner,
+          phone: args.phone,
+          createdAt: new Date().toISOString(),
+          active: true,
+          totalVehicles: 0,
+          totalSpent: 0,
+          visitCount: 0,
+        });
+      }
+    }
+
+    const isInTaller = args.status !== "Entregado" && args.status !== "Suspendido";
+
+    const vehicleId = await ctx.db.insert("vehicles", {
+      ...args,
+      customerId,
+      inTaller: isInTaller,
+      exitDate: !isInTaller ? new Date().toISOString() : undefined,
+      lastUpdated: new Date().toISOString(),
+    });
+
+    // Actualizar métricas del cliente
+    if (customerId) {
+      const vehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_customer", (q) => q.eq("customerId", customerId))
+        .collect();
+      await ctx.db.patch(customerId, {
+        totalVehicles: vehicles.length,
+        totalSpent: vehicles.reduce((s, v) => s + v.cost, 0),
+        lastVisit: args.entryDate,
+        visitCount: vehicles.length,
       });
     }
 
