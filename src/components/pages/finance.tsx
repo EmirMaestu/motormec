@@ -145,17 +145,19 @@ export default function Finance() {
   
 
   const getStatusBadge = (active: boolean) => {
+    const base = "text-[11px] font-medium px-2 py-0.5 rounded-full border inline-flex items-center"
     if (active) {
-      return <Badge className="bg-green-100 text-green-800">Activo</Badge>
+      return <span className={`${base} bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800`}>Activo</span>
     } else {
-      return <Badge className="bg-gray-100 text-gray-800">Suspendido</Badge>
+      return <span className={`${base} bg-gray-50 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-zinc-700`}>Suspendido</span>
     }
   }
 
   const getTypeBadge = (type: string) => {
-    return type === "Ingreso" 
-      ? <Badge className="bg-blue-100 text-blue-800">Ingreso</Badge>
-      : <Badge className="bg-red-100 text-red-800">Egreso</Badge>
+    const base = "text-[11px] font-medium px-2 py-0.5 rounded-full border inline-flex items-center"
+    return type === "Ingreso"
+      ? <span className={`${base} bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800`}>Ingreso</span>
+      : <span className={`${base} bg-red-50 dark:bg-red-950/50 text-red-500 dark:text-red-400 border-red-200 dark:border-red-800`}>Egreso</span>
   }
 
   const validateTransaction = (transaction: typeof newTransaction) => {
@@ -378,6 +380,12 @@ export default function Finance() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-zinc-100">Finanzas</h1>
+        <p className="text-sm text-gray-400 dark:text-zinc-500 mt-0.5">Ingresos, egresos y balance del taller</p>
+      </div>
+
       {/* Cards de estadísticas financieras con carousel */}
       <FinanceCards />
 
@@ -390,30 +398,30 @@ export default function Finance() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
+            <div className="flex justify-between items-center p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl">
               <div>
-                <p className="text-sm font-medium text-green-800">Total Ingresos</p>
-                <p className="text-2xl font-bold text-green-600">${totalIngresos.toLocaleString()}</p>
+                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Total Ingresos</p>
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${totalIngresos.toLocaleString()}</p>
               </div>
-              <TrendingUp className="h-8 w-8 text-green-500" />
+              <TrendingUp className="h-7 w-7 text-emerald-500 dark:text-emerald-400" />
             </div>
-            
-            <div className="flex justify-between items-center p-4 bg-red-50 rounded-lg">
+
+            <div className="flex justify-between items-center p-4 bg-red-50 dark:bg-red-950/40 rounded-xl">
               <div>
-                <p className="text-sm font-medium text-red-800">Total Egresos</p>
-                <p className="text-2xl font-bold text-red-600">${totalEgresos.toLocaleString()}</p>
+                <p className="text-xs font-medium text-red-700 dark:text-red-400">Total Egresos</p>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">${totalEgresos.toLocaleString()}</p>
               </div>
-              <TrendingDown className="h-8 w-8 text-red-500" />
+              <TrendingDown className="h-7 w-7 text-red-500 dark:text-red-400" />
             </div>
-            
-            <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
+
+            <div className={`flex justify-between items-center p-4 rounded-xl ${gananciaNeta >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-red-50 dark:bg-red-950/40'}`}>
               <div>
-                <p className="text-sm font-medium text-blue-800">Ganancia Neta</p>
-                <p className={`text-2xl font-bold ${gananciaNeta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <p className={`text-xs font-medium ${gananciaNeta >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>Ganancia Neta</p>
+                <p className={`text-2xl font-bold ${gananciaNeta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                   ${gananciaNeta.toLocaleString()}
                 </p>
               </div>
-              <DollarSign className="h-8 w-8 text-blue-500" />
+              <DollarSign className={`h-7 w-7 ${gananciaNeta >= 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`} />
             </div>
           </CardContent>
         </Card>
@@ -641,8 +649,8 @@ export default function Finance() {
                     />
                   </FormField>
                   
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p className="text-sm text-blue-800">
+                  <div className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg p-3">
+                    <p className="text-sm text-gray-600 dark:text-zinc-400">
                       <span className="font-medium">ℹ️ Nota:</span> Los detalles adicionales (persona responsable, método de pago, notas) se incluirán en la descripción de la transacción.
                     </p>
                   </div>
@@ -839,7 +847,7 @@ export default function Finance() {
               </TableHeader>
               <TableBody>
                 {transactions.map((transaction) => (
-                  <TableRow key={transaction._id}>
+                  <TableRow key={transaction._id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/40 transition-colors">
                     <TableCell>
                       <span className="text-sm">
                         {new Date(transaction.date).toLocaleDateString()}
@@ -872,7 +880,7 @@ export default function Finance() {
                               </p>
                             )}
                             {transaction.description.includes("Cliente:") && (
-                              <p className="text-xs font-medium text-blue-700">
+                              <p className="text-xs font-medium text-gray-600 dark:text-zinc-400">
                                 👤 Cliente: {transaction.description.match(/Cliente: ([^-]+)/)?.[1]?.trim() || "Cliente"}
                               </p>
                             )}

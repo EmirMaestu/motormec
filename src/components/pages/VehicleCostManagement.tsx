@@ -115,8 +115,8 @@ export default function VehicleCostManagement() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-500">Cargando información del vehículo...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-600 mx-auto mb-4"></div>
+          <p className="text-gray-500 dark:text-zinc-400">Cargando información del vehículo...</p>
         </div>
       </div>
     )
@@ -145,7 +145,7 @@ export default function VehicleCostManagement() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Gestión de Costos</h1>
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-zinc-400">
           {vehicle.plate} - {vehicle.brand} {vehicle.model} ({vehicle.owner})
         </p>
       </div>
@@ -173,8 +173,8 @@ export default function VehicleCostManagement() {
                   placeholder="0.00"
                 />
               </div>
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <p className="text-sm text-blue-800">
+              <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg border border-blue-100 dark:border-blue-900/50">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
                   <span className="font-medium">Total Mano de Obra:</span>
                   <span className="text-lg font-bold ml-2">${laborCost.toLocaleString()}</span>
                 </p>
@@ -191,7 +191,7 @@ export default function VehicleCostManagement() {
           <CardContent>
             <div className="space-y-4">
               {/* Agregar nuevo repuesto */}
-              <div className="border rounded-lg p-4 bg-gray-50">
+              <div className="border border-gray-200 dark:border-zinc-700 rounded-lg p-4 bg-gray-50 dark:bg-zinc-800/50">
                 <h3 className="text-sm font-medium mb-3">Agregar Repuesto</h3>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
@@ -275,7 +275,7 @@ export default function VehicleCostManagement() {
               {/* Lista de repuestos */}
               <div className="space-y-2">
                 {parts.map((part) => (
-                  <div key={part.id} className="border rounded-lg p-3 bg-white">
+                  <div key={part.id} className="border border-gray-200 dark:border-zinc-700 rounded-lg p-3 bg-white dark:bg-zinc-900">
                     <div className="flex items-center justify-between">
                       <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-3">
                         <div>
@@ -324,7 +324,7 @@ export default function VehicleCostManagement() {
                     </div>
                     
                     {(part.supplier || part.notes) && (
-                      <div className="mt-2 text-sm text-gray-600">
+                      <div className="mt-2 text-sm text-gray-600 dark:text-zinc-400">
                         {part.supplier && <p><strong>Proveedor:</strong> {part.supplier}</p>}
                         {part.notes && <p><strong>Notas:</strong> {part.notes}</p>}
                       </div>
@@ -333,7 +333,7 @@ export default function VehicleCostManagement() {
                 ))}
                 
                 {parts.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500 dark:text-zinc-400">
                     <p>No hay repuestos agregados</p>
                     <p className="text-sm">Usa el formulario de arriba para agregar repuestos</p>
                   </div>
@@ -351,22 +351,22 @@ export default function VehicleCostManagement() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-blue-600 font-medium">Mano de Obra</p>
-              <p className="text-2xl font-bold text-blue-900">${laborCost.toLocaleString()}</p>
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 p-4 rounded-lg">
+              <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">Mano de Obra</p>
+              <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">${laborCost.toLocaleString()}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <p className="text-sm text-green-600 font-medium">Repuestos</p>
-              <p className="text-2xl font-bold text-green-900">${partsCost.toLocaleString()}</p>
-              <p className="text-xs text-green-700">{parts.length} repuesto(s)</p>
+            <div className="bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900/50 p-4 rounded-lg">
+              <p className="text-sm text-green-600 dark:text-green-400 font-medium">Repuestos</p>
+              <p className="text-2xl font-bold text-green-900 dark:text-green-200">${partsCost.toLocaleString()}</p>
+              <p className="text-xs text-green-700 dark:text-green-400">{parts.length} repuesto(s)</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <p className="text-sm text-purple-600 font-medium">Total</p>
-              <p className="text-3xl font-bold text-purple-900">${totalCost.toLocaleString()}</p>
+            <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/50 p-4 rounded-lg">
+              <p className="text-sm text-purple-600 dark:text-purple-400 font-medium">Total</p>
+              <p className="text-3xl font-bold text-purple-900 dark:text-purple-200">${totalCost.toLocaleString()}</p>
             </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600 font-medium">Distribución</p>
-              <div className="space-y-1 text-xs">
+            <div className="bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 p-4 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-zinc-400 font-medium">Distribución</p>
+              <div className="space-y-1 text-xs dark:text-zinc-300">
                 <p>Mano de obra: {totalCost > 0 ? Math.round((laborCost / totalCost) * 100) : 0}%</p>
                 <p>Repuestos: {totalCost > 0 ? Math.round((partsCost / totalCost) * 100) : 0}%</p>
               </div>

@@ -4,6 +4,7 @@ import { ConvexProvider, ConvexReactClient } from "convex/react"
 import { ClerkProvider } from '@clerk/clerk-react'
 import './index.css'
 import AppRouter from './router/AppRouter'
+import { ThemeProvider } from './lib/theme'
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL!)
 
@@ -15,10 +16,12 @@ if (!PUBLISHABLE_KEY) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
-      <ConvexProvider client={convex}>
-        <AppRouter />
-      </ConvexProvider>
-    </ClerkProvider>
+    <ThemeProvider>
+      <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+        <ConvexProvider client={convex}>
+          <AppRouter />
+        </ConvexProvider>
+      </ClerkProvider>
+    </ThemeProvider>
   </StrictMode>,
 )

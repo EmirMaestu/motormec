@@ -158,11 +158,10 @@ export default function Customers() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6">
-        <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Gestión de Clientes</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-zinc-100">Gestión de Clientes</h1>
+            <p className="text-sm text-gray-400 dark:text-zinc-500 mt-0.5">
               Administra la información de tus clientes y sus vehículos
             </p>
           </div>
@@ -257,7 +256,6 @@ export default function Customers() {
             </DialogContent>
           </Dialog>
         </div>
-      </div>
 
       {/* Estadísticas generales */}
       {customersStats && (
@@ -265,7 +263,7 @@ export default function Customers() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Clientes</CardTitle>
-              <Users className="h-4 w-4 text-blue-600" />
+              <Users className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{customersStats.totalCustomers}</div>
@@ -334,10 +332,10 @@ export default function Customers() {
               {filteredCustomers.map((customer) => (
                 <div 
                   key={customer._id}
-                  className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                    selectedCustomer?._id === customer._id 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'border-gray-200 hover:border-gray-300'
+                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                    selectedCustomer?._id === customer._id
+                      ? 'border-gray-300 dark:border-zinc-600 bg-gray-50 dark:bg-zinc-800'
+                      : 'border-gray-100 dark:border-zinc-800 hover:border-gray-200 dark:hover:border-zinc-700 hover:bg-gray-50/50 dark:hover:bg-zinc-800/50'
                   }`}
                   onClick={() => setSelectedCustomer(customer)}
                 >
@@ -415,9 +413,9 @@ export default function Customers() {
                       Cliente desde {formatDateToDDMMYYYY(validSelectedCustomerMetrics.createdAt)}
                     </p>
                   </div>
-                  <Badge className="bg-green-100 text-green-800">
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
                     Activo
-                  </Badge>
+                  </span>
                 </div>
               </CardHeader>
               <CardContent>
@@ -448,7 +446,7 @@ export default function Customers() {
                       <Card>
                         <CardContent className="p-4">
                           <div className="flex items-center space-x-2">
-                            <Car className="h-5 w-5 text-blue-600" />
+                            <Car className="h-5 w-5 text-gray-500 dark:text-zinc-400" />
                             <div>
                               <p className="text-lg font-bold">{validSelectedCustomerMetrics.totalVehicles}</p>
                               <p className="text-xs text-muted-foreground">Vehículos</p>
@@ -528,7 +526,7 @@ export default function Customers() {
                             </div>
                             <div className="flex justify-between">
                               <span className="text-sm text-gray-600">Vehículos activos:</span>
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                              <Badge variant="outline" className="bg-gray-50 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300">
                                 {validSelectedCustomerMetrics.activeVehicles}
                               </Badge>
                             </div>
@@ -562,7 +560,7 @@ export default function Customers() {
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <p className="font-medium">
-                                  {vehicle.plate} - {vehicle.brand} {vehicle.model} {vehicle.year}
+                                  {vehicle.plate} - {vehicle.brand} {vehicle.model}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
                                   Servicios: {vehicle.services.join(", ")}

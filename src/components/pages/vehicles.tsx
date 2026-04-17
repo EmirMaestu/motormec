@@ -15,6 +15,8 @@ import {
   Calculator,
   Crown,
   User,
+  Users,
+  Wrench,
   Play,
   Pause,
   Square,
@@ -161,10 +163,10 @@ function CustomerSelector({
         autoComplete="off"
       />
       {isDropdownOpen && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-52 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-lg dark:shadow-zinc-950/50 max-h-52 overflow-y-auto">
           <button
             type="button"
-            className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm text-blue-600 font-medium border-b"
+            className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-zinc-800 text-sm text-gray-700 dark:text-zinc-300 font-medium border-b border-gray-100 dark:border-zinc-800"
             onMouseDown={(e) => {
               e.preventDefault();
               if (searchQuery.trim()) {
@@ -183,7 +185,7 @@ function CustomerSelector({
               <button
                 key={customer._id}
                 type="button"
-                className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
+                className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-zinc-800 text-sm text-gray-900 dark:text-zinc-100 transition-colors"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   onCustomerChange(customer._id, customer);
@@ -299,7 +301,7 @@ function ResponsibleSelector({
                 {responsible.isAdmin ? (
                   <Crown className="h-3 w-3 text-yellow-600" />
                 ) : (
-                  <User className="h-3 w-3 text-blue-600" />
+                  <User className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
                 )}
                 <span className="text-sm">
                   <strong>{responsible.name}</strong>
@@ -339,7 +341,7 @@ function ResponsibleSelector({
                   )?.role === "org:admin" ? (
                     <Crown className="h-3 w-3 text-yellow-600" />
                   ) : (
-                    <User className="h-3 w-3 text-blue-600" />
+                    <User className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
                   )}
                   <span>
                     {
@@ -399,7 +401,7 @@ function ResponsibleSelector({
                         {member.role === "org:admin" ? (
                           <Crown className="h-3 w-3 text-yellow-600" />
                         ) : (
-                          <User className="h-3 w-3 text-blue-600" />
+                          <User className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
                         )}
                         {member.publicUserData.firstName}{" "}
                         {member.publicUserData.lastName}
@@ -463,6 +465,7 @@ export default function Vehicles() {
     type: "all",
     label: "Todos",
   });
+  const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
@@ -621,7 +624,6 @@ export default function Vehicles() {
     plate: "",
     brand: "",
     model: "",
-    year: "",
     owner: "",
     phone: "",
     customerId: "",
@@ -647,24 +649,15 @@ export default function Vehicles() {
     : [];
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Ingresado":
-        return (
-          <Badge className="bg-yellow-100 text-yellow-800">Ingresado</Badge>
-        );
-      case "En Reparación":
-        return (
-          <Badge className="bg-blue-100 text-blue-800">En Reparación</Badge>
-        );
-      case "Listo":
-        return <Badge className="bg-green-100 text-green-800">Listo</Badge>;
-      case "Entregado":
-        return <Badge className="bg-gray-100 text-gray-800">Entregado</Badge>;
-      case "Suspendido":
-        return <Badge variant="destructive">Suspendido</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+    const base = "text-[11px] font-medium px-2 py-0.5 rounded-full border inline-flex items-center";
+    const map: Record<string, string> = {
+      "Ingresado": "bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+      "En Reparación": "bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+      "Listo": "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
+      "Entregado": "bg-gray-50 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-zinc-700",
+      "Suspendido": "bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800",
+    };
+    return <span className={`${base} ${map[status] ?? "bg-gray-50 text-gray-500 border-gray-200"}`}>{status}</span>;
   };
 
   const handleAddVehicle = async () => {
@@ -726,7 +719,7 @@ export default function Vehicles() {
             plate: newVehicle.plate,
             brand: newVehicle.brand,
             model: newVehicle.model,
-            year: parseInt(newVehicle.year) || new Date().getFullYear(),
+            year: new Date().getFullYear(),
             owner: newVehicle.owner,
             phone: newVehicle.phone,
             customerId: customerId ? (customerId as any) : undefined,
@@ -747,7 +740,6 @@ export default function Vehicles() {
           plate: "",
           brand: "",
           model: "",
-          year: "",
           owner: "",
           phone: "",
           customerId: "",
@@ -1062,10 +1054,10 @@ export default function Vehicles() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-zinc-100">
             Gestión de Vehículos
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-gray-400 dark:text-zinc-500">
             Administra los vehículos en el taller
           </p>
         </div>
@@ -1128,7 +1120,7 @@ export default function Vehicles() {
                               setNewEntryPlate(vehicle.plate);
                               setIsPlateDropdownOpen(false);
                             }}
-                            className="w-full text-left px-4 py-2 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                            className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors border-b border-gray-100 dark:border-zinc-800 last:border-b-0"
                           >
                             <div className="flex items-center justify-between">
                               <div>
@@ -1136,7 +1128,7 @@ export default function Vehicles() {
                                   {vehicle.plate}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {vehicle.vehicleInfo.brand} {vehicle.vehicleInfo.model} {vehicle.vehicleInfo.year} - {vehicle.vehicleInfo.owner}
+                                  {vehicle.vehicleInfo.brand} {vehicle.vehicleInfo.model} - {vehicle.vehicleInfo.owner}
                                 </p>
                               </div>
                               <Badge variant="outline" className="text-xs">
@@ -1149,14 +1141,14 @@ export default function Vehicles() {
                     )}
                   </div>
                   {selectedVehicleForEntry && (
-                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                      <p className="text-sm font-medium text-blue-900">
-                        {selectedVehicleForEntry.brand} {selectedVehicleForEntry.model} {selectedVehicleForEntry.year}
+                    <div className="bg-gray-50 dark:bg-zinc-800 p-3 rounded-lg border border-gray-200 dark:border-zinc-700">
+                      <p className="text-sm font-medium text-gray-900 dark:text-zinc-100">
+                        {selectedVehicleForEntry.brand} {selectedVehicleForEntry.model}
                       </p>
-                      <p className="text-xs text-blue-700">
+                      <p className="text-xs text-gray-600 dark:text-zinc-400">
                         Cliente: {selectedVehicleForEntry.owner} | Tel: {selectedVehicleForEntry.phone}
                       </p>
-                      <p className="text-xs text-blue-600 mt-1">
+                      <p className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
                         Visitas anteriores: {selectedVehicleForEntry.visitCount}
                       </p>
                     </div>
@@ -1265,253 +1257,296 @@ export default function Vehicles() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>{isExistingPlate ? "Nueva Entrada para Vehículo Existente" : "Ingresar Nuevo Vehículo"}</DialogTitle>
-                <DialogDescription>
-                  {isExistingPlate
-                    ? "Se creará una nueva entrada para este vehículo"
-                    : "Registra un nuevo vehículo en el taller"}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2 relative">
-                    <Label htmlFor="plate">Placa</Label>
-                    <Input
-                      id="plate"
-                      value={newVehicle.plate}
-                      onChange={(e) => {
-                        const val = e.target.value.toUpperCase();
-                        setNewVehicle({ ...newVehicle, plate: val });
-                        setShowPlateDropdown(val.length >= 1);
-                        if (isExistingPlate) {
-                          setIsExistingPlate(false);
-                          setNewVehicle((prev) => ({
-                            ...prev,
-                            plate: val,
-                            brand: "",
-                            model: "",
-                            year: "",
-                            owner: "",
-                            phone: "",
-                            customerId: "",
-                          }));
-                        }
-                      }}
-                      onFocus={() => setShowPlateDropdown(newVehicle.plate.length >= 1)}
-                      onBlur={() => setTimeout(() => setShowPlateDropdown(false), 200)}
-                      placeholder="ABC-123"
-                      autoComplete="off"
-                    />
-                    {isExistingPlate && (
-                      <p className="text-xs text-blue-600">
-                        Placa existente — se creará una nueva entrada
-                      </p>
-                    )}
-                    {showPlateDropdown && filteredNewVehiclePlates.length > 0 && !isExistingPlate && (
-                      <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                        {filteredNewVehiclePlates.map((v) => (
-                          <button
-                            key={v.plate}
-                            type="button"
-                            className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between items-center"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              setNewVehicle({ plate: "", brand: "", model: "", owner: "", phone: "", customerId: "", services: [], cost: "", description: "", mileage: "", responsibles: [] });
+              setIsExistingPlate(false);
+              setShowPlateDropdown(false);
+            }
+          }}>
+            <DialogContent className="sm:max-w-[560px] p-0 gap-0 overflow-hidden flex flex-col max-h-[92vh]">
+              {/* Header */}
+              <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-100 dark:border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 dark:bg-zinc-800">
+                    <Car className="h-4 w-4 text-gray-700 dark:text-zinc-300" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-zinc-100 leading-tight">
+                      {isExistingPlate ? "Nueva Entrada" : "Ingresar Vehículo"}
+                    </h2>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                      {isExistingPlate ? "Nueva entrada para vehículo ya registrado" : "Registra un vehículo en el taller"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="px-6 py-5 space-y-5">
+
+                  {/* ── Sección Vehículo ── */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1.5">
+                      <Car className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" />
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Vehículo</span>
+                    </div>
+
+                    {/* Placa */}
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="space-y-1.5 relative">
+                        <Label htmlFor="plate" className="text-xs font-medium text-gray-700 dark:text-zinc-300">Placa</Label>
+                        <Input
+                          id="plate"
+                          value={newVehicle.plate}
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase();
+                            setNewVehicle({ ...newVehicle, plate: val });
+                            setShowPlateDropdown(val.length >= 1);
+                            if (isExistingPlate) {
+                              setIsExistingPlate(false);
                               setNewVehicle((prev) => ({
                                 ...prev,
-                                plate: v.plate,
-                                brand: v.vehicleInfo.brand,
-                                model: v.vehicleInfo.model,
-                                year: String(v.vehicleInfo.year),
-                                owner: v.vehicleInfo.owner,
+                                plate: val,
+                                brand: "",
+                                model: "",
+                                owner: "",
+                                phone: "",
+                                customerId: "",
                               }));
-                              setIsExistingPlate(true);
-                              setShowPlateDropdown(false);
-                            }}
-                          >
-                            <span className="font-medium">{v.plate}</span>
-                            <span className="text-muted-foreground text-xs">
-                              {v.vehicleInfo.brand} {v.vehicleInfo.model} — {v.vehicleInfo.owner}
-                            </span>
-                          </button>
-                        ))}
+                            }
+                          }}
+                          onFocus={() => setShowPlateDropdown(newVehicle.plate.length >= 1)}
+                          onBlur={() => setTimeout(() => setShowPlateDropdown(false), 200)}
+                          placeholder="ABC-123"
+                          autoComplete="off"
+                          className="font-mono tracking-wider"
+                        />
+                        {isExistingPlate && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <div className="h-1.5 w-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400">Vehículo existente — se creará nueva entrada</p>
+                          </div>
+                        )}
+                        {showPlateDropdown && filteredNewVehiclePlates.length > 0 && !isExistingPlate && (
+                          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-lg overflow-hidden">
+                            {filteredNewVehiclePlates.map((v) => (
+                              <button
+                                key={v.plate}
+                                type="button"
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-zinc-800 text-sm flex justify-between items-center border-b border-gray-50 dark:border-zinc-800 last:border-b-0 transition-colors"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setNewVehicle((prev) => ({
+                                    ...prev,
+                                    plate: v.plate,
+                                    brand: v.vehicleInfo.brand,
+                                    model: v.vehicleInfo.model,
+                                    owner: v.vehicleInfo.owner,
+                                  }));
+                                  setIsExistingPlate(true);
+                                  setShowPlateDropdown(false);
+                                }}
+                              >
+                                <span className="font-mono font-semibold text-gray-900 dark:text-zinc-100">{v.plate}</span>
+                                <span className="text-xs text-gray-500 dark:text-zinc-400">
+                                  {v.vehicleInfo.brand} {v.vehicleInfo.model} · {v.vehicleInfo.owner}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Marca + Modelo — solo para vehículos nuevos */}
+                    {!isExistingPlate ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="brand" className="text-xs font-medium text-gray-700 dark:text-zinc-300">Marca</Label>
+                          <Input
+                            id="brand"
+                            value={newVehicle.brand}
+                            onChange={(e) => setNewVehicle({ ...newVehicle, brand: e.target.value })}
+                            placeholder="Toyota"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="model" className="text-xs font-medium text-gray-700 dark:text-zinc-300">Modelo</Label>
+                          <Input
+                            id="model"
+                            value={newVehicle.model}
+                            onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
+                            placeholder="Corolla"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      /* Card resumen del vehículo existente */
+                      <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 px-3.5 py-3">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">
+                          {newVehicle.brand} {newVehicle.model}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">{newVehicle.owner}</p>
                       </div>
                     )}
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="year">Año</Label>
-                    <Input
-                      id="year"
-                      type="number"
-                      value={newVehicle.year}
-                      onChange={(e) =>
-                        setNewVehicle({ ...newVehicle, year: e.target.value })
-                      }
-                      onFocus={(e) => e.target.select()}
-                      placeholder="2024"
-                      disabled={isExistingPlate}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="brand">Marca</Label>
-                    <Input
-                      id="brand"
-                      value={newVehicle.brand}
-                      onChange={(e) =>
-                        setNewVehicle({ ...newVehicle, brand: e.target.value })
-                      }
-                      placeholder="Toyota"
-                      disabled={isExistingPlate}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="model">Modelo</Label>
-                    <Input
-                      id="model"
-                      value={newVehicle.model}
-                      onChange={(e) =>
-                        setNewVehicle({ ...newVehicle, model: e.target.value })
-                      }
-                      placeholder="Corolla"
-                      disabled={isExistingPlate}
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-4">
-                  {isExistingPlate ? (
-                    <div className="grid gap-2">
-                      <Label>Cliente</Label>
-                      <Input value={newVehicle.owner} disabled />
-                    </div>
-                  ) : (
-                    <div className="grid gap-2">
-                      <Label htmlFor="customer">Cliente</Label>
-                      <CustomerSelector
-                        selectedCustomerId={newVehicle.customerId}
-                        onCustomerChange={(customerId, customerData) => {
-                          setNewVehicle({
-                            ...newVehicle,
-                            customerId: customerId,
-                            owner: customerData.name,
-                            phone: customerData.phone,
-                          });
-                        }}
-                        onNewCustomerName={(name) => {
-                          setNewVehicle({
-                            ...newVehicle,
-                            customerId: "",
-                            owner: name,
-                          });
-                        }}
-                        newCustomerName={
-                          !newVehicle.customerId ? newVehicle.owner : ""
-                        }
-                      />
-                    </div>
+
+                  <div className="border-t border-gray-100 dark:border-zinc-800" />
+
+                  {/* ── Sección Cliente ── */}
+                  {!isExistingPlate && (
+                    <>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-1.5">
+                          <User className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" />
+                          <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Cliente</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="customer" className="text-xs font-medium text-gray-700 dark:text-zinc-300">Buscar o crear cliente</Label>
+                          <CustomerSelector
+                            selectedCustomerId={newVehicle.customerId}
+                            onCustomerChange={(customerId, customerData) => {
+                              setNewVehicle({
+                                ...newVehicle,
+                                customerId: customerId,
+                                owner: customerData.name,
+                                phone: customerData.phone,
+                              });
+                            }}
+                            onNewCustomerName={(name) => {
+                              setNewVehicle({
+                                ...newVehicle,
+                                customerId: "",
+                                owner: name,
+                              });
+                            }}
+                            newCustomerName={!newVehicle.customerId ? newVehicle.owner : ""}
+                          />
+                        </div>
+                        {isAdmin && (
+                          <div className="space-y-1.5">
+                            <Label htmlFor="phone" className="text-xs font-medium text-gray-700 dark:text-zinc-300">Teléfono</Label>
+                            <Input
+                              id="phone"
+                              value={newVehicle.phone}
+                              onChange={(e) => setNewVehicle({ ...newVehicle, phone: e.target.value })}
+                              placeholder="+57 300 000 0000"
+                              disabled={!!newVehicle.customerId}
+                            />
+                            {newVehicle.customerId && (
+                              <p className="text-[11px] text-gray-400 dark:text-zinc-500">Teléfono del cliente seleccionado</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="border-t border-gray-100 dark:border-zinc-800" />
+                    </>
                   )}
-                  {isAdmin && (
-                    <div className="grid gap-2">
-                      <Label htmlFor="phone">Teléfono</Label>
-                      <Input
-                        id="phone"
-                        value={newVehicle.phone}
-                        onChange={(e) =>
-                          setNewVehicle({
-                            ...newVehicle,
-                            phone: e.target.value,
-                          })
-                        }
-                        placeholder="555-0123"
-                        disabled={!!newVehicle.customerId}
+
+                  {/* ── Sección Servicio ── */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1.5">
+                      <Wrench className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" />
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Servicio</span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="services" className="text-xs font-medium text-gray-700 dark:text-zinc-300">Servicios</Label>
+                      <CreatableSelect
+                        value={newVehicle.services}
+                        onChange={(services) => setNewVehicle({ ...newVehicle, services })}
+                        options={serviceOptions}
+                        onCreateOption={(serviceName) => {
+                          console.log("Nuevo servicio:", serviceName);
+                        }}
+                        placeholder="Escribí o seleccioná un servicio..."
                       />
-                      {newVehicle.customerId && (
-                        <p className="text-xs text-muted-foreground">
-                          Teléfono del cliente seleccionado
-                        </p>
+                    </div>
+
+                    <div className={`grid gap-3 ${isAdmin ? "grid-cols-2" : "grid-cols-1"}`}>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="mileage" className="text-xs font-medium text-gray-700 dark:text-zinc-300">
+                          Kilometraje <span className="text-gray-400 dark:text-zinc-500 font-normal">(km)</span>
+                        </Label>
+                        <Input
+                          id="mileage"
+                          type="number"
+                          value={newVehicle.mileage}
+                          onChange={(e) => setNewVehicle({ ...newVehicle, mileage: e.target.value })}
+                          onFocus={(e) => e.target.select()}
+                          placeholder="150000"
+                        />
+                      </div>
+                      {isAdmin && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="cost" className="text-xs font-medium text-gray-700 dark:text-zinc-300">Costo estimado</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-zinc-500 pointer-events-none select-none">$</span>
+                            <Input
+                              id="cost"
+                              type="number"
+                              step="0.01"
+                              value={newVehicle.cost}
+                              onChange={(e) => setNewVehicle({ ...newVehicle, cost: e.target.value })}
+                              onFocus={(e) => e.target.select()}
+                              placeholder="0"
+                              className="pl-6"
+                            />
+                          </div>
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="services">Servicios</Label>
-                  <CreatableSelect
-                    value={newVehicle.services}
-                    onChange={(services) =>
-                      setNewVehicle({ ...newVehicle, services })
-                    }
-                    options={serviceOptions}
-                    onCreateOption={(serviceName) => {
-                      // createService({ name: serviceName });
-                      console.log("Nuevo servicio:", serviceName);
-                    }}
-                    placeholder="Seleccionar o agregar servicios..."
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Responsables</Label>
-                  <ResponsibleSelector
-                    responsibles={newVehicle.responsibles}
-                    onChange={(responsibles) =>
-                      setNewVehicle({ ...newVehicle, responsibles })
-                    }
-                  />
-                </div>
-                {isAdmin && (
-                  <div className="grid gap-2">
-                    <Label htmlFor="cost">Costo Estimado</Label>
-                    <Input
-                      id="cost"
-                      type="number"
-                      step="0.01"
-                      value={newVehicle.cost}
-                      onChange={(e) =>
-                        setNewVehicle({ ...newVehicle, cost: e.target.value })
-                      }
-                      onFocus={(e) => e.target.select()}
-                      placeholder="0.00"
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="description" className="text-xs font-medium text-gray-700 dark:text-zinc-300">Descripción</Label>
+                      <textarea
+                        id="description"
+                        value={newVehicle.description}
+                        onChange={(e) => setNewVehicle({ ...newVehicle, description: e.target.value })}
+                        placeholder="Describí el problema o el trabajo a realizar..."
+                        rows={3}
+                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-100 dark:border-zinc-800" />
+
+                  {/* ── Sección Responsables ── */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" />
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Responsables</span>
+                    </div>
+                    <ResponsibleSelector
+                      responsibles={newVehicle.responsibles}
+                      onChange={(responsibles) => setNewVehicle({ ...newVehicle, responsibles })}
                     />
                   </div>
-                )}
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Descripción</Label>
-                  <Input
-                    id="description"
-                    value={newVehicle.description}
-                    onChange={(e) =>
-                      setNewVehicle({
-                        ...newVehicle,
-                        description: e.target.value,
-                      })
-                    }
-                    placeholder="Descripción detallada del problema o servicio"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="mileage">Kilometraje</Label>
-                  <Input
-                    id="mileage"
-                    type="number"
-                    value={newVehicle.mileage}
-                    onChange={(e) =>
-                      setNewVehicle({
-                        ...newVehicle,
-                        mileage: e.target.value,
-                      })
-                    }
-                    onFocus={(e) => e.target.select()}
-                    placeholder="150000"
-                  />
+
                 </div>
               </div>
-              <DialogFooter>
-                <Button type="submit" onClick={handleAddVehicle}>
-                  Registrar Vehículo
+
+              {/* Footer fijo */}
+              <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 dark:border-zinc-800 bg-gray-50/80 dark:bg-zinc-900/60 flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setIsDialogOpen(false)}
+                >
+                  Cancelar
                 </Button>
-              </DialogFooter>
+                <Button
+                  className="flex-1"
+                  onClick={handleAddVehicle}
+                  disabled={!newVehicle.plate || (!isExistingPlate && (!newVehicle.brand || !newVehicle.model || !newVehicle.owner))}
+                >
+                  {isExistingPlate ? "Crear Nueva Entrada" : "Registrar Vehículo"}
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
@@ -1539,21 +1574,6 @@ export default function Vehicles() {
                           plate: e.target.value,
                         })
                       }
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-year">Año</Label>
-                    <Input
-                      id="edit-year"
-                      type="number"
-                      value={editingVehicle.year}
-                      onChange={(e) =>
-                        setEditingVehicle({
-                          ...editingVehicle,
-                          year: e.target.value,
-                        })
-                      }
-                      onFocus={(e) => e.target.select()}
                     />
                   </div>
                 </div>
@@ -2022,18 +2042,18 @@ export default function Vehicles() {
             </DialogHeader>
             {vehicleToDeliver && (
               <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <div className="bg-gray-50 dark:bg-zinc-800 p-4 rounded-lg border border-gray-200 dark:border-zinc-700">
                   <div className="flex items-center space-x-3">
                     <div className="flex-1">
-                      <h3 className="text-sm font-medium text-blue-900">
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-zinc-100">
                         {vehicleToDeliver.plate} - {vehicleToDeliver.brand}{" "}
                         {vehicleToDeliver.model}
                       </h3>
-                      <p className="text-sm text-blue-700">
+                      <p className="text-sm text-gray-600 dark:text-zinc-400">
                         Cliente: {vehicleToDeliver.owner}
                       </p>
                       {isAdmin && (
-                        <p className="text-sm text-blue-700">
+                        <p className="text-sm text-gray-600 dark:text-zinc-400">
                           Costo total: $
                           {vehicleToDeliver.cost?.toLocaleString() || "0"}
                         </p>
@@ -2174,73 +2194,108 @@ export default function Vehicles() {
         <VehicleCards />
       </div>
 
-      {/* Filtro de fechas */}
-      <DateRangeFilter
-        value={dateFilter}
-        onChange={setDateFilter}
-        compact
-        className="w-full md:w-auto"
-      />
+      {/* Barra de búsqueda + botón Filtros (único para todos los tamaños) */}
+      {(() => {
+        const activeFilterCount = [
+          dateFilter.type !== "all" ? 1 : 0,
+          statusFilter !== "all" ? 1 : 0,
+          responsibleFilter !== "all" ? 1 : 0,
+        ].reduce((a, b) => a + b, 0);
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={
-              isAdmin
-                ? "Buscar por placa, marca, cliente, teléfono..."
-                : "Buscar por placa, marca, cliente..."
-            }
-            className="pl-8"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
+        return (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por placa, marca, cliente..."
+                  className="pl-8"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue>
-              {statusFilter === "all"
-                ? "Todos los estados"
-                : statusFilter === "delivered"
-                  ? "Entregados"
-                  : statusFilter === "not_delivered"
-                    ? "No entregados"
-                    : "Todos los estados"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los estados</SelectItem>
-            <SelectItem value="not_delivered">No entregados</SelectItem>
-            <SelectItem value="delivered">Entregados</SelectItem>
-          </SelectContent>
-        </Select>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                  showFilters || activeFilterCount > 0
+                    ? "bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-gray-900 dark:border-zinc-100"
+                    : "bg-white dark:bg-zinc-900 text-gray-700 dark:text-zinc-300 border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                }`}
+              >
+                <Filter className="h-4 w-4" />
+                <span className="hidden xs:inline">Filtros</span>
+                {activeFilterCount > 0 ? (
+                  <span className={`text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center ${
+                    showFilters || activeFilterCount > 0
+                      ? "bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100"
+                      : "bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                  }`}>
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </button>
+            </div>
 
-        <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <User className="h-4 w-4 mr-2" />
-            <SelectValue>
-              {responsibleFilter === "all"
-                ? "Todos"
-                : responsibleFilter === "mine"
-                  ? "Asignados a mí"
-                  : responsibleFilter === "assigned"
-                    ? "Con responsable"
-                    : responsibleFilter === "unassigned"
-                      ? "Sin asignar"
-                      : "Todos"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="mine">Asignados a mí</SelectItem>
-            <SelectItem value="assigned">Con responsable</SelectItem>
-            <SelectItem value="unassigned">Sin asignar</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+            {showFilters && (
+              <div className="flex flex-col gap-2 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800/60 border border-gray-100 dark:border-zinc-700">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <DateRangeFilter
+                    value={dateFilter}
+                    onChange={setDateFilter}
+                    compact
+                    className="w-full"
+                  />
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full">
+                      <Filter className="h-4 w-4 mr-2" />
+                      <SelectValue>
+                        {statusFilter === "all" ? "Todos los estados"
+                          : statusFilter === "delivered" ? "Entregados"
+                          : "No entregados"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los estados</SelectItem>
+                      <SelectItem value="not_delivered">No entregados</SelectItem>
+                      <SelectItem value="delivered">Entregados</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
+                    <SelectTrigger className="w-full">
+                      <User className="h-4 w-4 mr-2" />
+                      <SelectValue>
+                        {responsibleFilter === "all" ? "Todos los responsables"
+                          : responsibleFilter === "mine" ? "Asignados a mí"
+                          : responsibleFilter === "assigned" ? "Con responsable"
+                          : "Sin asignar"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="mine">Asignados a mí</SelectItem>
+                      <SelectItem value="assigned">Con responsable</SelectItem>
+                      <SelectItem value="unassigned">Sin asignar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => {
+                      setStatusFilter("all");
+                      setResponsibleFilter("all");
+                      setDateFilter({ type: "all", label: "Todos" });
+                    }}
+                    className="text-xs text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 text-left transition-colors w-fit"
+                  >
+                    Limpiar filtros ({activeFilterCount})
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Tabla de vehículos */}
       <Card>
@@ -2256,22 +2311,16 @@ export default function Vehicles() {
                 )}
               </div>
               {!isAdmin && (
-                <Badge
-                  variant="outline"
-                  className="text-xs bg-blue-50 text-blue-700 border-blue-200 hidden sm:inline-flex"
-                >
-                  <User className="h-3 w-3 mr-1" />
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 border border-gray-200 dark:border-zinc-700 hidden sm:inline-flex items-center gap-1">
+                  <User className="h-3 w-3" />
                   Vista de Miembro
-                </Badge>
+                </span>
               )}
               {isAdmin && (
-                <Badge
-                  variant="outline"
-                  className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200 hidden sm:inline-flex"
-                >
-                  <Crown className="h-3 w-3 mr-1" />
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hidden sm:inline-flex items-center gap-1">
+                  <Crown className="h-3 w-3" />
                   Vista de Admin
-                </Badge>
+                </span>
               )}
             </div>
             <div className="flex items-center gap-4">
@@ -2323,7 +2372,7 @@ export default function Vehicles() {
                     Responsables
                   </TableHead>
                   <TableHead className="min-w-[80px]">Estado</TableHead>
-                  <TableHead className="min-w-[80px]">KM</TableHead>
+                  <TableHead className="min-w-[80px] hidden sm:table-cell">KM</TableHead>
                   {isAdmin && (
                     <TableHead className="min-w-[80px] hidden sm:table-cell">
                       Costo
@@ -2381,46 +2430,36 @@ export default function Vehicles() {
                   paginatedVehicles.map((vehicle) => (
                     <TableRow
                       key={vehicle._id}
-                      className="cursor-pointer hover:bg-gray-50 transition-colors group"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800/40 transition-colors group"
                       onClick={() => handleViewDetail(vehicle)}
                       title="Clic para ver detalles del vehículo"
                     >
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className="w-1 h-8 bg-blue-200 rounded-full group-hover:bg-blue-400 transition-colors opacity-30 group-hover:opacity-100"></div>
+                          <div className="w-0.5 h-7 bg-gray-200 dark:bg-zinc-700 rounded-full group-hover:bg-gray-400 dark:group-hover:bg-zinc-500 transition-colors"></div>
                           <div>
-                            <p className="font-medium">{vehicle.plate}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {vehicle.brand} {vehicle.model} {vehicle.year}
+                            <p className="font-medium text-gray-900 dark:text-zinc-100">{vehicle.plate}</p>
+                            <p className="text-xs text-gray-400 dark:text-zinc-500">
+                              {vehicle.brand} {vehicle.model}
                             </p>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div>
-                          <p className="font-medium">{vehicle.owner}</p>
-                          {isAdmin && (
-                            <p className="text-sm text-muted-foreground">
-                              {vehicle.phone}
-                            </p>
-                          )}
-                        </div>
+                        <p className="font-medium truncate max-w-[120px] sm:max-w-none">{vehicle.owner}</p>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <div className="max-w-64">
                           <div className="flex flex-wrap gap-1 mb-1">
                             {vehicle.services.length > 0 && (
-                              <Badge
-                                variant="secondary"
-                                className="text-xs bg-blue-100 text-blue-800"
-                              >
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 border border-gray-200 dark:border-zinc-700">
                                 {vehicle.services[0]}
-                              </Badge>
+                              </span>
                             )}
                             {vehicle.services.length > 1 && (
-                              <Badge variant="outline" className="text-xs">
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-50 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400 border border-gray-200 dark:border-zinc-700">
                                 +{vehicle.services.length - 1} más
-                              </Badge>
+                              </span>
                             )}
                           </div>
                           {vehicle.description && (
@@ -2446,18 +2485,15 @@ export default function Vehicles() {
                                       {responsible.isAdmin ? (
                                         <Crown className="h-3 w-3 text-yellow-600" />
                                       ) : (
-                                        <User className="h-3 w-3 text-blue-600" />
+                                        <User className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
                                       )}
-                                      <Badge
-                                        variant="outline"
-                                        className={`text-xs ${
-                                          responsible.isAdmin
-                                            ? "bg-yellow-50 text-yellow-800 border-yellow-200"
-                                            : "bg-green-50 text-green-800 border-green-200"
-                                        }`}
-                                      >
+                                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
+                                        responsible.isAdmin
+                                          ? "bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+                                          : "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                                      }`}>
                                         {responsible.name}
-                                      </Badge>
+                                      </span>
                                     </div>
                                   </div>
                                 ))}
@@ -2475,7 +2511,7 @@ export default function Vehicles() {
                         </div>
                       </TableCell>
                       <TableCell>{getStatusBadge(vehicle.status)}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <span className="text-sm font-medium">
                           {vehicle.mileage ? vehicle.mileage.toLocaleString() : '-'}
                         </span>
@@ -2712,29 +2748,31 @@ export default function Vehicles() {
           </div>
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4">
-              <p className="text-sm text-muted-foreground">
-                Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, vehiclesInTaller.length)} de {vehiclesInTaller.length}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4">
+              <p className="text-xs text-muted-foreground order-2 sm:order-1">
+                {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, vehiclesInTaller.length)} de {vehiclesInTaller.length}
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 order-1 sm:order-2">
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-8 px-3 text-xs"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                 >
-                  Anterior
+                  ← Anterior
                 </Button>
-                <span className="text-sm text-muted-foreground">
-                  Página {currentPage} de {totalPages}
+                <span className="text-xs font-medium text-gray-700 dark:text-zinc-300 px-1 tabular-nums">
+                  {currentPage} / {totalPages}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-8 px-3 text-xs"
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
                 >
-                  Siguiente
+                  Siguiente →
                 </Button>
               </div>
             </div>

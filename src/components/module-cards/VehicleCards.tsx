@@ -34,8 +34,6 @@ export const VehicleCards: React.FC = () => {
       value: vehicleStats.inTaller,
       description: "vehículos actualmente en reparación",
       icon: Wrench,
-      color: "text-blue-600",
-      borderColor: "border-blue-200",
     },
     {
       id: "delivered",
@@ -43,8 +41,7 @@ export const VehicleCards: React.FC = () => {
       value: vehicleStats.byStatus.entregados,
       description: "vehículos completados",
       icon: CheckCircle,
-      color: "text-green-600",
-      borderColor: "border-green-200",
+      color: "text-emerald-600 dark:text-emerald-400",
     },
     {
       id: "inProgress",
@@ -52,8 +49,7 @@ export const VehicleCards: React.FC = () => {
       value: vehicleStats.byStatus.enReparacion,
       description: "vehículos siendo reparados",
       icon: Clock,
-      color: "text-yellow-600",
-      borderColor: "border-yellow-200",
+      color: "text-amber-600 dark:text-amber-400",
     },
     {
       id: "suspended",
@@ -61,8 +57,7 @@ export const VehicleCards: React.FC = () => {
       value: vehicleStats.byStatus.suspendidos,
       description: "vehículos suspendidos",
       icon: AlertTriangle,
-      color: "text-red-600",
-      borderColor: "border-red-200",
+      color: "text-red-500 dark:text-red-400",
     },
     {
       id: "earnings",
@@ -70,7 +65,7 @@ export const VehicleCards: React.FC = () => {
       value: `$${vehicleStats.totalEarnings.toLocaleString()}`,
       description: "ingresos por vehículos entregados",
       icon: DollarSign,
-      color: "text-green-600",
+      color: "text-emerald-600 dark:text-emerald-400",
     }
   ];
 

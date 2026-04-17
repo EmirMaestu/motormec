@@ -34,8 +34,7 @@ export const FinanceCards: React.FC = () => {
       value: `$${financialSummary.totalIngresos.toLocaleString()}`,
       description: "ingresos totales registrados",
       icon: TrendingUp,
-      color: "text-green-600",
-      borderColor: "border-green-200",
+      color: "text-emerald-600 dark:text-emerald-400",
     },
     {
       id: "totalExpenses",
@@ -43,8 +42,7 @@ export const FinanceCards: React.FC = () => {
       value: `$${financialSummary.totalEgresos.toLocaleString()}`,
       description: "gastos totales registrados",
       icon: TrendingDown,
-      color: "text-red-600",
-      borderColor: "border-red-200",
+      color: "text-red-500 dark:text-red-400",
     },
     {
       id: "balance",
@@ -52,8 +50,7 @@ export const FinanceCards: React.FC = () => {
       value: `$${financialSummary.balance.toLocaleString()}`,
       description: financialSummary.balance >= 0 ? "ganancia neta" : "pérdida neta",
       icon: BarChart3,
-      color: financialSummary.balance >= 0 ? "text-green-600" : "text-red-600",
-      borderColor: financialSummary.balance >= 0 ? "border-green-200" : "border-red-200",
+      color: financialSummary.balance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400",
     },
     {
       id: "activeTransactions",
@@ -61,7 +58,6 @@ export const FinanceCards: React.FC = () => {
       value: financialSummary.totalActive,
       description: "transacciones válidas",
       icon: CreditCard,
-      color: "text-blue-600",
     },
     {
       id: "suspendedTransactions",
@@ -69,8 +65,7 @@ export const FinanceCards: React.FC = () => {
       value: financialSummary.totalSuspended,
       description: "transacciones suspendidas",
       icon: Target,
-      color: "text-orange-600",
-      borderColor: "border-orange-200",
+      color: "text-amber-600 dark:text-amber-400",
     },
     {
       id: "averageIncome",
@@ -78,7 +73,7 @@ export const FinanceCards: React.FC = () => {
       value: `$${averageIncome.toFixed(2)}`,
       description: "promedio por transacción de ingreso",
       icon: Calculator,
-      color: "text-green-600",
+      color: "text-emerald-600 dark:text-emerald-400",
     },
     {
       id: "averageExpense",
@@ -86,7 +81,7 @@ export const FinanceCards: React.FC = () => {
       value: `$${averageExpense.toFixed(2)}`,
       description: "promedio por transacción de egreso",
       icon: Calculator,
-      color: "text-red-600",
+      color: "text-red-500 dark:text-red-400",
     }
   ];
 

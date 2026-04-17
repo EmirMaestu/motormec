@@ -456,7 +456,7 @@ export default function Partners() {
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <p className="font-medium">
-                                  {vehicle.plate} - {vehicle.brand} {vehicle.model} {vehicle.year}
+                                  {vehicle.plate} - {vehicle.brand} {vehicle.model}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
                                   Cliente: {vehicle.owner}

@@ -275,10 +275,19 @@ export default defineSchema({
     reviewer: v.string(),
   }),
 
+  // Números autorizados para usar el bot de WhatsApp
+  numerosAutorizados: defineTable({
+    phone: v.string(),        // E.164 tal como llega del webhook (ej: 5492612494123)
+    name: v.string(),         // Nombre descriptivo (ej: "Juan Mecánico")
+    active: v.boolean(),
+    addedAt: v.string(),
+    addedBy: v.optional(v.string()), // userId de Clerk que lo agregó
+  }).index("by_phone", ["phone"]),
+
   // Conversaciones activas del bot de WhatsApp (estado de cada flujo)
   conversaciones: defineTable({
     phone: v.string(),                                    // número WhatsApp del cliente
-    etapa: v.string(),                                    // 'verificando_cliente' | 'pidiendo_ano' | 'confirmando'
+    etapa: v.string(),                                    // 'verificando_cliente' | 'confirmando' | 'pidiendo_fotos'
     datos: v.any(),                                       // datos parciales recolectados
     candidatoClienteId: v.optional(v.id("customers")),   // cliente candidato encontrado
     candidatoClienteNombre: v.optional(v.string()),

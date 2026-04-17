@@ -88,45 +88,16 @@ export default function VehicleRepairHistory() {
   const eliminarFoto = useMutation(api.historialTaller.eliminarFoto);
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Entregado":
-        return (
-          <Badge className="bg-green-100 text-green-800">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Entregado
-          </Badge>
-        );
-      case "Suspendido":
-        return (
-          <Badge variant="destructive">
-            <XCircle className="h-3 w-3 mr-1" />
-            Suspendido
-          </Badge>
-        );
-      case "Listo":
-        return (
-          <Badge className="bg-blue-100 text-blue-800">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Listo
-          </Badge>
-        );
-      case "En Reparación":
-        return (
-          <Badge className="bg-yellow-100 text-yellow-800">
-            <Wrench className="h-3 w-3 mr-1" />
-            En Reparación
-          </Badge>
-        );
-      case "Ingresado":
-        return (
-          <Badge variant="outline">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Ingresado
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+    const base = "text-[11px] font-medium px-2 py-0.5 rounded-full border inline-flex items-center gap-1";
+    const map: Record<string, { cls: string; icon: React.ReactNode }> = {
+      "Entregado":   { cls: "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800", icon: <CheckCircle className="h-3 w-3" /> },
+      "Listo":       { cls: "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-500 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800", icon: <CheckCircle className="h-3 w-3" /> },
+      "En Reparación": { cls: "bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800", icon: <Wrench className="h-3 w-3" /> },
+      "Ingresado":   { cls: "bg-gray-50 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-zinc-700", icon: <AlertCircle className="h-3 w-3" /> },
+      "Suspendido":  { cls: "bg-red-50 dark:bg-red-950/50 text-red-500 dark:text-red-400 border-red-200 dark:border-red-800", icon: <XCircle className="h-3 w-3" /> },
+    };
+    const s = map[status] ?? { cls: "bg-gray-50 text-gray-500 border-gray-200", icon: null };
+    return <span className={`${base} ${s.cls}`}>{s.icon}{status}</span>;
   };
 
   const handleSaveEdit = async () => {
@@ -287,10 +258,10 @@ export default function VehicleRepairHistory() {
           Volver a Vehículos
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-zinc-100">
             Detalle del Vehículo
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-gray-400 dark:text-zinc-500">
             Historial completo de todas las visitas del vehículo
           </p>
         </div>
@@ -318,7 +289,7 @@ export default function VehicleRepairHistory() {
                   Vehículo:
                 </span>
                 <span className="text-sm">
-                  {vehicleInfo.brand} {vehicleInfo.model} {vehicleInfo.year}
+                  {vehicleInfo.brand} {vehicleInfo.model}
                 </span>
               </div>
             </div>
@@ -353,7 +324,7 @@ export default function VehicleRepairHistory() {
                 </p>
                 <p className="text-2xl font-bold">{statistics.totalVisits}</p>
               </div>
-              <Calendar className="h-8 w-8 text-blue-500" />
+              <Calendar className="h-8 w-8 text-gray-400 dark:text-zinc-500" />
             </div>
           </CardContent>
         </Card>
@@ -422,8 +393,10 @@ export default function VehicleRepairHistory() {
             {visits.map((visit, index) => (
               <Card
                 key={visit.id}
-                className={`cursor-pointer transition-all hover:shadow-md ${
-                  expandedVisit === visit.id ? "border-blue-500" : ""
+                className={`cursor-pointer transition-all ${
+                  expandedVisit === visit.id
+                    ? "border-gray-300 dark:border-zinc-600 shadow-sm"
+                    : "hover:border-gray-200 dark:hover:border-zinc-700"
                 }`}
                 onClick={() =>
                   setExpandedVisit(
@@ -434,54 +407,55 @@ export default function VehicleRepairHistory() {
                 <CardContent className="pt-6">
                   <div className="space-y-4">
                     {/* Información Principal */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <Badge variant="outline" className="text-sm">
-                            Visita #{visits.length - index}
-                          </Badge>
-                          {getStatusBadge(visit.status)}
-                          {visit.inTaller && (
-                            <Badge className="bg-blue-100 text-blue-800">
-                              En Taller
-                            </Badge>
-                          )}
-                          <div className="ml-auto flex gap-2">
-                            {isAdmin && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-green-200 text-green-700 hover:bg-green-50"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openCostDialog(visit);
-                                }}
-                              >
-                                <Calculator className="h-3 w-3 mr-1" />
-                                Costos
-                              </Button>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingVisit(visit);
-                                setEditForm({
-                                  status: visit.status,
-                                  services: visit.services?.join(', ') || '',
-                                  mileage: visit.mileage || '',
-                                  description: visit.description || '',
-                                  cost: visit.cost || 0,
-                                });
-                              }}
-                            >
-                              <Edit3 className="h-3 w-3 mr-1" />
-                              Editar
-                            </Button>
-                          </div>
-                        </div>
-                        <div className={`grid gap-4 mt-4 ${isAdmin ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-4'}`}>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <Badge variant="outline" className="text-sm flex-shrink-0">
+                          Visita #{visits.length - index}
+                        </Badge>
+                        {getStatusBadge(visit.status)}
+                        {visit.inTaller && (
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 flex-shrink-0">
+                            En Taller
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        {isAdmin && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 h-8 px-2.5 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openCostDialog(visit);
+                            }}
+                          >
+                            <Calculator className="h-3 w-3 mr-1" />
+                            Costos
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2.5 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingVisit(visit);
+                            setEditForm({
+                              status: visit.status,
+                              services: visit.services?.join(', ') || '',
+                              mileage: visit.mileage || '',
+                              description: visit.description || '',
+                              cost: visit.cost || 0,
+                            });
+                          }}
+                        >
+                          <Edit3 className="h-3 w-3 mr-1" />
+                          Editar
+                        </Button>
+                      </div>
+                    </div>
+                    <div className={`grid gap-4 mt-2 ${isAdmin ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-4'}`}>
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-gray-500" />
                             <div>
@@ -546,8 +520,6 @@ export default function VehicleRepairHistory() {
                               </div>
                             </div>
                           )}
-                        </div>
-                      </div>
                     </div>
 
                     {/* Información Expandida */}
@@ -564,13 +536,12 @@ export default function VehicleRepairHistory() {
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {visit.services.map((service, idx) => (
-                                <Badge
+                                <span
                                   key={idx}
-                                  variant="secondary"
-                                  className="bg-blue-100 text-blue-800"
+                                  className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-zinc-700"
                                 >
                                   {service}
-                                </Badge>
+                                </span>
                               ))}
                             </div>
                           </div>
@@ -601,34 +572,22 @@ export default function VehicleRepairHistory() {
                               </h4>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
-                              <div className="bg-blue-50 p-3 rounded-lg">
-                                <p className="text-xs text-blue-600 font-medium">
-                                  Mano de Obra
-                                </p>
-                                <p className="text-lg font-bold text-blue-900">
-                                  $
-                                  {visit.costs.laborCost?.toLocaleString() ||
-                                    "0"}
+                              <div className="bg-gray-100 dark:bg-zinc-800 p-3 rounded-xl">
+                                <p className="text-xs text-gray-600 dark:text-zinc-400 font-medium">Mano de Obra</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-zinc-100">
+                                  ${visit.costs.laborCost?.toLocaleString() || "0"}
                                 </p>
                               </div>
-                              <div className="bg-purple-50 p-3 rounded-lg">
-                                <p className="text-xs text-purple-600 font-medium">
-                                  Repuestos
-                                </p>
-                                <p className="text-lg font-bold text-purple-900">
-                                  $
-                                  {visit.costs.partsCost?.toLocaleString() ||
-                                    "0"}
+                              <div className="bg-violet-50 dark:bg-violet-950/40 p-3 rounded-xl">
+                                <p className="text-xs text-violet-600 dark:text-violet-400 font-medium">Repuestos</p>
+                                <p className="text-lg font-bold text-violet-700 dark:text-violet-300">
+                                  ${visit.costs.partsCost?.toLocaleString() || "0"}
                                 </p>
                               </div>
-                              <div className="bg-green-50 p-3 rounded-lg">
-                                <p className="text-xs text-green-600 font-medium">
-                                  Total
-                                </p>
-                                <p className="text-lg font-bold text-green-900">
-                                  $
-                                  {visit.costs.totalCost?.toLocaleString() ||
-                                    "0"}
+                              <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3 rounded-xl">
+                                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Total</p>
+                                <p className="text-lg font-bold text-emerald-700 dark:text-emerald-300">
+                                  ${visit.costs.totalCost?.toLocaleString() || "0"}
                                 </p>
                               </div>
                             </div>
@@ -648,7 +607,7 @@ export default function VehicleRepairHistory() {
                               {visit.parts.map((part, idx) => (
                                 <div
                                   key={idx}
-                                  className={`flex items-center p-2 bg-gray-50 rounded ${isAdmin ? 'justify-between' : ''}`}
+                                  className={`flex items-center p-2 bg-gray-50 dark:bg-zinc-800/60 rounded-lg ${isAdmin ? 'justify-between' : ''}`}
                                 >
                                   <div>
                                     <p className="text-sm font-medium">
@@ -682,7 +641,7 @@ export default function VehicleRepairHistory() {
                                 Descripción
                               </h4>
                             </div>
-                            <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
+                            <p className="text-sm text-gray-700 dark:text-zinc-300 bg-gray-50 dark:bg-zinc-800/60 p-3 rounded-xl">
                               {visit.description}
                             </p>
                           </div>
@@ -701,7 +660,7 @@ export default function VehicleRepairHistory() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="ml-auto h-7 text-xs border-blue-200 text-blue-700 hover:bg-blue-50"
+                              className="ml-auto h-7 text-xs border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
                               disabled={isUploading && uploadingVisitId === visit.id}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -726,7 +685,7 @@ export default function VehicleRepairHistory() {
                                       e.stopPropagation();
                                       setLightboxUrl(url);
                                     }}
-                                    className="w-full h-full rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full h-full rounded-lg overflow-hidden border border-gray-200 dark:border-zinc-700 hover:border-gray-400 dark:hover:border-zinc-500 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-gray-400"
                                   >
                                     <img
                                       src={url}
@@ -749,7 +708,7 @@ export default function VehicleRepairHistory() {
                               ))}
                             </div>
                           ) : (
-                            <p className="text-sm text-muted-foreground text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                            <p className="text-sm text-gray-400 dark:text-zinc-500 text-center py-4 bg-gray-50 dark:bg-zinc-800/40 rounded-xl border border-dashed border-gray-200 dark:border-zinc-700">
                               Sin fotos — usá el botón para agregar
                             </p>
                           )}
@@ -770,7 +729,7 @@ export default function VehicleRepairHistory() {
                                   (responsible: Responsible, idx: number) => (
                                     <div
                                       key={idx}
-                                      className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                                      className="flex items-center justify-between p-2 bg-gray-50 dark:bg-zinc-800/60 rounded-lg"
                                     >
                                       <div>
                                         <p className="text-sm font-medium">
@@ -889,12 +848,12 @@ export default function VehicleRepairHistory() {
               {parts.length > 0 && (
                 <div className="space-y-2">
                   {parts.map((part) => (
-                    <div key={part.id} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2">
+                    <div key={part.id} className="flex items-center gap-2 bg-gray-50 dark:bg-zinc-800/60 rounded-lg p-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{part.name}</p>
                         <p className="text-xs text-muted-foreground">
                           {part.quantity} × ${part.price.toLocaleString()} = ${(part.quantity * part.price).toLocaleString()}
-                          {part.source === "client" && <span className="ml-1 text-blue-600">(del cliente)</span>}
+                          {part.source === "client" && <span className="ml-1 text-gray-500 dark:text-zinc-400">(del cliente)</span>}
                         </p>
                       </div>
                       <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0 h-7 w-7 p-0" onClick={() => removePart(part.id)}>
@@ -906,14 +865,14 @@ export default function VehicleRepairHistory() {
               )}
 
               {/* Formulario para nuevo repuesto */}
-              <div className="border rounded-lg p-3 space-y-2 bg-gray-50">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Agregar repuesto</p>
+              <div className="border border-gray-200 dark:border-zinc-700 rounded-xl p-3 space-y-2 bg-gray-50 dark:bg-zinc-800/50">
+                <p className="text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Agregar repuesto</p>
                 <div className="grid grid-cols-2 gap-2">
                   <Input
                     placeholder="Nombre del repuesto"
                     value={newPart.name}
                     onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
-                    className="col-span-2 bg-white"
+                    className="col-span-2"
                   />
                   <Input
                     type="number"
@@ -922,7 +881,6 @@ export default function VehicleRepairHistory() {
                     value={newPart.price || ""}
                     onChange={(e) => setNewPart({ ...newPart, price: parseFloat(e.target.value) || 0 })}
                     onFocus={(e) => e.target.select()}
-                    className="bg-white"
                   />
                   <Input
                     type="number"
@@ -931,10 +889,9 @@ export default function VehicleRepairHistory() {
                     value={newPart.quantity || ""}
                     onChange={(e) => setNewPart({ ...newPart, quantity: parseInt(e.target.value) || 1 })}
                     onFocus={(e) => e.target.select()}
-                    className="bg-white"
                   />
                   <Select value={newPart.source} onValueChange={(v) => setNewPart({ ...newPart, source: v as "client" | "purchased" })}>
-                    <SelectTrigger className="bg-white">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -951,19 +908,19 @@ export default function VehicleRepairHistory() {
             </div>
 
             {/* Resumen */}
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 space-y-2">
-              <p className="text-sm font-semibold text-green-800 mb-3">Resumen de Costos</p>
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/30 p-4 space-y-2">
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300 mb-3">Resumen de Costos</p>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Mano de Obra</span>
-                <span className="font-medium">${laborCost.toLocaleString()}</span>
+                <span className="text-gray-600 dark:text-zinc-400">Mano de Obra</span>
+                <span className="font-medium text-gray-900 dark:text-zinc-100">${laborCost.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Repuestos ({parts.length})</span>
-                <span className="font-medium">${partsCost.toLocaleString()}</span>
+                <span className="text-gray-600 dark:text-zinc-400">Repuestos ({parts.length})</span>
+                <span className="font-medium text-gray-900 dark:text-zinc-100">${partsCost.toLocaleString()}</span>
               </div>
-              <div className="flex justify-between text-base font-bold border-t border-green-200 pt-2 mt-2">
-                <span className="text-green-900">Total</span>
-                <span className="text-green-900">${totalCost.toLocaleString()}</span>
+              <div className="flex justify-between text-base font-bold border-t border-emerald-200 dark:border-emerald-800/60 pt-2 mt-2">
+                <span className="text-emerald-800 dark:text-emerald-300">Total</span>
+                <span className="text-emerald-800 dark:text-emerald-300">${totalCost.toLocaleString()}</span>
               </div>
             </div>
           </div>

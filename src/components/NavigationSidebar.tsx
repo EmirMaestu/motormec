@@ -2,75 +2,51 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "../lib/utils";
 import { UserButton, useUser, useOrganization } from "@clerk/clerk-react";
+import { useTheme } from "../lib/theme";
 import {
-  BarChart3,
+  LayoutDashboard,
   Car,
   DollarSign,
-  Package,
-  FileText,
   Users,
-  UserCheck,
   MessageSquare,
-  ChevronLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   Menu,
   X,
+  Wrench,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 const navigationItems = [
   {
     title: "Dashboard",
-    icon: BarChart3,
+    icon: LayoutDashboard,
     path: "/dashboard",
-    color: "text-blue-600",
     adminOnly: false,
   },
   {
     title: "Vehículos",
     icon: Car,
     path: "/vehiculos",
-    color: "text-green-600",
-    adminOnly: false,
-  },
-  {
-    title: "Inventario",
-    icon: Package,
-    path: "/inventario",
-    color: "text-purple-600",
     adminOnly: false,
   },
   {
     title: "Finanzas",
     icon: DollarSign,
     path: "/finanzas",
-    color: "text-emerald-600",
-    adminOnly: true,
-  },
-  {
-    title: "Reportes",
-    icon: FileText,
-    path: "/reportes",
-    color: "text-orange-600",
     adminOnly: true,
   },
   {
     title: "Clientes",
-    icon: UserCheck,
-    path: "/clientes",
-    color: "text-purple-600",
-    adminOnly: true,
-  },
-  {
-    title: "Socios",
     icon: Users,
-    path: "/socios",
-    color: "text-indigo-600",
+    path: "/clientes",
     adminOnly: true,
   },
   {
     title: "Bot WhatsApp",
     icon: MessageSquare,
     path: "/whatsapp-bot",
-    color: "text-green-600",
     adminOnly: true,
   },
 ];
@@ -81,234 +57,207 @@ export default function NavigationSidebar() {
   const location = useLocation();
   const { user } = useUser();
   const { membership } = useOrganization();
+  const { theme, toggle } = useTheme();
 
-  // Determinar si el usuario es admin
   const isAdmin = membership?.role === "org:admin";
 
-  // Cargar estado del sidebar desde localStorage
   useEffect(() => {
-    const savedState = localStorage.getItem("sidebar-collapsed");
-    if (savedState !== null) {
-      setIsCollapsed(JSON.parse(savedState));
-    }
+    const saved = localStorage.getItem("sidebar-collapsed");
+    if (saved !== null) setIsCollapsed(JSON.parse(saved));
   }, []);
 
-  // Guardar estado cuando cambie
   useEffect(() => {
     localStorage.setItem("sidebar-collapsed", JSON.stringify(isCollapsed));
   }, [isCollapsed]);
 
-  const toggleCollapsed = () => {
-    setIsCollapsed(!isCollapsed);
-  };
+  // Cerrar mobile al navegar
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [location.pathname]);
 
-  const toggleMobile = () => {
-    setIsMobileOpen(!isMobileOpen);
-  };
-
-  // Filtrar elementos de navegación basados en el rol
-  const filteredNavigationItems = navigationItems.filter(
+  const filteredItems = navigationItems.filter(
     (item) => !item.adminOnly || isAdmin
   );
 
+  const isActive = (path: string) =>
+    location.pathname === path ||
+    (path !== "/dashboard" && location.pathname.startsWith(path));
+
   return (
     <>
-      {/* Botón móvil */}
+      {/* ── Botón hamburguesa mobile ─────────────────────────────────── */}
       <button
-        onClick={toggleMobile}
-        className={cn(
-          "lg:hidden fixed top-6 z-50 p-2 rounded-md bg-white shadow-md border border-gray-200 transition-all duration-300",
-          isMobileOpen ? "left-52" : "left-4"
-        )}
+        onClick={() => setIsMobileOpen(true)}
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-white dark:bg-zinc-900 shadow-sm border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+        aria-label="Abrir menú"
       >
-        {isMobileOpen ? (
-          <X className="h-5 w-5" />
-        ) : (
-          <Menu className="h-5 w-5" />
-        )}
+        <Menu className="h-5 w-5" />
       </button>
 
-      {/* Overlay móvil */}
-      {isMobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={() => setIsMobileOpen(false)}
-        />
-      )}
+      {/* ── Overlay mobile ───────────────────────────────────────────── */}
+      <div
+        className={cn(
+          "lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity duration-300",
+          isMobileOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        )}
+        onClick={() => setIsMobileOpen(false)}
+      />
 
-      {/* Sidebar */}
+      {/* ── Sidebar ──────────────────────────────────────────────────── */}
       <aside
         className={cn(
-          "fixed left-0 top-0 h-screen bg-white border-r border-gray-200 z-40 transition-all duration-300 ease-in-out flex flex-col",
-          // Estados responsive - mantener siempre fixed para que no se mueva con el scroll
-          "lg:translate-x-0", // Desktop: siempre visible
-          "-translate-x-full lg:translate-x-0", // Mobile: oculto por defecto
-          isMobileOpen && "translate-x-0", // Mobile: mostrar cuando esté abierto
-          // Ancho según estado
-          isCollapsed ? "w-16" : "w-64"
+          "fixed left-0 top-0 h-screen z-40 flex flex-col",
+          "bg-white dark:bg-zinc-950 border-r border-gray-100 dark:border-zinc-800",
+          "transition-all duration-300 ease-in-out",
+          "lg:translate-x-0",
+          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+          isCollapsed ? "w-[68px]" : "w-60"
         )}
       >
-        {/* Header del sidebar */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 h-20 flex-shrink-0">
-          {!isCollapsed && (
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Car className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-lg font-bold text-gray-900">MotorMec</span>
+        {/* ── Logo ─────────────────────────────────────────────────── */}
+        <div className={cn(
+          "flex items-center h-16 flex-shrink-0 border-b border-gray-100 dark:border-zinc-800 px-4",
+          isCollapsed ? "justify-center" : "justify-between"
+        )}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 bg-gray-900 dark:bg-zinc-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Wrench className="h-4 w-4 text-white dark:text-zinc-900" />
             </div>
+            {!isCollapsed && (
+              <span className="text-[15px] font-semibold text-gray-900 dark:text-gray-100 truncate tracking-tight">
+                MotorMec
+              </span>
+            )}
+          </div>
+
+          {/* Botón colapsar — solo desktop */}
+          {!isCollapsed && (
+            <button
+              onClick={() => setIsCollapsed(true)}
+              className="hidden lg:flex p-1.5 rounded-md text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors flex-shrink-0"
+              aria-label="Colapsar sidebar"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
           )}
+        </div>
+
+        {/* ── Botón expandir (solo visible cuando colapsado, desktop) ── */}
+        {isCollapsed && (
           <button
-            onClick={toggleCollapsed}
+            onClick={() => setIsCollapsed(false)}
+            className="hidden lg:flex mx-auto mt-3 p-1.5 rounded-md text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+            aria-label="Expandir sidebar"
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+          </button>
+        )}
+
+        {/* ── Botón cerrar mobile ───────────────────────────────────── */}
+        {isMobileOpen && (
+          <button
+            onClick={() => setIsMobileOpen(false)}
+            className="lg:hidden absolute top-4 right-3 p-1.5 rounded-md text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+
+        {/* ── Navegación ───────────────────────────────────────────── */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {filteredItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                title={isCollapsed ? item.title : undefined}
+                className={cn(
+                  "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group",
+                  active
+                    ? "bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-medium"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 hover:bg-gray-50 dark:hover:bg-zinc-800/60 font-normal",
+                  isCollapsed && "justify-center px-0"
+                )}
+              >
+                <Icon className={cn(
+                  "h-[18px] w-[18px] flex-shrink-0",
+                  active
+                    ? "text-white dark:text-zinc-900"
+                    : "text-gray-400 dark:text-zinc-500 group-hover:text-gray-700 dark:group-hover:text-zinc-300"
+                )} />
+
+                {!isCollapsed && (
+                  <span className="truncate">{item.title}</span>
+                )}
+
+                {/* Tooltip colapsado */}
+                {isCollapsed && (
+                  <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 pointer-events-none whitespace-nowrap z-50 shadow-lg">
+                    {item.title}
+                  </div>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* ── Toggle dark mode ─────────────────────────────────────── */}
+        <div className={cn(
+          "px-3 pb-2",
+          isCollapsed && "flex justify-center"
+        )}>
+          <button
+            onClick={toggle}
+            title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
             className={cn(
-              "hidden lg:flex p-1.5 rounded-md hover:bg-gray-100 transition-colors",
-              isCollapsed && "mx-auto"
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm w-full transition-all duration-150",
+              "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 hover:bg-gray-50 dark:hover:bg-zinc-800/60",
+              isCollapsed && "justify-center px-0 w-auto"
             )}
           >
-            <ChevronLeft
-              className={cn(
-                "h-4 w-4 transition-transform",
-                isCollapsed && "rotate-180"
-              )}
-            />
+            {theme === "dark"
+              ? <Sun className="h-[18px] w-[18px] flex-shrink-0 text-gray-400 dark:text-zinc-500" />
+              : <Moon className="h-[18px] w-[18px] flex-shrink-0 text-gray-400 dark:text-zinc-500" />
+            }
+            {!isCollapsed && (
+              <span>{theme === "dark" ? "Modo claro" : "Modo oscuro"}</span>
+            )}
           </button>
         </div>
 
-        {/* Navegación principal */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <div className="space-y-1">
+        {/* ── Usuario ──────────────────────────────────────────────── */}
+        <div className={cn(
+          "flex-shrink-0 border-t border-gray-100 dark:border-zinc-800 p-3",
+        )}>
+          <div className={cn(
+            "flex items-center gap-2.5 rounded-lg px-2 py-2",
+            isCollapsed && "justify-center px-0"
+          )}>
+            <UserButton
+              appearance={{
+                elements: {
+                  avatarBox: "w-7 h-7",
+                  userButtonPopoverCard: "shadow-xl border border-gray-100 rounded-xl",
+                  userButtonPopoverActionButton: "hover:bg-gray-50 rounded-lg",
+                  userButtonPopoverActionButtonText: "text-gray-700 text-sm",
+                  userButtonPopoverFooter: "hidden",
+                },
+              }}
+              showName={false}
+            />
             {!isCollapsed && (
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-3">
-                Principal
-              </p>
-            )}
-            {filteredNavigationItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setIsMobileOpen(false)}
-                  className={cn(
-                    "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                    "hover:bg-gray-50 group",
-                    isActive
-                      ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
-                      : "text-gray-700 hover:text-gray-900",
-                    isCollapsed && "justify-center px-2"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "h-5 w-5 flex-shrink-0 transition-colors",
-                      isActive
-                        ? item.color
-                        : "text-gray-400 group-hover:text-gray-600",
-                      !isCollapsed && "mr-3"
-                    )}
-                  />
-                  {!isCollapsed && (
-                    <span className="truncate">{item.title}</span>
-                  )}
-
-                  {/* Tooltip para modo colapsado */}
-                  {isCollapsed && (
-                    <div className="absolute left-16 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
-                      {item.title}
-                    </div>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-
-          {/* Ejemplos */}
-          {/* <div className="pt-6 space-y-1">
-            {!isCollapsed && (
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-3">
-                Ejemplos
-              </p>
-            )}
-            {exampleItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setIsMobileOpen(false)}
-                  className={cn(
-                    "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                    "hover:bg-gray-50 group",
-                    isActive
-                      ? "bg-gray-100 text-gray-900"
-                      : "text-gray-600 hover:text-gray-900",
-                    isCollapsed && "justify-center px-2"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "h-4 w-4 flex-shrink-0 transition-colors",
-                      "text-gray-400 group-hover:text-gray-600",
-                      !isCollapsed && "mr-3"
-                    )}
-                  />
-                  {!isCollapsed && (
-                    <span className="truncate">{item.title}</span>
-                  )}
-
-                  {isCollapsed && (
-                    <div className="absolute left-16 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
-                      {item.title}
-                    </div>
-                  )}
-                </Link>
-              );
-            })}
-          </div> */}
-        </nav>
-
-        {/* Footer del sidebar con UserButton */}
-        <div className="p-4 border-t border-gray-200 flex-shrink-0 space-y-3 h-16">
-          {/* UserButton */}
-          <div className="flex items-center justify-center">
-            <div className="rounded-lg w-full">
-              <div
-                className={cn(
-                  "flex items-center space-x-2",
-                  isCollapsed && "justify-center space-x-0"
-                )}
-              >
-                <div className="flex-shrink-0">
-                  <UserButton
-                    appearance={{
-                      elements: {
-                        avatarBox: "w-8 h-8",
-                        userButtonPopoverCard:
-                          "shadow-lg border border-gray-200",
-                        userButtonPopoverActionButton: "hover:bg-gray-50",
-                        userButtonPopoverActionButtonText: "text-gray-700",
-                        userButtonPopoverFooter: "hidden",
-                      },
-                    }}
-                    showName={false}
-                    userProfileMode="navigation"
-                    userProfileUrl="/user-profile"
-                  />
-                </div>
-                {!isCollapsed && (
-                  <div className="text-left flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {user?.firstName || "Admin"}
-                    </p>
-                    <p className="text-xs text-gray-500">Conectado</p>
-                  </div>
-                )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate leading-tight">
+                  {user?.firstName || "Usuario"}
+                </p>
+                <p className="text-xs text-gray-400 dark:text-zinc-500 truncate">
+                  {isAdmin ? "Administrador" : "Empleado"}
+                </p>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </aside>

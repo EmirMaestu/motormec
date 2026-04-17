@@ -70,7 +70,7 @@ export const CarouselCards: React.FC<CarouselCardsProps> = ({
     <div className={cn("space-y-4", className)}>
       {title && (
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+          <h2 className="text-sm font-medium text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{title}</h2>
           
           {/* Controles de navegación - Solo mostrar si hay más cards que las visibles */}
           {cards.length > visibleCards && (
@@ -93,9 +93,9 @@ export const CarouselCards: React.FC<CarouselCardsProps> = ({
                     onClick={() => goToSlide(i)}
                     className={cn(
                       "w-2 h-2 rounded-full transition-colors",
-                      currentIndex === i 
-                        ? "bg-blue-600" 
-                        : "bg-gray-300 hover:bg-gray-400"
+                      currentIndex === i
+                        ? "bg-gray-900 dark:bg-zinc-100"
+                        : "bg-gray-200 dark:bg-zinc-700 hover:bg-gray-400 dark:hover:bg-zinc-500"
                     )}
                   />
                 ))}
@@ -136,31 +136,22 @@ export const CarouselCards: React.FC<CarouselCardsProps> = ({
                   "lg:w-1/3" // desktop: 33.333%
                 )}
               >
-                <Card
-                  className={cn(
-                    "h-full transition-all duration-200 ease-in-out hover:shadow-md",
-                    card.borderColor || ""
-                  )}
-                >
+                <Card className="h-full transition-all duration-200 ease-in-out">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
+                    <CardTitle className="text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase tracking-wide">
                       {card.title}
                     </CardTitle>
-                    <IconComponent 
-                      className={cn(
-                        "h-4 w-4",
-                        card.color || "text-muted-foreground"
-                      )} 
+                    <IconComponent
+                      className={cn("h-4 w-4", card.color || "text-gray-400 dark:text-zinc-500")}
                     />
                   </CardHeader>
                   <CardContent>
-                    <div className={cn("text-2xl font-bold", card.color || "")}>
-                      {typeof card.value === 'number' 
-                        ? card.value.toLocaleString() 
-                        : card.value
-                      }
+                    <div className={cn("text-2xl font-bold text-gray-900 dark:text-zinc-100", card.color || "")}>
+                      {typeof card.value === 'number'
+                        ? card.value.toLocaleString()
+                        : card.value}
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">
                       {card.description}
                     </p>
                   </CardContent>

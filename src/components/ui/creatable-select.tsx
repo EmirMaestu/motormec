@@ -154,7 +154,7 @@ export const CreatableSelect: React.FC<CreatableSelectProps> = ({
             <Badge
               key={index}
               variant="secondary"
-              className="flex items-center gap-1 bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors duration-150"
+              className="flex items-center gap-1 bg-gray-100 dark:bg-zinc-700 text-gray-800 dark:text-zinc-200 hover:bg-gray-200 dark:hover:bg-zinc-600 transition-colors duration-150"
             >
               <span className="text-xs">{service}</span>
               {!disabled && (
@@ -164,7 +164,7 @@ export const CreatableSelect: React.FC<CreatableSelectProps> = ({
                     e.stopPropagation();
                     removeService(service);
                   }}
-                  className="ml-1 hover:bg-blue-300 rounded-full p-0.5 transition-colors duration-150"
+                  className="ml-1 hover:bg-gray-300 dark:hover:bg-zinc-500 rounded-full p-0.5 transition-colors duration-150"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -195,7 +195,7 @@ export const CreatableSelect: React.FC<CreatableSelectProps> = ({
                 setIsOpen(!isOpen);
               }
             }}
-            className="flex items-center justify-center p-1 rounded hover:bg-gray-100"
+            className="flex items-center justify-center p-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-700"
           >
             <ChevronDown 
               className={cn(
@@ -209,16 +209,16 @@ export const CreatableSelect: React.FC<CreatableSelectProps> = ({
 
       {/* Dropdown con opciones */}
       {isOpen && !disabled && (
-        <div className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-md border bg-white shadow-lg animate-in fade-in-0 zoom-in-95">
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg dark:shadow-zinc-950/50 animate-in fade-in-0 zoom-in-95">
             <div className="p-1">
               {/* Opción para crear nuevo servicio */}
               {inputValue.trim() && !allOptions.some(opt => opt.toLowerCase() === inputValue.toLowerCase()) && (
                 <button
                   type="button"
                   onClick={() => addService(inputValue)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-blue-50 hover:text-blue-900 rounded-sm transition-colors duration-150"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-sm transition-colors duration-150"
                 >
-                  <Plus className="h-4 w-4 text-blue-600" />
+                  <Plus className="h-4 w-4 text-gray-600 dark:text-zinc-400" />
                   <span>Crear "<strong>{inputValue}</strong>"</span>
                 </button>
               )}
@@ -229,7 +229,7 @@ export const CreatableSelect: React.FC<CreatableSelectProps> = ({
                   key={index}
                   type="button"
                   onClick={() => addService(option)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 hover:text-blue-900 rounded-sm transition-colors duration-150"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-sm transition-colors duration-150"
                 >
                   {option}
                 </button>

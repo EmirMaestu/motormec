@@ -6,9 +6,14 @@ interface WhatsAppMessage {
   id: string;
   from: string;
   timestamp: string;
-  type: "text" | "image" | "document" | "audio" | "video";
+  type: "text" | "image" | "document" | "audio" | "video" | "interactive";
   text?: { body: string };
   image?: { id: string; mime_type: string; caption?: string };
+  interactive?: {
+    type: "button_reply" | "list_reply";
+    button_reply?: { id: string; title: string };
+    list_reply?: { id: string; title: string };
+  };
 }
 
 interface WhatsAppPayload {
@@ -40,7 +45,6 @@ interface DatosConversacion {
   patente: string;
   tarea: string;
   cliente: string;
-  ano?: string;
   customerId?: string;
   clienteEsNuevo?: boolean;
   rawMessage?: string;
@@ -100,13 +104,9 @@ export const handleWhatsApp = httpAction(async (ctx, request) => {
 });
 
 // ─── Normalizar número argentino para envío ────────────────────────────────
-// El webhook recibe: 5492612494123 (E.164 con prefijo "9" de celular)
-// La lista de destinatarios de Meta guarda: 54261152494123 (con prefijo "15")
-// Esta función convierte entre ambos formatos
 function normalizarNumeroEnvio(phone: string): string {
   if (!phone.startsWith("549")) return phone;
-  const sinPais9 = phone.slice(3); // "2612494123" → 10 dígitos
-  // Buenos Aires (11) tiene 8 dígitos locales, el resto tiene 7
+  const sinPais9 = phone.slice(3);
   const localDigits = sinPais9.startsWith("11") ? 8 : 7;
   const area = sinPais9.slice(0, sinPais9.length - localDigits);
   const local = sinPais9.slice(sinPais9.length - localDigits);
@@ -148,22 +148,93 @@ async function enviarMensaje(
   }
 }
 
+// ─── Enviar mensaje con botones interactivos ───────────────────────────────
+async function enviarMensajeConBotones(
+  to: string,
+  texto: string,
+  botones: Array<{ id: string; titulo: string }>,
+  phoneNumberId: string,
+  accessToken: string
+) {
+  const toNormalizado = normalizarNumeroEnvio(to);
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: toNormalizado,
+          type: "interactive",
+          interactive: {
+            type: "button",
+            body: { text: texto },
+            action: {
+              buttons: botones.map((b) => ({
+                type: "reply",
+                reply: { id: b.id, title: b.titulo },
+              })),
+            },
+          },
+        }),
+      }
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`[WhatsApp] Error al enviar botones: ${res.status}`, err);
+      // Fallback a mensaje de texto si los botones fallan
+      await enviarMensaje(
+        to,
+        texto + "\n\n" + botones.map((b) => `▸ ${b.titulo}`).join("\n"),
+        phoneNumberId,
+        accessToken
+      );
+    }
+  } catch (err) {
+    console.error("[WhatsApp] Error en enviarMensajeConBotones:", err);
+  }
+}
+
 // ─── Detectar respuesta afirmativa/negativa ────────────────────────────────
 function esAfirmativo(texto: string): boolean {
   const t = texto.trim().toLowerCase();
-  return ["sí", "si", "s", "yes", "y", "claro", "ok", "dale", "confirmar", "confirmo", "correcto"].some((w) => t === w || t.startsWith(w + " "));
+  return ["sí", "si", "s", "yes", "y", "claro", "ok", "dale", "confirmar", "confirmo", "correcto"].some(
+    (w) => t === w || t.startsWith(w + " ")
+  );
 }
 
 function esNegativo(texto: string): boolean {
   const t = texto.trim().toLowerCase();
-  return ["no", "n", "nop", "nope", "cancelar", "cancel"].some((w) => t === w || t.startsWith(w + " "));
+  return ["no", "n", "nop", "nope", "cancelar", "cancel"].some(
+    (w) => t === w || t.startsWith(w + " ")
+  );
 }
 
 function esListo(texto: string): boolean {
   const t = texto.trim().toLowerCase();
-  return ["listo", "ya", "fin", "terminar", "terminé", "termine", "guardar", "no mas", "no más", "ya está", "ya esta"].some(
-    (w) => t === w || t.startsWith(w + " ")
-  );
+  return [
+    "listo", "ya", "fin", "terminar", "terminé", "termine",
+    "guardar", "no mas", "no más", "ya está", "ya esta",
+  ].some((w) => t === w || t.startsWith(w + " "));
+}
+
+// ─── Extraer texto de un mensaje (texto o respuesta a botón) ──────────────
+function extraerTexto(msg: WhatsAppMessage): string {
+  if (msg.type === "text") return (msg.text?.body ?? "").trim();
+  if (msg.type === "image") return (msg.image?.caption ?? "").trim();
+  if (msg.type === "interactive") {
+    const btnId = msg.interactive?.button_reply?.id ?? "";
+    const btnTitle = msg.interactive?.button_reply?.title ?? "";
+    const listId = msg.interactive?.list_reply?.id ?? "";
+    const listTitle = msg.interactive?.list_reply?.title ?? "";
+    // Retornar el ID del botón (para manejo preciso) o el título como fallback
+    return btnId || listId || btnTitle || listTitle;
+  }
+  return "";
 }
 
 // ─── Procesar un mensaje individual ───────────────────────────────────────
@@ -175,16 +246,13 @@ async function procesarMensaje(
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN!;
   const from = msg.from;
 
-  // Ignorar mensajes que no sean texto ni imagen
-  if (msg.type !== "text" && msg.type !== "image") {
+  // Ignorar tipos no soportados
+  if (!["text", "image", "interactive"].includes(msg.type)) {
     console.log(`[WhatsApp] Tipo ${msg.type} ignorado`);
     return;
   }
 
-  const textoOriginal =
-    msg.type === "text"
-      ? (msg.text?.body ?? "").trim()
-      : (msg.image?.caption ?? "").trim();
+  const textoOriginal = extraerTexto(msg);
 
   // ── Verificar si hay una conversación activa ───────────────────────────
   const convActiva = await ctx.runQuery(
@@ -193,10 +261,8 @@ async function procesarMensaje(
   );
 
   if (convActiva) {
-    // Conversación en curso — verificar si no es muy antigua (>30 min)
     const hace30min = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     if (convActiva.updatedAt < hace30min) {
-      // Conversación expirada — limpiar y procesar como nueva
       await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
     } else {
       await manejarRespuesta(ctx, convActiva, msg, textoOriginal, from, phoneNumberId, accessToken);
@@ -204,12 +270,25 @@ async function procesarMensaje(
     }
   }
 
+  // ── Verificar autorización del número ──────────────────────────────────
+  const autorizado = await ctx.runQuery(internal.numerosAutorizados.verificar, { phone: from });
+  if (!autorizado) {
+    console.log(`[WhatsApp] Número no autorizado: ${from}`);
+    await enviarMensaje(
+      from,
+      "⛔ Este número no está autorizado para usar el bot. Contactá al taller para solicitar acceso.",
+      phoneNumberId,
+      accessToken
+    );
+    return;
+  }
+
   // ── Nueva conversación ─────────────────────────────────────────────────
   if (!textoOriginal && msg.type !== "image") {
     return;
   }
 
-  // Guardar registro inicial (idempotente — retorna null si ya fue procesado)
+  // Guardar registro inicial (idempotente)
   const historialId = await ctx.runMutation(internal.historialTaller.guardar, {
     whatsappMessageId: msg.id,
     whatsappFrom: from,
@@ -220,7 +299,6 @@ async function procesarMensaje(
     createdAt: new Date().toISOString(),
   });
 
-  // Mensaje duplicado — ya fue procesado anteriormente, ignorar
   if (historialId === null) {
     console.log(`[WhatsApp] Mensaje ${msg.id} ya procesado, ignorando duplicado`);
     return;
@@ -251,7 +329,6 @@ async function procesarMensaje(
   }
 
   if (!datosVehiculo) {
-    // Error de IA — actualizar historial y avisar
     await ctx.runMutation(internal.historialTaller.actualizar, {
       id: historialId,
       fotoIds: fotoIds as any,
@@ -279,7 +356,6 @@ async function procesarMensaje(
     status: "processed",
   });
 
-  // Datos base para la conversación
   const datos: DatosConversacion = {
     marca_modelo: datosVehiculo.marca_modelo,
     kilometraje: datosVehiculo.kilometraje,
@@ -290,7 +366,7 @@ async function procesarMensaje(
     fotoIds,
   };
 
-  // ── Buscar cliente en la base de datos (solo por nombre extraído) ─────
+  // ── Buscar cliente en la base de datos ────────────────────────────────
   let clienteEncontrado: { _id: string; name: string; phone: string } | null = null;
 
   if (datosVehiculo.cliente) {
@@ -304,8 +380,12 @@ async function procesarMensaje(
     }
   }
 
+  const patente = datosVehiculo.patente || "sin patente";
+  const trabajo = datosVehiculo.tarea || "sin especificar";
+  const km = datosVehiculo.kilometraje ? `${datosVehiculo.kilometraje} km` : null;
+
   if (clienteEncontrado) {
-    // Encontramos un candidato — preguntar confirmación
+    // Encontramos un candidato — preguntar confirmación con botones
     await ctx.runMutation(internal.conversaciones.guardar, {
       phone: from,
       etapa: "verificando_cliente",
@@ -315,38 +395,42 @@ async function procesarMensaje(
       historialId,
     });
 
-    const patente = datosVehiculo.patente || "sin patente";
-    const trabajo = datosVehiculo.tarea || "sin especificar";
-    const km = datosVehiculo.kilometraje ? `${datosVehiculo.kilometraje} km` : null;
-    await enviarMensaje(
+    await enviarMensajeConBotones(
       from,
       `✅ Recibí el ingreso:\n*${datosVehiculo.marca_modelo}* — ${patente}` +
       (km ? `\n📊 ${km}` : "") +
       `\n🔧 ${trabajo}\n\n` +
-      `Encontré este cliente en la base:\n👤 *${clienteEncontrado.name}*\n📞 ${clienteEncontrado.phone}\n\n` +
-      `¿Es este el cliente? Respondé *sí* o *no*`,
+      `Encontré este cliente en la base:\n👤 *${clienteEncontrado.name}*\n📞 ${clienteEncontrado.phone}\n\n¿Es este el cliente?`,
+      [
+        { id: "btn_si", titulo: "✅ Sí, es él" },
+        { id: "btn_no", titulo: "❌ No, es otro" },
+      ],
       phoneNumberId,
       accessToken
     );
   } else {
-    // No hay cliente previo — pedir año directamente
+    // No hay cliente previo — ir directo a confirmación
     await ctx.runMutation(internal.conversaciones.guardar, {
       phone: from,
-      etapa: "pidiendo_ano",
+      etapa: "confirmando",
       datos: { ...datos, clienteEsNuevo: true },
       historialId,
     });
 
-    const patente = datosVehiculo.patente || "sin patente";
-    const trabajo = datosVehiculo.tarea || "sin especificar";
     const clienteNombre = datosVehiculo.cliente || "desconocido";
-    const km = datosVehiculo.kilometraje ? `${datosVehiculo.kilometraje} km` : null;
-    await enviarMensaje(
+    await enviarMensajeConBotones(
       from,
-      `✅ Recibí el ingreso:\n*${datosVehiculo.marca_modelo}* — ${patente}` +
-      (km ? `\n📊 ${km}` : "") +
-      `\n🔧 ${trabajo}\n👤 ${clienteNombre} _(nuevo cliente)_\n\n` +
-      `¿Cuál es el *año* del vehículo?`,
+      `📋 *Resumen del ingreso:*\n\n` +
+      `🚗 *Vehículo:* ${datosVehiculo.marca_modelo}\n` +
+      `🔖 *Patente:* ${patente}\n` +
+      (km ? `📊 *Kilometraje:* ${km}\n` : "") +
+      `🔧 *Trabajo:* ${trabajo}\n` +
+      `👤 *Cliente:* ${clienteNombre} _(nuevo)_\n\n` +
+      `¿Confirmar y registrar el vehículo?`,
+      [
+        { id: "btn_confirmar", titulo: "✅ Confirmar" },
+        { id: "btn_cancelar", titulo: "❌ Cancelar" },
+      ],
       phoneNumberId,
       accessToken
     );
@@ -375,10 +459,14 @@ async function manejarRespuesta(
   const etapa = conv.etapa;
   const datos = conv.datos as DatosConversacion;
 
+  // Normalizar texto: si es ID de botón, tratarlo como afirmativo/negativo
+  const esBtnSi = texto === "btn_si" || texto === "btn_confirmar";
+  const esBtnNo = texto === "btn_no" || texto === "btn_cancelar";
+  const afirmativo = esBtnSi || esAfirmativo(texto);
+  const negativo = esBtnNo || esNegativo(texto);
+
   // ── Cancelación global en cualquier etapa ──────────────────────────────
-  if (esNegativo(texto) && etapa !== "verificando_cliente" && etapa !== "pidiendo_fotos") {
-    // En verificando_cliente el "no" significa "ese no es el cliente", no cancelar
-    // En pidiendo_fotos el "no" significa "no quiero fotos", no cancelar
+  if (negativo && etapa !== "verificando_cliente" && etapa !== "pidiendo_fotos") {
     await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
     await enviarMensaje(
       from,
@@ -391,8 +479,8 @@ async function manejarRespuesta(
 
   // ── ETAPA: verificando_cliente ─────────────────────────────────────────
   if (etapa === "verificando_cliente") {
-    if (esAfirmativo(texto)) {
-      // Cliente confirmado
+    if (afirmativo) {
+      // Cliente confirmado → ir a confirmando con resumen
       const nuevosDatos = {
         ...datos,
         customerId: conv.candidatoClienteId as string,
@@ -400,77 +488,33 @@ async function manejarRespuesta(
       };
       await ctx.runMutation(internal.conversaciones.actualizar, {
         phone: from,
-        etapa: "pidiendo_ano",
+        etapa: "confirmando",
         datos: nuevosDatos,
       });
-      await enviarMensaje(
-        from,
-        `👍 Perfecto. ¿Cuál es el *año* del ${datos.marca_modelo}?`,
-        phoneNumberId,
-        accessToken
-      );
-    } else if (esNegativo(texto)) {
-      // Cliente no es el correcto — continuar como nuevo
-      const nuevosDatos = { ...datos, clienteEsNuevo: true };
-      await ctx.runMutation(internal.conversaciones.actualizar, {
-        phone: from,
-        etapa: "pidiendo_ano",
-        datos: nuevosDatos,
-      });
-      await enviarMensaje(
-        from,
-        `Entendido. El cliente *${datos.cliente}* se registrará como nuevo.\n\n¿Cuál es el *año* del ${datos.marca_modelo}?`,
-        phoneNumberId,
-        accessToken
-      );
-    } else {
-      await enviarMensaje(
-        from,
-        `Por favor respondé *sí* o *no* para confirmar si el cliente es *${conv.candidatoClienteNombre}*.`,
-        phoneNumberId,
-        accessToken
-      );
-    }
-    return;
-  }
 
-  // ── ETAPA: pidiendo_ano ────────────────────────────────────────────────
-  if (etapa === "pidiendo_ano") {
-    const anoMatch = texto.match(/\b(19|20)\d{2}\b/);
-    if (anoMatch) {
-      const ano = anoMatch[0];
-      const nuevosDatos = { ...datos, ano };
+      await enviarResumenConfirmacion(
+        from, nuevosDatos, conv.candidatoClienteNombre, phoneNumberId, accessToken
+      );
+    } else if (negativo) {
+      // Cliente no es el correcto → continuar como nuevo, ir a confirmando
+      const nuevosDatos = { ...datos, clienteEsNuevo: true };
       await ctx.runMutation(internal.conversaciones.actualizar, {
         phone: from,
         etapa: "confirmando",
         datos: nuevosDatos,
       });
 
-      // Mostrar resumen para confirmación final
-      const marcaModelo = datos.marca_modelo || "desconocido";
-      const patente = datos.patente || "sin patente";
-      const km = datos.kilometraje ? `${datos.kilometraje} km` : "sin datos";
-      const tarea = datos.tarea || "sin especificar";
-      const cliente = datos.clienteEsNuevo
-        ? `${datos.cliente} _(nuevo)_`
-        : `${conv.candidatoClienteNombre ?? datos.cliente} ✓`;
-
-      await enviarMensaje(
-        from,
-        `📋 *Resumen del ingreso:*\n\n` +
-        `🚗 *Vehículo:* ${marcaModelo} ${ano}\n` +
-        `🔖 *Patente:* ${patente}\n` +
-        `📊 *Kilometraje:* ${km}\n` +
-        `🔧 *Trabajo:* ${tarea}\n` +
-        `👤 *Cliente:* ${cliente}\n\n` +
-        `¿Confirmar y registrar el vehículo? Respondé *sí* o *no*`,
-        phoneNumberId,
-        accessToken
+      await enviarResumenConfirmacion(
+        from, nuevosDatos, undefined, phoneNumberId, accessToken
       );
     } else {
-      await enviarMensaje(
+      await enviarMensajeConBotones(
         from,
-        `No reconocí un año válido. Por favor enviá el año del vehículo (ej: *2018*).`,
+        `Por favor confirmá si el cliente es *${conv.candidatoClienteNombre}*.`,
+        [
+          { id: "btn_si", titulo: "✅ Sí, es él" },
+          { id: "btn_no", titulo: "❌ No, es otro" },
+        ],
         phoneNumberId,
         accessToken
       );
@@ -480,21 +524,20 @@ async function manejarRespuesta(
 
   // ── ETAPA: confirmando ─────────────────────────────────────────────────
   if (etapa === "confirmando") {
-    if (esAfirmativo(texto)) {
-      // Pasar a etapa de fotos antes de crear el vehículo
+    if (afirmativo) {
       await ctx.runMutation(internal.conversaciones.actualizar, {
         phone: from,
         etapa: "pidiendo_fotos",
         datos,
       });
-      await enviarMensaje(
+      await enviarMensajeConBotones(
         from,
-        `📸 ¿Querés agregar fotos del vehículo?\nEnviá las imágenes directamente o respondé *no* para omitir.`,
+        `📸 ¿Querés agregar fotos del vehículo?\nEnviá las imágenes directamente o tocá "Sin fotos" para omitir.`,
+        [{ id: "btn_sin_fotos", titulo: "📋 Sin fotos" }],
         phoneNumberId,
         accessToken
       );
-    } else if (esNegativo(texto)) {
-      // Cancelar
+    } else if (negativo) {
       await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
       await enviarMensaje(
         from,
@@ -503,13 +546,9 @@ async function manejarRespuesta(
         accessToken
       );
     } else {
-      const marcaModelo = datos.marca_modelo || "desconocido";
-      const ano = datos.ano || "?";
-      await enviarMensaje(
-        from,
-        `Respondé *sí* para confirmar el registro del *${marcaModelo} ${ano}*, o *no* para cancelar.`,
-        phoneNumberId,
-        accessToken
+      await enviarResumenConfirmacion(
+        from, datos, datos.clienteEsNuevo ? undefined : conv.candidatoClienteNombre,
+        phoneNumberId, accessToken
       );
     }
     return;
@@ -526,9 +565,10 @@ async function manejarRespuesta(
           phone: from,
           datos: { ...datos, fotoIds: nuevosFotoIds },
         });
-        await enviarMensaje(
+        await enviarMensajeConBotones(
           from,
-          `📸 Foto ${nuevosFotoIds.length} guardada. Enviá más o respondé *listo* para registrar el vehículo.`,
+          `📸 Foto ${nuevosFotoIds.length} guardada. Enviá más o finalizá el registro.`,
+          [{ id: "btn_listo", titulo: "✅ Registrar vehículo" }],
           phoneNumberId,
           accessToken
         );
@@ -539,14 +579,20 @@ async function manejarRespuesta(
       return;
     }
 
-    // Si dice "listo", "no" o similar → crear el vehículo
-    const proceder = esListo(texto) || esNegativo(texto) || esAfirmativo(texto);
-    if (proceder || texto === "") {
+    // Si dice "listo", "sin fotos", "no" o similar → crear el vehículo
+    const proceder =
+      texto === "btn_sin_fotos" ||
+      texto === "btn_listo" ||
+      esListo(texto) ||
+      esNegativo(texto) ||
+      esAfirmativo(texto) ||
+      texto === "";
+
+    if (proceder) {
       try {
         const [marcaParte, ...modeloPartes] = (datos.marca_modelo ?? "").split(" ");
         const marca = marcaParte || "Desconocida";
         const modelo = modeloPartes.join(" ") || "Desconocido";
-        const ano = parseInt(datos.ano ?? "0") || new Date().getFullYear();
         const fotoIds = datos.fotoIds ?? [];
 
         const vehicleId = await ctx.runMutation(
@@ -555,7 +601,7 @@ async function manejarRespuesta(
             plate: (datos.patente ?? "").toUpperCase(),
             brand: marca,
             model: modelo,
-            year: ano,
+            year: new Date().getFullYear(),
             owner: datos.cliente || "Sin nombre",
             phone: from,
             customerId: datos.customerId as any,
@@ -563,11 +609,12 @@ async function manejarRespuesta(
             entryDate: new Date().toISOString().split("T")[0],
             services: datos.tarea ? [datos.tarea] : [],
             cost: 0,
-            mileage: datos.kilometraje ? parseInt(datos.kilometraje.replace(/\D/g, "")) || undefined : undefined,
+            mileage: datos.kilometraje
+              ? parseInt(datos.kilometraje.replace(/\D/g, "")) || undefined
+              : undefined,
           }
         );
 
-        // Actualizar historial con vehicleId, customerId y fotos acumuladas
         if (conv.historialId) {
           await ctx.runMutation(internal.historialTaller.vincular, {
             id: conv.historialId as any,
@@ -583,13 +630,15 @@ async function manejarRespuesta(
           }
         }
 
-        // Limpiar conversación
         await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
 
-        const fotoMsg = fotoIds.length > 0 ? `\n📸 ${fotoIds.length} foto${fotoIds.length > 1 ? "s" : ""} adjunta${fotoIds.length > 1 ? "s" : ""}.` : "";
+        const fotoMsg =
+          fotoIds.length > 0
+            ? `\n📸 ${fotoIds.length} foto${fotoIds.length > 1 ? "s" : ""} adjunta${fotoIds.length > 1 ? "s" : ""}.`
+            : "";
         await enviarMensaje(
           from,
-          `✅ *¡Vehículo registrado!*\n\n${datos.marca_modelo} ${datos.ano} — ${datos.patente}\nYa aparece en el sistema como *Ingresado*. 🔧${fotoMsg}`,
+          `✅ *¡Vehículo registrado!*\n\n${datos.marca_modelo} — ${datos.patente || "sin patente"}\nYa aparece en el sistema como *Ingresado*. 🔧${fotoMsg}`,
           phoneNumberId,
           accessToken
         );
@@ -606,10 +655,10 @@ async function manejarRespuesta(
       return;
     }
 
-    // Respuesta no reconocida
-    await enviarMensaje(
+    await enviarMensajeConBotones(
       from,
-      `Enviá fotos directamente, o respondé *listo* para guardar el vehículo sin fotos.`,
+      `Enviá fotos del vehículo o tocá el botón para registrar sin fotos.`,
+      [{ id: "btn_sin_fotos", titulo: "📋 Sin fotos" }],
       phoneNumberId,
       accessToken
     );
@@ -620,7 +669,41 @@ async function manejarRespuesta(
   await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
 }
 
-// ─── Llamar a la IA del VPS (Ollama) ──────────────────────────────────────
+// ─── Enviar resumen para confirmación ─────────────────────────────────────
+async function enviarResumenConfirmacion(
+  to: string,
+  datos: DatosConversacion,
+  clienteConfirmadoNombre: string | undefined,
+  phoneNumberId: string,
+  accessToken: string
+) {
+  const marcaModelo = datos.marca_modelo || "desconocido";
+  const patente = datos.patente || "sin patente";
+  const km = datos.kilometraje ? `${datos.kilometraje} km` : "sin datos";
+  const tarea = datos.tarea || "sin especificar";
+  const cliente = datos.clienteEsNuevo
+    ? `${datos.cliente} _(nuevo)_`
+    : `${clienteConfirmadoNombre ?? datos.cliente} ✓`;
+
+  await enviarMensajeConBotones(
+    to,
+    `📋 *Resumen del ingreso:*\n\n` +
+    `🚗 *Vehículo:* ${marcaModelo}\n` +
+    `🔖 *Patente:* ${patente}\n` +
+    `📊 *Kilometraje:* ${km}\n` +
+    `🔧 *Trabajo:* ${tarea}\n` +
+    `👤 *Cliente:* ${cliente}\n\n` +
+    `¿Confirmar y registrar el vehículo?`,
+    [
+      { id: "btn_confirmar", titulo: "✅ Confirmar" },
+      { id: "btn_cancelar", titulo: "❌ Cancelar" },
+    ],
+    phoneNumberId,
+    accessToken
+  );
+}
+
+// ─── Llamar a Groq con LLaMA ───────────────────────────────────────────────
 async function procesarConIA(texto: string): Promise<DatosVehiculo> {
   const groqApiKey = process.env.GROQ_API_KEY;
 
@@ -642,7 +725,7 @@ El JSON debe tener exactamente estos campos:
 }
 
 REGLAS IMPORTANTES:
-- Para "tarea": copiá la descripción del trabajo de forma COMPLETA. NUNCA abrevies ni resumas. Si dice "cambio sonda lambda 1", el valor debe ser "cambio sonda lambda 1", NO solo "cambio".
+- Para "tarea": copiá la descripción del trabajo de forma COMPLETA. NUNCA abrevies ni resumas.
 - Para "cliente": extraé solo el nombre propio, sin la palabra "cliente".
 - Si un campo no aparece en el mensaje, usá cadena vacía "". NO inventes datos.`;
 
@@ -654,7 +737,7 @@ REGLAS IMPORTANTES:
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${groqApiKey}`,
+        Authorization: `Bearer ${groqApiKey}`,
       },
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",

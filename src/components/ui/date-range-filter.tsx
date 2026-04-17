@@ -243,7 +243,7 @@ export default function DateRangeFilter({
             {/* Presets */}
             {showPresets && (
               <div className="space-y-2">
-                <Label className="text-xs font-medium text-gray-600">Periodos rápidos</Label>
+                <Label className="text-xs font-medium text-gray-600 dark:text-zinc-400">Periodos rápidos</Label>
                 <div className="grid grid-cols-2 gap-1">
                   {DATE_PRESETS.map((preset) => {
                     const Icon = preset.icon
@@ -268,11 +268,11 @@ export default function DateRangeFilter({
             )}
 
             {/* Custom range */}
-            <div className="space-y-2 border-t pt-3">
-              <Label className="text-xs font-medium text-gray-600">Rango personalizado</Label>
+            <div className="space-y-2 border-t border-gray-200 dark:border-zinc-700 pt-3">
+              <Label className="text-xs font-medium text-gray-600 dark:text-zinc-400">Rango personalizado</Label>
               <div className="grid gap-2">
                 <div>
-                  <Label htmlFor="start-date" className="text-xs text-gray-500">Desde</Label>
+                  <Label htmlFor="start-date" className="text-xs text-gray-500 dark:text-zinc-400">Desde</Label>
                   <Input
                     id="start-date"
                     type="date"
@@ -281,7 +281,7 @@ export default function DateRangeFilter({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="end-date" className="text-xs text-gray-500">Hasta</Label>
+                  <Label htmlFor="end-date" className="text-xs text-gray-500 dark:text-zinc-400">Hasta</Label>
                   <Input
                     id="end-date"
                     type="date"
@@ -320,7 +320,7 @@ export default function DateRangeFilter({
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5 text-blue-600" />
+            <Filter className="h-5 w-5 text-gray-500 dark:text-zinc-400" />
             Filtro de Fechas
           </CardTitle>
           <div className="flex items-center gap-2">
@@ -361,11 +361,11 @@ export default function DateRangeFilter({
         )}
 
         {/* Custom range */}
-        <div className="space-y-3 border-t pt-4">
+        <div className="space-y-3 border-t border-gray-200 dark:border-zinc-700 pt-4">
           <Label className="text-sm font-medium">Rango personalizado</Label>
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <Label htmlFor="custom-start" className="text-xs text-gray-500">Fecha desde</Label>
+              <Label htmlFor="custom-start" className="text-xs text-gray-500 dark:text-zinc-400">Fecha desde</Label>
               <Input
                 id="custom-start"
                 type="date"
@@ -374,7 +374,7 @@ export default function DateRangeFilter({
               />
             </div>
             <div>
-              <Label htmlFor="custom-end" className="text-xs text-gray-500">Fecha hasta</Label>
+              <Label htmlFor="custom-end" className="text-xs text-gray-500 dark:text-zinc-400">Fecha hasta</Label>
               <Input
                 id="custom-end"
                 type="date"

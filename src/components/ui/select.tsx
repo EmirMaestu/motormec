@@ -1,11 +1,27 @@
 import * as React from "react"
-
+import { createPortal } from "react-dom"
 import { cn } from "../../lib/utils"
 
-const Select = ({ 
-  children, 
+interface SelectContextValue {
+  value: string
+  onValueChange: (value: string) => void
+  isOpen: boolean
+  setIsOpen: (open: boolean) => void
+  triggerRef: React.MutableRefObject<HTMLButtonElement | null>
+}
+
+const SelectContext = React.createContext<SelectContextValue>({
+  value: "",
+  onValueChange: () => {},
+  isOpen: false,
+  setIsOpen: () => {},
+  triggerRef: { current: null },
+})
+
+const Select = ({
+  children,
   onValueChange,
-  value 
+  value
 }: {
   children: React.ReactNode
   onValueChange?: (value: string) => void
@@ -13,6 +29,12 @@ const Select = ({
 }) => {
   const [selectedValue, setSelectedValue] = React.useState(value || "")
   const [isOpen, setIsOpen] = React.useState(false)
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null)
+
+  // Sync internal state when controlled value changes
+  React.useEffect(() => {
+    if (value !== undefined) setSelectedValue(value)
+  }, [value])
 
   const handleValueChange = (newValue: string) => {
     setSelectedValue(newValue)
@@ -26,7 +48,8 @@ const Select = ({
         value: selectedValue,
         onValueChange: handleValueChange,
         isOpen,
-        setIsOpen
+        setIsOpen,
+        triggerRef,
       }}>
         {children}
       </SelectContext.Provider>
@@ -34,32 +57,30 @@ const Select = ({
   )
 }
 
-const SelectContext = React.createContext<{
-  value: string
-  onValueChange: (value: string) => void
-  isOpen: boolean
-  setIsOpen: (open: boolean) => void
-}>({
-  value: "",
-  onValueChange: () => {},
-  isOpen: false,
-  setIsOpen: () => {}
-})
-
 const SelectTrigger = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement>
 >(({ className, children, ...props }, ref) => {
-  const { isOpen, setIsOpen } = React.useContext(SelectContext)
-  
+  const { isOpen, setIsOpen, triggerRef } = React.useContext(SelectContext)
+
+  // Combine external ref and internal triggerRef
+  const setRefs = React.useCallback(
+    (el: HTMLButtonElement | null) => {
+      (triggerRef as React.MutableRefObject<HTMLButtonElement | null>).current = el
+      if (typeof ref === "function") ref(el)
+      else if (ref) (ref as React.MutableRefObject<HTMLButtonElement | null>).current = el
+    },
+    [ref, triggerRef]
+  )
+
   return (
     <button
-      ref={ref}
+      ref={setRefs}
       type="button"
       role="combobox"
       aria-expanded={isOpen}
       className={cn(
-        "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200 ease-in-out hover:border-gray-400 focus:border-blue-500",
+        "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200 ease-in-out hover:border-gray-400 focus:border-gray-500",
         className
       )}
       onClick={() => setIsOpen(!isOpen)}
@@ -73,7 +94,7 @@ const SelectTrigger = React.forwardRef<
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className={cn(
-          "h-4 w-4 opacity-50 transition-transform duration-200 ease-in-out",
+          "h-4 w-4 opacity-50 transition-transform duration-200 ease-in-out flex-shrink-0 ml-1",
           isOpen && "rotate-180"
         )}
       >
@@ -96,11 +117,11 @@ const SelectValue = React.forwardRef<
   }
 >(({ className, placeholder, ...props }, ref) => {
   const { value } = React.useContext(SelectContext)
-  
+
   return (
     <span
       ref={ref}
-      className={cn(value ? "" : "text-muted-foreground", className)}
+      className={cn("flex-1 truncate text-left", value ? "" : "text-muted-foreground", className)}
       {...props}
     >
       {value || placeholder}
@@ -113,49 +134,66 @@ const SelectContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, children, ...props }, ref) => {
-  const { isOpen, setIsOpen } = React.useContext(SelectContext)
+  const { isOpen, setIsOpen, triggerRef } = React.useContext(SelectContext)
   const [shouldRender, setShouldRender] = React.useState(false)
-  
+  const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0 })
+
   React.useEffect(() => {
     if (isOpen) {
       setShouldRender(true)
+      // Calculate position from trigger's bounding rect
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect()
+        setCoords({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width,
+        })
+      }
     } else {
       const timer = setTimeout(() => setShouldRender(false), 200)
       return () => clearTimeout(timer)
     }
-  }, [isOpen])
-  
+  }, [isOpen, triggerRef])
+
   if (!shouldRender) return null
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
-      <div 
+      <div
         className={cn(
           "fixed inset-0 z-40 transition-opacity duration-200",
           isOpen ? "opacity-100" : "opacity-0"
         )}
         onClick={() => setIsOpen(false)}
       />
-      
-      {/* Content */}
+
+      {/* Content — rendered at fixed position above everything */}
       <div
         ref={ref}
+        style={{
+          position: "fixed",
+          top: coords.top,
+          left: coords.left,
+          width: coords.width,
+          zIndex: 9999,
+        }}
         className={cn(
-          "absolute left-0 right-0 z-50 max-h-96 overflow-hidden rounded-md border bg-white shadow-lg transition-all duration-200 ease-out mt-1",
-          // Animaciones de entrada/salida
-          isOpen 
-            ? "opacity-100 scale-100 translate-y-0" 
+          "max-h-80 overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg dark:shadow-zinc-950/50 transition-all duration-200 ease-out",
+          isOpen
+            ? "opacity-100 scale-100 translate-y-0"
             : "opacity-0 scale-95 -translate-y-2",
           className
         )}
         {...props}
       >
-        <div className="p-1 max-h-80 overflow-y-auto">
+        <div className="p-1 max-h-72 overflow-y-auto">
           {children}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 })
 SelectContent.displayName = "SelectContent"
@@ -168,14 +206,14 @@ const SelectItem = React.forwardRef<
 >(({ className, children, value, ...props }, ref) => {
   const { onValueChange, value: selectedValue } = React.useContext(SelectContext)
   const isSelected = selectedValue === value
-  
+
   return (
     <div
       ref={ref}
       className={cn(
         "relative flex w-full cursor-pointer select-none items-center rounded-sm py-2 pl-3 pr-2 text-sm outline-none transition-all duration-150 ease-in-out",
-        "hover:bg-blue-50 hover:text-blue-900 active:bg-blue-100",
-        isSelected && "bg-blue-100 text-blue-900 font-medium",
+        "hover:bg-gray-100 dark:hover:bg-zinc-700 hover:text-gray-900 dark:hover:text-zinc-100 active:bg-gray-200 dark:active:bg-zinc-600",
+        isSelected && "bg-gray-100 dark:bg-zinc-700 text-gray-900 dark:text-zinc-100 font-medium",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}
@@ -184,7 +222,7 @@ const SelectItem = React.forwardRef<
     >
       {isSelected && (
         <div className="absolute left-1 flex h-4 w-4 items-center justify-center">
-          <div className="h-2 w-2 rounded-full bg-blue-600 transition-all duration-150" />
+          <div className="h-2 w-2 rounded-full bg-gray-900 dark:bg-zinc-100 transition-all duration-150" />
         </div>
       )}
       <span className={cn("transition-all duration-150", isSelected && "ml-4")}>

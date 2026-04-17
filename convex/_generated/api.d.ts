@@ -27,6 +27,7 @@ import type * as metrics from "../metrics.js";
 import type * as migrateServices from "../migrateServices.js";
 import type * as migrateVehicles from "../migrateVehicles.js";
 import type * as navigation from "../navigation.js";
+import type * as numerosAutorizados from "../numerosAutorizados.js";
 import type * as partners from "../partners.js";
 import type * as products from "../products.js";
 import type * as reports from "../reports.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   migrateServices: typeof migrateServices;
   migrateVehicles: typeof migrateVehicles;
   navigation: typeof navigation;
+  numerosAutorizados: typeof numerosAutorizados;
   partners: typeof partners;
   products: typeof products;
   reports: typeof reports;

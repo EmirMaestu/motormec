@@ -229,7 +229,7 @@ export default function VehicleHistory() {
                         <div>
                           <p className="font-medium">{vehicle.plate}</p>
                           <p className="text-sm text-muted-foreground">
-                            {vehicle.brand} {vehicle.model} {vehicle.year}
+                            {vehicle.brand} {vehicle.model}
                           </p>
                         </div>
                       </TableCell>
@@ -396,8 +396,6 @@ export default function VehicleHistory() {
                     <span className="text-sm font-semibold text-gray-900">{detailVehicle.model}</span>
                   </div>
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-sm text-gray-600 font-medium">Año:</span>
-                    <span className="text-sm font-semibold text-gray-900">{detailVehicle.year}</span>
                   </div>
                 </div>
               </div>
