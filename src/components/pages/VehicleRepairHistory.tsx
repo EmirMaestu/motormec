@@ -21,6 +21,9 @@ import {
   X,
   Edit3,
   Save,
+  Plus,
+  Trash2,
+  Calculator,
 } from "lucide-react";
 import { formatDateToDDMMYYYY } from "../../lib/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -40,6 +43,14 @@ interface Responsible {
   totalWorkTime?: number;
 }
 
+interface Part {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  source: "client" | "purchased";
+}
+
 export default function VehicleRepairHistory() {
   const navigate = useNavigate();
   const { plate } = useParams<{ plate: string }>();
@@ -48,6 +59,13 @@ export default function VehicleRepairHistory() {
   const [editingVisit, setEditingVisit] = useState<any>(null);
   const [editForm, setEditForm] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  // Estados para gestión de costos
+  const [costVisit, setCostVisit] = useState<any>(null);
+  const [laborCost, setLaborCost] = useState(0);
+  const [parts, setParts] = useState<Part[]>([]);
+  const [newPart, setNewPart] = useState<Partial<Part>>({ name: "", price: 0, quantity: 1, source: "purchased" });
+  const [isSavingCosts, setIsSavingCosts] = useState(false);
   const { membership } = useOrganization();
   const isAdmin = membership?.role === "org:admin";
 
@@ -121,6 +139,44 @@ export default function VehicleRepairHistory() {
       alert('Error al guardar los cambios');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // ── Costos ────────────────────────────────────────────────────────────────
+  const openCostDialog = (visit: any) => {
+    setCostVisit(visit);
+    setLaborCost(visit.costs?.laborCost ?? visit.cost ?? 0);
+    setParts(visit.parts?.map((p: any) => ({ ...p })) ?? []);
+    setNewPart({ name: "", price: 0, quantity: 1, source: "purchased" });
+  };
+
+  const addPart = () => {
+    if (!newPart.name || !newPart.price) return;
+    setParts([...parts, { id: Date.now().toString(), name: newPart.name!, price: Number(newPart.price), quantity: Number(newPart.quantity) || 1, source: newPart.source as "client" | "purchased" }]);
+    setNewPart({ name: "", price: 0, quantity: 1, source: "purchased" });
+  };
+
+  const removePart = (id: string) => setParts(parts.filter((p) => p.id !== id));
+
+  const partsCost = parts.reduce((sum, p) => sum + p.price * p.quantity, 0);
+  const totalCost = laborCost + partsCost;
+
+  const handleSaveCosts = async () => {
+    if (!costVisit) return;
+    setIsSavingCosts(true);
+    try {
+      await updateVehicle({
+        id: costVisit.id,
+        costs: { laborCost, partsCost, totalCost },
+        parts,
+        cost: totalCost,
+      });
+      setCostVisit(null);
+    } catch (err) {
+      console.error("Error al guardar costos:", err);
+      alert("Error al guardar los costos");
+    } finally {
+      setIsSavingCosts(false);
     }
   };
 
@@ -337,25 +393,40 @@ export default function VehicleRepairHistory() {
                               En Taller
                             </Badge>
                           )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="ml-auto"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingVisit(visit);
-                              setEditForm({
-                                status: visit.status,
-                                services: visit.services?.join(', ') || '',
-                                mileage: visit.mileage || '',
-                                description: visit.description || '',
-                                cost: visit.cost || 0,
-                              });
-                            }}
-                          >
-                            <Edit3 className="h-3 w-3 mr-1" />
-                            Editar
-                          </Button>
+                          <div className="ml-auto flex gap-2">
+                            {isAdmin && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-green-200 text-green-700 hover:bg-green-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openCostDialog(visit);
+                                }}
+                              >
+                                <Calculator className="h-3 w-3 mr-1" />
+                                Costos
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingVisit(visit);
+                                setEditForm({
+                                  status: visit.status,
+                                  services: visit.services?.join(', ') || '',
+                                  mileage: visit.mileage || '',
+                                  description: visit.description || '',
+                                  cost: visit.cost || 0,
+                                });
+                              }}
+                            >
+                              <Edit3 className="h-3 w-3 mr-1" />
+                              Editar
+                            </Button>
+                          </div>
                         </div>
                         <div className={`grid gap-4 mt-4 ${isAdmin ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-4'}`}>
                           <div className="flex items-center gap-2">
@@ -691,6 +762,130 @@ export default function VehicleRepairHistory() {
             <Button onClick={handleSaveEdit} disabled={isSaving}>
               <Save className="h-4 w-4 mr-2" />
               {isSaving ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Costos */}
+      <Dialog open={!!costVisit} onOpenChange={(open) => !open && setCostVisit(null)}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5 text-green-600" />
+              Costos de la Visita
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Mano de obra */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Mano de Obra</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground text-sm">$</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={laborCost}
+                  onChange={(e) => setLaborCost(parseFloat(e.target.value) || 0)}
+                  onFocus={(e) => e.target.select()}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            {/* Repuestos */}
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Repuestos</Label>
+
+              {/* Lista de repuestos agregados */}
+              {parts.length > 0 && (
+                <div className="space-y-2">
+                  {parts.map((part) => (
+                    <div key={part.id} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{part.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {part.quantity} × ${part.price.toLocaleString()} = ${(part.quantity * part.price).toLocaleString()}
+                          {part.source === "client" && <span className="ml-1 text-blue-600">(del cliente)</span>}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0 h-7 w-7 p-0" onClick={() => removePart(part.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Formulario para nuevo repuesto */}
+              <div className="border rounded-lg p-3 space-y-2 bg-gray-50">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Agregar repuesto</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="Nombre del repuesto"
+                    value={newPart.name}
+                    onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
+                    className="col-span-2 bg-white"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Precio unitario"
+                    min={0}
+                    value={newPart.price || ""}
+                    onChange={(e) => setNewPart({ ...newPart, price: parseFloat(e.target.value) || 0 })}
+                    onFocus={(e) => e.target.select()}
+                    className="bg-white"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Cantidad"
+                    min={1}
+                    value={newPart.quantity || ""}
+                    onChange={(e) => setNewPart({ ...newPart, quantity: parseInt(e.target.value) || 1 })}
+                    onFocus={(e) => e.target.select()}
+                    className="bg-white"
+                  />
+                  <Select value={newPart.source} onValueChange={(v) => setNewPart({ ...newPart, source: v as "client" | "purchased" })}>
+                    <SelectTrigger className="bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="purchased">Comprado por el taller</SelectItem>
+                      <SelectItem value="client">Lo trajo el cliente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="outline" onClick={addPart} disabled={!newPart.name || !newPart.price} className="col-start-2 border-green-200 text-green-700 hover:bg-green-50">
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Agregar
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Resumen */}
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 space-y-2">
+              <p className="text-sm font-semibold text-green-800 mb-3">Resumen de Costos</p>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Mano de Obra</span>
+                <span className="font-medium">${laborCost.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Repuestos ({parts.length})</span>
+                <span className="font-medium">${partsCost.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-base font-bold border-t border-green-200 pt-2 mt-2">
+                <span className="text-green-900">Total</span>
+                <span className="text-green-900">${totalCost.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCostVisit(null)}>Cancelar</Button>
+            <Button onClick={handleSaveCosts} disabled={isSavingCosts} className="bg-green-600 hover:bg-green-700">
+              <Save className="h-4 w-4 mr-2" />
+              {isSavingCosts ? "Guardando..." : "Guardar Costos"}
             </Button>
           </DialogFooter>
         </DialogContent>
