@@ -93,21 +93,23 @@ export const eliminar = internalMutation({
 export const buscarClientePorNombre = internalQuery({
   args: { nombre: v.string() },
   handler: async (ctx, args) => {
-    const todos = await ctx.db
-      .query("customers")
-      .filter((q) => q.eq(q.field("active"), true))
-      .collect();
+    if (!args.nombre || args.nombre.trim().length < 3) return null;
 
-    const nombreLower = args.nombre.toLowerCase();
+    // Buscar en TODOS los clientes (sin filtrar por active) para no perder datos
+    const todos = await ctx.db.query("customers").collect();
 
-    // Buscar por similitud: si el nombre del mensaje está contenido en el nombre del cliente
-    // o viceversa (ej: "Chizi" encuentra "Chizito")
-    return todos.find((c) => {
+    const nombreLower = args.nombre.toLowerCase().trim();
+
+    // Prioridad 1: activos
+    const activos = todos.filter((c) => c.active);
+    // Prioridad 2: todos (incluye inactivos como fallback)
+    const candidatos = activos.length > 0 ? activos : todos;
+
+    return candidatos.find((c) => {
       const clienteLower = c.name.toLowerCase();
       return (
         clienteLower.includes(nombreLower) ||
         nombreLower.includes(clienteLower) ||
-        // Comparar iniciales / primeras letras
         clienteLower.startsWith(nombreLower.substring(0, 4))
       );
     }) ?? null;
@@ -122,17 +124,16 @@ export const buscarClientePorTelefono = internalQuery({
     // La base puede tener formatos distintos, intentamos normalizar
     const phoneClean = args.phone.replace(/\D/g, "");
 
-    const todos = await ctx.db
-      .query("customers")
-      .filter((q) => q.eq(q.field("active"), true))
-      .collect();
+    const todos = await ctx.db.query("customers").collect();
 
     return todos.find((c) => {
       const clientePhone = c.phone.replace(/\D/g, "");
+      // Requerir mínimo 7 dígitos para evitar falsos positivos con teléfonos cortos/placeholder
+      const minLen = 7;
       return (
         clientePhone === phoneClean ||
-        phoneClean.endsWith(clientePhone) ||
-        clientePhone.endsWith(phoneClean)
+        (clientePhone.length >= minLen && phoneClean.endsWith(clientePhone)) ||
+        (phoneClean.length >= minLen && clientePhone.endsWith(phoneClean))
       );
     }) ?? null;
   },

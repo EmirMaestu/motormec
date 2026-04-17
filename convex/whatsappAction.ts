@@ -99,6 +99,20 @@ export const handleWhatsApp = httpAction(async (ctx, request) => {
   return new Response("Method Not Allowed", { status: 405 });
 });
 
+// ─── Normalizar número argentino para envío ────────────────────────────────
+// El webhook recibe: 5492612494123 (E.164 con prefijo "9" de celular)
+// La lista de destinatarios de Meta guarda: 54261152494123 (con prefijo "15")
+// Esta función convierte entre ambos formatos
+function normalizarNumeroEnvio(phone: string): string {
+  if (!phone.startsWith("549")) return phone;
+  const sinPais9 = phone.slice(3); // "2612494123" → 10 dígitos
+  // Buenos Aires (11) tiene 8 dígitos locales, el resto tiene 7
+  const localDigits = sinPais9.startsWith("11") ? 8 : 7;
+  const area = sinPais9.slice(0, sinPais9.length - localDigits);
+  const local = sinPais9.slice(sinPais9.length - localDigits);
+  return "54" + area + "15" + local;
+}
+
 // ─── Enviar mensaje de texto por WhatsApp ─────────────────────────────────
 async function enviarMensaje(
   to: string,
@@ -106,6 +120,8 @@ async function enviarMensaje(
   phoneNumberId: string,
   accessToken: string
 ) {
+  const toNormalizado = normalizarNumeroEnvio(to);
+  console.log(`[WhatsApp] Enviando a ${to} → normalizado: ${toNormalizado}`);
   try {
     const res = await fetch(
       `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
@@ -117,7 +133,7 @@ async function enviarMensaje(
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to,
+          to: toNormalizado,
           type: "text",
           text: { body: texto },
         }),
@@ -186,7 +202,7 @@ async function procesarMensaje(
     return;
   }
 
-  // Guardar registro inicial
+  // Guardar registro inicial (idempotente — retorna null si ya fue procesado)
   const historialId = await ctx.runMutation(internal.historialTaller.guardar, {
     whatsappMessageId: msg.id,
     whatsappFrom: from,
@@ -196,6 +212,12 @@ async function procesarMensaje(
     status: "pending",
     createdAt: new Date().toISOString(),
   });
+
+  // Mensaje duplicado — ya fue procesado anteriormente, ignorar
+  if (historialId === null) {
+    console.log(`[WhatsApp] Mensaje ${msg.id} ya procesado, ignorando duplicado`);
+    return;
+  }
 
   // Procesar foto si hay
   const fotoIds: string[] = [];
@@ -261,19 +283,10 @@ async function procesarMensaje(
     fotoIds,
   };
 
-  // ── Buscar cliente en la base de datos ────────────────────────────────
+  // ── Buscar cliente en la base de datos (solo por nombre extraído) ─────
   let clienteEncontrado: { _id: string; name: string; phone: string } | null = null;
 
-  // 1. Buscar por el teléfono del remitente
-  const clientePorTel = await ctx.runQuery(
-    internal.conversaciones.buscarClientePorTelefono,
-    { phone: from }
-  ) as { _id: string; name: string; phone: string } | null;
-
-  if (clientePorTel) {
-    clienteEncontrado = clientePorTel;
-  } else if (datosVehiculo.cliente) {
-    // 2. Buscar por nombre extraído
+  if (datosVehiculo.cliente) {
     const clientePorNombre = await ctx.runQuery(
       internal.conversaciones.buscarClientePorNombre,
       { nombre: datosVehiculo.cliente }
@@ -297,9 +310,12 @@ async function procesarMensaje(
 
     const patente = datosVehiculo.patente || "sin patente";
     const trabajo = datosVehiculo.tarea || "sin especificar";
+    const km = datosVehiculo.kilometraje ? `${datosVehiculo.kilometraje} km` : null;
     await enviarMensaje(
       from,
-      `✅ Recibí el ingreso:\n*${datosVehiculo.marca_modelo}* — ${patente}\n🔧 ${trabajo}\n\n` +
+      `✅ Recibí el ingreso:\n*${datosVehiculo.marca_modelo}* — ${patente}` +
+      (km ? `\n📊 ${km}` : "") +
+      `\n🔧 ${trabajo}\n\n` +
       `Encontré este cliente en la base:\n👤 *${clienteEncontrado.name}*\n📞 ${clienteEncontrado.phone}\n\n` +
       `¿Es este el cliente? Respondé *sí* o *no*`,
       phoneNumberId,
@@ -317,9 +333,12 @@ async function procesarMensaje(
     const patente = datosVehiculo.patente || "sin patente";
     const trabajo = datosVehiculo.tarea || "sin especificar";
     const clienteNombre = datosVehiculo.cliente || "desconocido";
+    const km = datosVehiculo.kilometraje ? `${datosVehiculo.kilometraje} km` : null;
     await enviarMensaje(
       from,
-      `✅ Recibí el ingreso:\n*${datosVehiculo.marca_modelo}* — ${patente}\n🔧 ${trabajo}\n👤 ${clienteNombre} _(nuevo cliente)_\n\n` +
+      `✅ Recibí el ingreso:\n*${datosVehiculo.marca_modelo}* — ${patente}` +
+      (km ? `\n📊 ${km}` : "") +
+      `\n🔧 ${trabajo}\n👤 ${clienteNombre} _(nuevo cliente)_\n\n` +
       `¿Cuál es el *año* del vehículo?`,
       phoneNumberId,
       accessToken
@@ -347,6 +366,19 @@ async function manejarRespuesta(
 ) {
   const etapa = conv.etapa;
   const datos = conv.datos as DatosConversacion;
+
+  // ── Cancelación global en cualquier etapa ──────────────────────────────
+  if (esNegativo(texto) && etapa !== "verificando_cliente") {
+    // En verificando_cliente el "no" significa "ese no es el cliente", no cancelar
+    await ctx.runMutation(internal.conversaciones.eliminar, { phone: from });
+    await enviarMensaje(
+      from,
+      `❌ Registro cancelado. Podés volver a enviar la información cuando quieras.`,
+      phoneNumberId,
+      accessToken
+    );
+    return;
+  }
 
   // ── ETAPA: verificando_cliente ─────────────────────────────────────────
   if (etapa === "verificando_cliente") {
@@ -529,21 +561,26 @@ async function procesarConIA(texto: string): Promise<DatosVehiculo> {
     throw new Error("VPS_URL no configurada en las variables de entorno de Convex");
   }
 
-  const systemPrompt = `Eres un extractor de datos para un taller mecánico.
-El usuario te enviará un mensaje informal con información de un vehículo.
+  const systemPrompt = `Eres un extractor de datos para un taller mecánico argentino.
+El usuario te enviará un mensaje informal con información de un vehículo que ingresa al taller.
 DEBES responder ÚNICAMENTE con un JSON válido, sin texto extra, sin markdown, sin explicaciones.
+
 El JSON debe tener exactamente estos campos:
 {
-  "marca_modelo": "string — marca y modelo del vehículo",
-  "kilometraje": "string — kilometraje numérico o vacío si no se indica",
-  "patente": "string — patente/matrícula del vehículo",
-  "tarea": "string — trabajo o servicio a realizar",
-  "cliente": "string — nombre del cliente o vacío si no se indica"
+  "marca_modelo": "string — marca y modelo completos del vehículo (ej: 'Chevrolet Aveo', 'Ford Focus')",
+  "kilometraje": "string — solo el número del kilometraje, sin texto (ej: '185444')",
+  "patente": "string — patente/matrícula en mayúsculas (ej: 'LWE366', 'AB123CD')",
+  "tarea": "string — descripción COMPLETA y LITERAL del trabajo a realizar, copiando todas las palabras del mensaje original (ej: 'cambio sonda lambda 1', 'reparación falla cilindro n2', 'service 10000 km')",
+  "cliente": "string — nombre propio del cliente (ej: 'Pedro', 'Juan García'). Buscar después de palabras como 'cliente', 'de', 'para'"
 }
-Si un campo no está claro, usa cadena vacía "". NO inventes datos.`;
+
+REGLAS IMPORTANTES:
+- Para "tarea": copiá la descripción del trabajo de forma COMPLETA. NUNCA abrevies ni resumas. Si dice "cambio sonda lambda 1", el valor debe ser "cambio sonda lambda 1", NO solo "cambio".
+- Para "cliente": extraé solo el nombre propio, sin la palabra "cliente".
+- Si un campo no aparece en el mensaje, usá cadena vacía "". NO inventes datos.`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+  const timeoutId = setTimeout(() => controller.abort(), 90_000);
 
   try {
     const response = await fetch(`${vpsUrl}/v1/chat/completions`, {

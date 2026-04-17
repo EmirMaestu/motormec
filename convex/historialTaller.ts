@@ -1,7 +1,7 @@
-import { internalMutation, mutation, query, internalQuery } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-// ─── Mutation interna: guardar nuevo registro (llamada desde el bot) ───────
+// ─── Mutation interna: guardar nuevo registro (idempotente por whatsappMessageId) ─
 export const guardar = internalMutation({
   args: {
     whatsappMessageId: v.string(),
@@ -23,6 +23,15 @@ export const guardar = internalMutation({
     createdAt: v.string(),
   },
   handler: async (ctx, args) => {
+    // Deduplicar: si ya existe un registro con este messageId, retornar el existente
+    const existente = await ctx.db
+      .query("historial_taller")
+      .withIndex("by_message_id", (q) => q.eq("whatsappMessageId", args.whatsappMessageId))
+      .first();
+    if (existente) {
+      console.log(`[historialTaller] Mensaje duplicado ignorado: ${args.whatsappMessageId}`);
+      return null; // señal de "ya procesado"
+    }
     return await ctx.db.insert("historial_taller", args);
   },
 });
