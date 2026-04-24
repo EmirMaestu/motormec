@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git worktree list)",
+      "mcp__Claude_Preview__preview_console_logs",
+      "mcp__Claude_Preview__preview_snapshot",
+      "mcp__Claude_Preview__preview_logs",
+      "mcp__Claude_Preview__preview_network",
+      "mcp__ccd_session__mark_chapter",
+      "mcp__mcp-registry__search_mcp_registry",
+      "mcp__b2d571c1-f2c0-4317-b0b7-0e0f612d8320__get_design_context",
+      "mcp__b2d571c1-f2c0-4317-b0b7-0e0f612d8320__get_metadata",
+      "mcp__b2d571c1-f2c0-4317-b0b7-0e0f612d8320__get_screenshot"
+    ]
+  }
+}

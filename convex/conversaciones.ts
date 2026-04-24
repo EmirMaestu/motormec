@@ -89,6 +89,35 @@ export const eliminar = internalMutation({
   },
 });
 
+// ─── Mutation interna: crear cliente nuevo desde el bot ──────────────────────
+export const crearClienteNuevo = internalMutation({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const nombreLimpio = args.name.trim() || "Sin datos";
+
+    // Si ya existe un cliente activo con exactamente el mismo nombre, reutilizarlo
+    const activos = await ctx.db
+      .query("customers")
+      .filter((q) => q.eq(q.field("active"), true))
+      .collect();
+
+    const existente = activos.find(
+      (c) => c.name.toLowerCase().trim() === nombreLimpio.toLowerCase()
+    );
+    if (existente) return existente._id;
+
+    return await ctx.db.insert("customers", {
+      name: nombreLimpio,
+      phone: "Sin teléfono",
+      createdAt: new Date().toISOString(),
+      active: true,
+      totalVehicles: 0,
+      totalSpent: 0,
+      visitCount: 0,
+    });
+  },
+});
+
 // ─── Query interna: buscar clientes por nombre (búsqueda parcial) ─────────────
 export const buscarClientePorNombre = internalQuery({
   args: { nombre: v.string() },
