@@ -61,7 +61,6 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { Label } from "../ui/label";
-import { VehicleCards } from "../module-cards";
 import { CreatableSelect } from "../ui/creatable-select";
 import DateRangeFilter, { type DateRangeValue } from "../ui/date-range-filter";
 
@@ -2062,11 +2061,11 @@ export default function Vehicles() {
                   </div>
                 </div>
 
-                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <div className="bg-amber-50 dark:bg-amber-950/30 p-4 rounded-lg border border-amber-200 dark:border-amber-900/50">
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
                       <svg
-                        className="h-5 w-5 text-yellow-600"
+                        className="h-5 w-5 text-amber-600 dark:text-amber-400"
                         fill="currentColor"
                         viewBox="0 0 20 20"
                       >
@@ -2078,10 +2077,10 @@ export default function Vehicles() {
                       </svg>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-yellow-800">
+                      <h3 className="text-sm font-medium text-amber-800 dark:text-amber-300">
                         Importante
                       </h3>
-                      <p className="text-sm text-yellow-700 mt-1">
+                      <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
                         Una vez marcado como entregado, el vehículo se moverá al
                         historial y no podrá ser modificado sin cambiar su
                         estado.
@@ -2122,28 +2121,28 @@ export default function Vehicles() {
             </DialogHeader>
             {vehicleToDelete && (
               <div className="space-y-4">
-                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <div className="bg-red-50 dark:bg-red-950/40 p-4 rounded-lg border border-red-200 dark:border-red-900/60">
                   <div className="flex items-center space-x-3">
                     <div className="flex-1">
-                      <h3 className="text-sm font-medium text-red-900">
+                      <h3 className="text-sm font-medium text-red-900 dark:text-red-200">
                         {vehicleToDelete.plate} - {vehicleToDelete.brand}{" "}
                         {vehicleToDelete.model}
                       </h3>
-                      <p className="text-sm text-red-700">
+                      <p className="text-sm text-red-700 dark:text-red-300/90">
                         Cliente: {vehicleToDelete.owner}
                       </p>
-                      <p className="text-sm text-red-700">
+                      <p className="text-sm text-red-700 dark:text-red-300/90">
                         Estado: {vehicleToDelete.status}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <div className="bg-yellow-50 dark:bg-yellow-950/40 p-4 rounded-lg border border-yellow-200 dark:border-yellow-900/60">
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
                       <svg
-                        className="h-5 w-5 text-yellow-600"
+                        className="h-5 w-5 text-yellow-600 dark:text-yellow-400"
                         fill="currentColor"
                         viewBox="0 0 20 20"
                       >
@@ -2155,11 +2154,11 @@ export default function Vehicles() {
                       </svg>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-yellow-800">
+                      <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                         Advertencia
                       </h3>
-                      <p className="text-sm text-yellow-700 mt-1">
-                        Esta acción eliminará permanentemente el vehículo y toda su información asociada. 
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300/90 mt-1">
+                        Esta acción eliminará permanentemente el vehículo y toda su información asociada.
                         Esta acción no se puede deshacer.
                       </p>
                     </div>
@@ -2187,11 +2186,6 @@ export default function Vehicles() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-
-      {/* Cards de Estadísticas Colapsables - Ocultas en móvil */}
-      <div className="hidden md:block">
-        <VehicleCards />
       </div>
 
       {/* Barra de búsqueda + botón Filtros (único para todos los tamaños) */}
@@ -2452,7 +2446,7 @@ export default function Vehicles() {
                         <div className="max-w-64">
                           <div className="flex flex-wrap gap-1 mb-1">
                             {vehicle.services.length > 0 && (
-                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 border border-gray-200 dark:border-zinc-700">
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 border border-gray-200 dark:border-zinc-700 max-w-[180px] truncate block">
                                 {vehicle.services[0]}
                               </span>
                             )}

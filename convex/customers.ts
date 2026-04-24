@@ -331,6 +331,97 @@ export const createOrGetCustomerByName = mutation({
   },
 });
 
+// Unir dos clientes: mueve todos los vehículos, historial y referencias del
+// cliente "source" hacia el "target", y desactiva el source.
+export const mergeCustomers = mutation({
+  args: {
+    sourceCustomerId: v.id("customers"),
+    targetCustomerId: v.id("customers"),
+  },
+  handler: async (ctx, args) => {
+    if (args.sourceCustomerId === args.targetCustomerId) {
+      throw new Error("No se puede unir un cliente consigo mismo");
+    }
+
+    const source = await ctx.db.get(args.sourceCustomerId);
+    const target = await ctx.db.get(args.targetCustomerId);
+
+    if (!source || !target) {
+      throw new Error("Cliente origen o destino no encontrado");
+    }
+
+    // 1) Reasignar vehículos del source al target
+    const sourceVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_customer", (q) => q.eq("customerId", args.sourceCustomerId))
+      .collect();
+
+    for (const vehicle of sourceVehicles) {
+      await ctx.db.patch(vehicle._id, {
+        customerId: args.targetCustomerId,
+        owner: target.name,
+        phone: target.phone,
+      });
+    }
+
+    // 2) Reasignar historial_taller (whatsapp) que apunte al source
+    const historial = await ctx.db
+      .query("historial_taller")
+      .filter((q) => q.eq(q.field("customerId"), args.sourceCustomerId))
+      .collect();
+
+    for (const h of historial) {
+      await ctx.db.patch(h._id, { customerId: args.targetCustomerId });
+    }
+
+    // 3) Consolidar notas: si el source tenía notas y el target no, o
+    //    son distintas, las agregamos al target para no perder info.
+    const mergedNotes = [target.notes, source.notes]
+      .filter((n) => n && n.trim())
+      .join("\n---\n")
+      .trim();
+
+    // 4) Recalcular métricas del target
+    const targetVehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_customer", (q) => q.eq("customerId", args.targetCustomerId))
+      .collect();
+
+    const totalVehicles = targetVehicles.length;
+    const totalSpent = targetVehicles.reduce((sum, v) => sum + v.cost, 0);
+    const lastVisit = targetVehicles.length > 0
+      ? targetVehicles
+          .sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime())[0]
+          .entryDate
+      : target.lastVisit;
+
+    await ctx.db.patch(args.targetCustomerId, {
+      notes: mergedNotes || undefined,
+      email: target.email || source.email,
+      address: target.address || source.address,
+      documentType: target.documentType || source.documentType,
+      documentNumber: target.documentNumber || source.documentNumber,
+      totalVehicles,
+      totalSpent,
+      visitCount: totalVehicles,
+      lastVisit,
+    });
+
+    // 5) Desactivar el source (soft delete). No borramos para conservar
+    //    trazabilidad histórica si alguien consulta transacciones viejas.
+    await ctx.db.patch(args.sourceCustomerId, {
+      active: false,
+      notes: `[Unido en ${new Date().toISOString()} con cliente ${target.name}]\n${source.notes || ""}`.trim(),
+    });
+
+    return {
+      targetCustomerId: args.targetCustomerId,
+      movedVehicles: sourceVehicles.length,
+      movedHistorial: historial.length,
+    };
+  },
+});
+
 // Obtener estadísticas generales de clientes
 export const getCustomersStats = query({
   handler: async (ctx) => {
