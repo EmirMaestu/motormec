@@ -1,0 +1,17 @@
+{
+  "name": "motormec-sync",
+  "version": "1.0.0",
+  "description": "Sync worker: Convex → PostgreSQL",
+  "main": "src/worker.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/worker.js",
+    "once": "node src/worker.js --once"
+  },
+  "dependencies": {
+    "pg": "^8.11.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
