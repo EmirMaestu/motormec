@@ -135,31 +135,28 @@ export const crearVehiculo = internalMutation({
     cost: v.number(),
     description: v.optional(v.string()),
     mileage: v.optional(v.number()),
+    costs: v.optional(v.object({
+      laborCost: v.optional(v.number()),
+      partsCost: v.optional(v.number()),
+      totalCost: v.optional(v.number()),
+    })),
   },
   handler: async (ctx, args) => {
     let customerId = args.customerId;
 
-    // Si no hay customerId, buscar o crear cliente por teléfono
-    if (!customerId && args.phone) {
-      const existingCustomer = await ctx.db
-        .query("customers")
-        .withIndex("by_phone", (q) => q.eq("phone", args.phone))
-        .filter((q) => q.eq(q.field("active"), true))
-        .first();
-
-      if (existingCustomer) {
-        customerId = existingCustomer._id;
-      } else {
-        customerId = await ctx.db.insert("customers", {
-          name: args.owner,
-          phone: args.phone,
-          createdAt: new Date().toISOString(),
-          active: true,
-          totalVehicles: 0,
-          totalSpent: 0,
-          visitCount: 0,
-        });
-      }
+    // Si no hay customerId, crear cliente por nombre (solo si hay nombre válido)
+    // IMPORTANTE: no buscar por teléfono porque args.phone puede ser el número
+    // del mecánico (bot de WhatsApp), no el del cliente del vehículo.
+    if (!customerId && args.owner && args.owner !== "Sin nombre") {
+      customerId = await ctx.db.insert("customers", {
+        name: args.owner,
+        phone: args.phone || "",
+        createdAt: new Date().toISOString(),
+        active: true,
+        totalVehicles: 0,
+        totalSpent: 0,
+        visitCount: 0,
+      });
     }
 
     const isInTaller = args.status !== "Entregado" && args.status !== "Suspendido";
@@ -1385,10 +1382,20 @@ export const searchVehicleByPlate = query({
 export const buscarPorPatente = internalQuery({
   args: { plate: v.string() },
   handler: async (ctx, { plate }) => {
-    const vehicles = await ctx.db
+    // plate llega normalizado (sin espacios ni guiones, mayúsculas)
+    let vehicles = await ctx.db
       .query("vehicles")
       .withIndex("by_plate", (q) => q.eq("plate", plate))
       .collect();
+
+    // Fallback: buscar registros legacy que tengan guiones o espacios
+    // (ej: "IAB-552" o "IAB 552" deben encontrarse al buscar "IAB552")
+    if (vehicles.length === 0) {
+      const todos = await ctx.db.query("vehicles").collect();
+      vehicles = todos.filter(
+        (v) => v.plate.replace(/[\s\-]/g, "").toUpperCase() === plate
+      );
+    }
 
     if (vehicles.length === 0) return null;
 
@@ -1419,12 +1426,25 @@ export const crearNuevaEntrada = internalMutation({
     cost: v.number(),
     mileage: v.optional(v.number()),
     entryDate: v.optional(v.string()),
+    costs: v.optional(v.object({
+      laborCost: v.optional(v.number()),
+      partsCost: v.optional(v.number()),
+      totalCost: v.optional(v.number()),
+    })),
   },
   handler: async (ctx, args) => {
-    const vehicles = await ctx.db
+    // Buscar por placa normalizada; fallback para registros legacy con guiones/espacios
+    let vehicles = await ctx.db
       .query("vehicles")
       .withIndex("by_plate", (q) => q.eq("plate", args.plate))
       .collect();
+
+    if (vehicles.length === 0) {
+      const todos = await ctx.db.query("vehicles").collect();
+      vehicles = todos.filter(
+        (v) => v.plate.replace(/[\s\-]/g, "").toUpperCase() === args.plate
+      );
+    }
 
     if (vehicles.length === 0) {
       throw new Error(`No se encontró vehículo con placa ${args.plate}`);
@@ -1448,6 +1468,7 @@ export const crearNuevaEntrada = internalMutation({
       entryDate,
       services: args.services,
       cost: args.cost,
+      costs: args.costs,
       mileage: args.mileage,
       inTaller: true,
       lastUpdated: new Date().toISOString(),
