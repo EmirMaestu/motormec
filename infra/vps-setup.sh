@@ -51,9 +51,24 @@ while ss -tlnp 2>/dev/null | grep -q ":${API_PORT} "; do API_PORT=$((API_PORT+1)
 ok "Puerto para la API Momec: $API_PORT"
 
 echo
-warn "Voy a: instalar lo que falte (node/postgres), crear DB '$PGDB' + usuario '$PGUSER',"
-warn "crear el usuario de sistema '$SVC_USER', clonar en $APP_DIR, configurar systemd y"
-warn "publicar la web. NO toco tu proyecto existente, ni tu proxy, ni tu base."
+c "Plan (lo que haría)"
+cat <<EOF
+  · Instalar (si faltan): node 22, postgres, git/curl.
+  · Crear base '$PGDB' + usuario '$PGUSER' (no toca otras bases).
+  · Crear usuario de sistema '$SVC_USER' y clonar el repo en $APP_DIR.
+  · Escribir $APP_DIR/apps/api/.env (API en puerto $API_PORT, HOST 127.0.0.1).
+  · Build + migraciones + publicar web en $WEB_ROOT.
+  · systemd 'motormec-api' + vhost de $MOMEC_DOMAIN en tu proxy ($PROXY), aditivo.
+  NO toca tu proyecto existente, ni su proxy, ni sus bases.
+EOF
+
+if [ "${MOMEC_DRYRUN:-0}" = "1" ]; then
+  echo
+  ok "DRY-RUN: no cambié nada. Volvé a correr SIN MOMEC_DRYRUN=1 para aplicar."
+  exit 0
+fi
+
+echo
 read -r -p "¿Continuar? [y/N] " GO; [ "${GO,,}" = "y" ] || die "Cancelado."
 
 # ---------------------------------------------------------------- deps ------
