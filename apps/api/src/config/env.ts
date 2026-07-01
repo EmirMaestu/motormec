@@ -64,8 +64,10 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().default(""),
   // Modelo para EXTRAER datos (mensajes cortos del bot): rápido y barato.
   CLAUDE_MODEL_PARSER: z.string().default("claude-haiku-4-5"),
-  // Modelo para el AGENTE (interpretar comandos editar/borrar, razonar): más capaz.
-  CLAUDE_MODEL_AGENT: z.string().default("claude-opus-4-8"),
+  // Modelo para el AGENTE (tool-use + razonamiento): capaz pero con costo medido.
+  // Sonnet 4.6 ($3/$15) es el balance; subir a claude-opus-4-8 si se quiere más
+  // capacidad, o bajar a claude-haiku-4-5 para ahorrar (menos preciso en tools).
+  CLAUDE_MODEL_AGENT: z.string().default("claude-sonnet-4-6"),
 
   MEDIA_ROOT: z.string().default("./media"),
 
