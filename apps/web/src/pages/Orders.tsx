@@ -5,6 +5,7 @@ import { api, qs } from "@/lib/api";
 import { useAuth } from "@/auth";
 import { useToast } from "@/components/toast";
 import { Modal } from "@/components/Modal";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CardRow, DataList } from "@/components/DataList";
 import {
   BrandModelSelect,
@@ -412,6 +413,7 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
   const [labor, setLabor] = useState("");
   const [notes, setNotes] = useState("");
   const [estimated, setEstimated] = useState("");
+  const [confirmKind, setConfirmKind] = useState<null | "cancel" | "delete">(null);
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["order", id] });
   const closeable = order && order.status !== "Entregado" && order.status !== "Cancelado";
@@ -480,6 +482,7 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
   });
 
   return (
+   <>
     <Modal
       open
       onOpenChange={(v) => !v && onClose()}
@@ -496,12 +499,7 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
           </>
         ) : closeable ? (
           <>
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (confirm(`¿Cancelar la orden #${order.number}?`)) cancelOrder.mutate();
-              }}
-            >
+            <Button variant="danger" onClick={() => setConfirmKind("cancel")}>
               Cancelar orden
             </Button>
             <Button onClick={() => finalize.mutate()} disabled={finalize.isPending}>
@@ -511,10 +509,7 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
         ) : isAdmin ? (
           <Button
             variant="danger"
-            onClick={() => {
-              if (confirm(`¿Borrar la orden #${order.number}? Se elimina definitivamente.`))
-                deleteOrder.mutate();
-            }}
+            onClick={() => setConfirmKind("delete")}
             disabled={deleteOrder.isPending}
           >
             <Trash2 size={15} /> Borrar orden
@@ -634,5 +629,26 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
         </div>
       )}
     </Modal>
+
+    <ConfirmDialog
+      open={confirmKind !== null}
+      title={confirmKind === "delete" ? "Borrar orden" : "Cancelar orden"}
+      message={
+        confirmKind === "delete"
+          ? `¿Borrar la orden #${order?.number}? Se elimina definitivamente y no queda en el historial.`
+          : `¿Cancelar la orden #${order?.number}? Queda registrada como Cancelado en el historial.`
+      }
+      confirmLabel={confirmKind === "delete" ? "Borrar" : "Cancelar orden"}
+      cancelLabel="Volver"
+      danger
+      loading={confirmKind === "delete" ? deleteOrder.isPending : cancelOrder.isPending}
+      onConfirm={() => {
+        if (confirmKind === "delete") deleteOrder.mutate();
+        else cancelOrder.mutate();
+        setConfirmKind(null);
+      }}
+      onCancel={() => setConfirmKind(null)}
+    />
+   </>
   );
 }

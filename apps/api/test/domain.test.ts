@@ -154,6 +154,67 @@ describe("Phase 2 domain flows", () => {
     expect(ingresos[0].category).toBe("Frenos");
   });
 
+  it("creating a vehicle from the web also creates a Work Order (shows in Órdenes)", async () => {
+    const v = (
+      await app.inject({
+        method: "POST",
+        url: "/api/vehicles",
+        headers: { cookie: adminCookie, ...J },
+        payload: { plate: "ORD777", brand: "VW", model: "Gol", cost: 12000, services: ["Service"] },
+      })
+    ).json().vehicle;
+
+    const orders = (
+      await app.inject({ method: "GET", url: "/api/orders", headers: { cookie: adminCookie } })
+    ).json().orders;
+    expect(orders).toHaveLength(1);
+    expect(orders[0].vehicleId).toBe(v.id);
+    expect(orders[0].total).toBe(12000);
+    expect(orders[0].services).toEqual(["Service"]);
+  });
+
+  it("reverting a delivered vehicle to En Reparación reopens the order and reverses income", async () => {
+    const v = (
+      await app.inject({
+        method: "POST",
+        url: "/api/vehicles",
+        headers: { cookie: adminCookie, ...J },
+        payload: { plate: "BACK55", cost: 40000, services: ["Motor"] },
+      })
+    ).json().vehicle;
+
+    // Entregar → ingreso 40000.
+    await app.inject({
+      method: "PATCH",
+      url: `/api/vehicles/${v.id}`,
+      headers: { cookie: adminCookie, ...J },
+      payload: { status: "Entregado" },
+    });
+    let summary = (
+      await app.inject({ method: "GET", url: "/api/transactions/summary", headers: { cookie: adminCookie } })
+    ).json();
+    expect(summary.totalIngresos).toBe(40000);
+
+    // Devolver a En Reparación → orden reabierta e ingreso revertido.
+    await app.inject({
+      method: "PATCH",
+      url: `/api/vehicles/${v.id}`,
+      headers: { cookie: adminCookie, ...J },
+      payload: { status: "En Reparación" },
+    });
+
+    const orders = (
+      await app.inject({ method: "GET", url: "/api/orders", headers: { cookie: adminCookie } })
+    ).json().orders;
+    expect(orders[0].status).toBe("En reparación");
+    expect(orders[0].finalizedAt).toBeFalsy();
+
+    summary = (
+      await app.inject({ method: "GET", url: "/api/transactions/summary", headers: { cookie: adminCookie } })
+    ).json();
+    expect(summary.totalIngresos).toBe(0);
+  });
+
   it("products: create + update log inventory movements and compute lowStock", async () => {
     const created = (
       await app.inject({

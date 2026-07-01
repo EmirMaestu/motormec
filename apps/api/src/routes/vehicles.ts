@@ -213,7 +213,7 @@ export async function vehicleRoutes(app: FastifyInstance): Promise<void> {
     const vehicle = await V.createVehicle(
       tenantDb,
       { userId: auth.userId, userName: auth.userName },
-      { ...parsed.data, responsibles: parsed.data.responsibles as never },
+      { ...parsed.data, responsibles: parsed.data.responsibles as never, withOrder: true },
     );
     return reply.code(201).send({ vehicle });
   });

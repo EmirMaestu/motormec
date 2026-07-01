@@ -5,6 +5,7 @@ import { api, qs } from "@/lib/api";
 import { useAuth } from "@/auth";
 import { useToast } from "@/components/toast";
 import { Modal } from "@/components/Modal";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CardRow, DataList } from "@/components/DataList";
 import {
   BrandModelSelect,
@@ -28,6 +29,7 @@ export function VehiclesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<Vehicle | null>(null);
 
   const [detailId, setDetailId] = useState<string | null>(null);
 
@@ -110,13 +112,7 @@ export function VehiclesPage() {
           </Button>
         )}
         {isAdmin ? (
-          <Button
-            size="sm"
-            variant="danger"
-            onClick={() => {
-              if (confirm(`¿Eliminar ${v.plate}?`)) remove.mutate(v.id);
-            }}
-          >
+          <Button size="sm" variant="danger" onClick={() => setConfirmDelete(v)}>
             <Trash2 size={14} />
           </Button>
         ) : null}
@@ -206,6 +202,21 @@ export function VehiclesPage() {
         />
       ) : null}
       {detailId ? <VehicleDetailModal id={detailId} onClose={() => setDetailId(null)} /> : null}
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="Eliminar vehículo"
+        message={`¿Eliminar ${confirmDelete?.plate} (${confirmDelete?.brand} ${confirmDelete?.model})? Se borra el vehículo y sus órdenes. Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        cancelLabel="Volver"
+        danger
+        loading={remove.isPending}
+        onConfirm={() => {
+          if (confirmDelete) remove.mutate(confirmDelete.id);
+          setConfirmDelete(null);
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 }

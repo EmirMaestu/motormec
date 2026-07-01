@@ -15,7 +15,7 @@ import {
 import { categorizeService } from "./categorize.js";
 import { recalcCustomerMetrics } from "./customerMetrics.js";
 import { logVehicleMovement, type Actor } from "./movements.js";
-import { finalizeOrder } from "./orders.js";
+import { createOrderForVehicle, finalizeOrder, reopenOrder } from "./orders.js";
 
 const DELIVERED = "Entregado";
 const SUSPENDED = "Suspendido";
@@ -44,6 +44,17 @@ async function syncOrderAndFinance(
     (a, b) => b.number - a.number,
   );
   const latest = orders[0];
+
+  // El vehículo volvió a un estado de trabajo pero su orden estaba entregada:
+  // corrección → reabrir la orden y revertir el ingreso de la entrega.
+  if (
+    vehicle.status !== DELIVERED &&
+    latest &&
+    (latest.status === "Entregado" || latest.finalizedAt)
+  ) {
+    await reopenOrder(tdb, actor, latest.id, VEH_TO_ORDER[vehicle.status] ?? "En reparación");
+    return;
+  }
 
   if (vehicle.status === DELIVERED) {
     if (latest && !latest.finalizedAt) {
@@ -132,11 +143,14 @@ export interface CreateVehicleInput {
   description?: string | null;
   mileage?: number | null;
   responsibles?: VehicleResponsible[];
+  /** Also create a linked Work Order so the vehicle appears in Órdenes. */
+  withOrder?: boolean;
 }
 
 /**
  * Create a vehicle. If no customerId is given but a phone is, link/create the
  * customer by phone. Logs a `created` movement and recomputes customer metrics.
+ * When `withOrder` is set, also creates the linked Work Order (Órdenes).
  */
 export async function createVehicle(
   tdb: TenantDb,
@@ -194,6 +208,16 @@ export async function createVehicle(
     description: "Vehículo ingresado",
     details: { newData: vehicle },
   });
+
+  // Cada ingreso genera su Orden de trabajo (para que aparezca en Órdenes).
+  if (input.withOrder) {
+    await createOrderForVehicle(tdb, vehicle, {
+      services: input.services ?? [],
+      laborCost: input.cost ?? 0,
+      mileage: input.mileage ?? null,
+      status: VEH_TO_ORDER[status] ?? "Pendiente",
+    });
+  }
 
   if (customerId) await recalcCustomerMetrics(tdb, customerId);
   return vehicle;
@@ -532,6 +556,7 @@ export async function createNewEntryForPlate(
     description: input.description ?? null,
     mileage: input.mileage ?? null,
     responsibles: input.responsibles ?? [],
+    withOrder: true,
   });
 }
 

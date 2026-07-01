@@ -7,6 +7,7 @@ import {
   vehicles,
   workOrders,
   type OrderPart,
+  type Vehicle,
   type WorkOrder,
 } from "../db/schema.js";
 import { categorizeService } from "./categorize.js";
@@ -278,6 +279,108 @@ export async function finalizeOrder(
   }
 
   return { order: finalized ?? order, warnings };
+}
+
+/**
+ * Create the initial work order for a freshly-created vehicle so it shows up in
+ * Órdenes. Used by the web "Nuevo vehículo" form and by returning-plate entries.
+ */
+export async function createOrderForVehicle(
+  tdb: TenantDb,
+  vehicle: Vehicle,
+  input: {
+    services?: string[];
+    laborCost?: number;
+    mileage?: number | null;
+    status?: WorkOrder["status"];
+    entryDate?: string;
+  },
+): Promise<WorkOrder> {
+  const laborCost = input.laborCost ?? 0;
+  const { partsCost, total } = computeTotals([], laborCost);
+  const customer = vehicle.customerId ? await tdb.findById(customers, vehicle.customerId) : null;
+  return tdb.insertOne(workOrders, {
+    number: await nextNumber(tdb),
+    vehicleId: vehicle.id,
+    customerId: vehicle.customerId ?? null,
+    vehiclePlate: vehicle.plate,
+    vehicleInfo: `${vehicle.brand} ${vehicle.model}`.trim(),
+    customerName: customer?.name ?? vehicle.owner ?? "",
+    status: input.status ?? "Pendiente",
+    services: input.services ?? [],
+    parts: [],
+    laborCost,
+    partsCost,
+    total,
+    mileage: input.mileage ?? null,
+    entryDate: input.entryDate ?? vehicle.entryDate,
+    estimatedDate: null,
+  });
+}
+
+/**
+ * Reopen a delivered order (correction — e.g. the vehicle was marked delivered by
+ * mistake and returned to the shop). Restores any stock deducted at delivery,
+ * reverses the delivery income, and clears the finalized markers.
+ */
+export async function reopenOrder(
+  tdb: TenantDb,
+  actor: Actor,
+  id: string,
+  targetStatus: WorkOrder["status"] = "En reparación",
+): Promise<WorkOrder | null> {
+  const order = await tdb.findById(workOrders, id);
+  if (!order) return null;
+
+  // 1. Restore stock deducted at delivery.
+  if (order.finalizedAt) {
+    for (const part of order.parts) {
+      if (!part.fromInventory || !part.productId) continue;
+      const product = await tdb.findById(products, part.productId);
+      if (!product) continue;
+      const newQty = product.quantity + part.quantity;
+      await tdb.updateById(products, product.id, {
+        quantity: newQty,
+        lowStock: newQty <= product.reorderPoint,
+        updatedAt: new Date(),
+      });
+      await logInventoryMovement(tdb, actor, {
+        productId: product.id,
+        productName: product.name,
+        productType: product.type,
+        movementType: "stock_increase",
+        previousQuantity: product.quantity,
+        newQuantity: newQty,
+        quantityChange: part.quantity,
+        reason: `Reapertura orden #${order.number}`,
+      });
+    }
+  }
+
+  // 2. Reverse the delivery income (deactivate the active income for this vehicle).
+  if (order.vehicleId) {
+    const income = await tdb.selectOne(
+      transactions,
+      and(
+        eq(transactions.vehicleId, order.vehicleId),
+        eq(transactions.type, "Ingreso"),
+        eq(transactions.active, true),
+      ),
+    );
+    if (income) {
+      await tdb.updateById(transactions, income.id, { active: false, updatedAt: new Date() });
+    }
+  }
+
+  // 3. Reopen the order.
+  const reopened = await tdb.updateById(workOrders, id, {
+    status: targetStatus,
+    finalizedAt: null,
+    deliveryDate: null,
+    updatedAt: new Date(),
+  });
+  if (order.customerId) await recalcCustomerMetrics(tdb, order.customerId);
+  return reopened ?? order;
 }
 
 /** All orders for a vehicle, newest first (full history). */
