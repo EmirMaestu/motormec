@@ -61,6 +61,21 @@ export interface BotDeps {
   };
   /** Nombre del taller, para personalizar el saludo (opcional). */
   tallerNombre?: string;
+  /**
+   * Redactor natural (opcional). Reescribe un mensaje base con tono humano sin
+   * cambiar los datos. Si no se provee, se usa el texto base tal cual.
+   */
+  redactar?: (base: string) => Promise<string>;
+}
+
+/** Reescribe `base` en tono natural si hay redactor; si no, devuelve `base`. */
+async function natural(deps: BotDeps, base: string): Promise<string> {
+  if (!deps.redactar) return base;
+  try {
+    return (await deps.redactar(base)) || base;
+  } catch {
+    return base;
+  }
 }
 
 interface ConvDatos extends Partial<DatosVehiculo> {
@@ -301,11 +316,12 @@ export async function procesarMensaje(
     const hayDatos = Boolean(datos.patente || datos.marca_modelo || datos.tarea);
     const intent = datos.intencion ?? (hayDatos ? "ingreso" : "saludo");
     if (intent === "consulta") {
-      await deps.send(from, await responderConsulta(tdb, datos));
+      const base = await responderConsulta(tdb, datos);
+      await deps.send(from, await natural(deps, base));
       return "consulta";
     }
     if (intent !== "ingreso" || !hayDatos) {
-      await deps.send(from, saludoAyuda(deps.tallerNombre));
+      await deps.send(from, await natural(deps, saludoAyuda(deps.tallerNombre)));
       return "saludo";
     }
 
@@ -446,7 +462,10 @@ export async function procesarMensaje(
       await tdb.deleteById(conversaciones, conv.id);
       await deps.send(
         from,
-        `✅ ¡Vehículo registrado! Patente ${(datos.patente ?? "").toUpperCase() || "—"}. Gracias.`,
+        await natural(
+          deps,
+          `✅ ¡Vehículo registrado! Patente ${(datos.patente ?? "").toUpperCase() || "—"}. Gracias.`,
+        ),
       );
       return "registered";
     }

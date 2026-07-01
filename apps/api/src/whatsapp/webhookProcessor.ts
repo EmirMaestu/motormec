@@ -13,6 +13,7 @@ import {
   type SendCtx,
 } from "./client.js";
 import { extraerDatosVehiculo } from "./parser.js";
+import { redactarNatural } from "./responder.js";
 import { sameNumber } from "./phone.js";
 import { procesarMensaje, type BotDeps, type WAMessage } from "./stateMachine.js";
 
@@ -31,6 +32,11 @@ function makeDeps(ctx: SendCtx, tenantId: string, plan: string, tallerNombre: st
     downloadMedia: (mediaId) => descargarMedia(ctx, mediaId),
     storage,
     tallerNombre,
+    redactar: async (base) => {
+      const r = await redactarNatural(base);
+      await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
+      return r.texto;
+    },
     iaQuota: {
       check: async () => withinLimit(await getIaUsage(tenantId), maxIa),
       tick: async () => {
