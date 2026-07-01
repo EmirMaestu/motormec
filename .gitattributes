@@ -1,0 +1,16 @@
+# Normalize line endings so shell scripts and unit files never ship CRLF to Linux.
+* text=auto eol=lf
+
+# Explicitly LF for files executed on the server.
+*.sh            text eol=lf
+*.service       text eol=lf
+*.timer         text eol=lf
+Caddyfile       text eol=lf
+
+# Binary assets (leave untouched).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
