@@ -309,6 +309,8 @@ export async function deleteVehicle(
 ): Promise<Vehicle | null> {
   const existing = await tdb.findById(vehicles, id);
   if (!existing) return null;
+  // Borrar también las órdenes de este vehículo (si no, quedan en Órdenes).
+  await tdb.delete(workOrders, eq(workOrders.vehicleId, id));
   const removed = await tdb.deleteById(vehicles, id);
   if (!removed) return null;
   await logVehicleMovement(tdb, actor, {

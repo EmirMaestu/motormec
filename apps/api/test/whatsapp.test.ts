@@ -286,6 +286,12 @@ describe("WhatsApp bot — comandos (editar/borrar)", () => {
     expect(sent.join(" ")).toMatch(/cancelada/i);
   });
 
+  it("crea el cliente a partir del nombre al cargar (createOrder)", async () => {
+    await createOrder(tdb, actor, { plate: "CUST111", customerName: "Cristián Test" });
+    const cs = await tdb.select(customers);
+    expect(cs.some((c) => c.name === "Cristián Test")).toBe(true);
+  });
+
   it("cambia el estado por chat", async () => {
     const order = await createOrder(tdb, actor, { plate: "CMD222" });
     const { deps } = fakeDeps(EMPTY);

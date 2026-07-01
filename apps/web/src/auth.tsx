@@ -44,9 +44,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await queryClient.invalidateQueries();
     },
     logout: async () => {
-      await api.post("/api/logout");
-      queryClient.clear();
-      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      try {
+        await api.post("/api/logout");
+      } finally {
+        queryClient.clear();
+        // Reset duro para salir de la sesión sin depender de un refetch.
+        window.location.href = "/app/";
+      }
     },
   };
 

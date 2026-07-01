@@ -80,8 +80,19 @@ export async function createOrder(
     }
   }
 
-  // Resolve customer (prefer explicit, else the vehicle's).
-  const customerId = input.customerId ?? vehicle?.customerId ?? null;
+  // Resolve customer (prefer explicit, else the vehicle's; else create by name).
+  let customerId = input.customerId ?? vehicle?.customerId ?? null;
+  if (!customerId && input.customerName && input.customerName.trim()) {
+    const nombre = input.customerName.trim();
+    const todos = await tdb.select(customers);
+    const found = todos.find((c) => c.name.toLowerCase() === nombre.toLowerCase());
+    const cust = found ?? (await tdb.insertOne(customers, { name: nombre, phone: input.phone ?? "" }));
+    customerId = cust.id;
+    // Vincular el cliente al vehículo si no tenía.
+    if (vehicle && !vehicle.customerId) {
+      await tdb.updateById(vehicles, vehicle.id, { customerId, updatedAt: new Date() });
+    }
+  }
   const customer = customerId ? await tdb.findById(customers, customerId) : null;
 
   const parts = input.parts ?? [];

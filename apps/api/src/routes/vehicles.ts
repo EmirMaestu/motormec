@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq, gte, lte, ilike, or } from "drizzle-orm";
 import { z } from "zod";
-import { customers, vehicles } from "../db/schema.js";
+import { customers, historialTaller, vehicles, workOrders } from "../db/schema.js";
 import { authed, requireAuth, requireRole } from "../auth/middleware.js";
 import * as V from "../domain/vehicles.js";
 
@@ -187,6 +187,23 @@ export async function vehicleRoutes(app: FastifyInstance): Promise<void> {
       ? await tenantDb.findById(customers, vehicle.customerId)
       : null;
     return reply.send({ vehicle, customer });
+  });
+
+  // Detalle del vehículo: info + cliente + órdenes (historial) + fotos.
+  app.get("/api/vehicles/:id/detail", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb } = authed(request);
+    const { id } = request.params as { id: string };
+    const vehicle = await tenantDb.findById(vehicles, id);
+    if (!vehicle) return reply.code(404).send({ error: "not_found" });
+    const customer = vehicle.customerId
+      ? await tenantDb.findById(customers, vehicle.customerId)
+      : null;
+    const orders = (await tenantDb.select(workOrders, eq(workOrders.vehicleId, id))).sort(
+      (a, b) => b.number - a.number,
+    );
+    const hist = await tenantDb.select(historialTaller, eq(historialTaller.vehicleId, id));
+    const photos = hist.flatMap((h) => h.fotoPaths ?? []);
+    return reply.send({ vehicle, customer, orders, photos });
   });
 
   app.post("/api/vehicles", { preHandler: requireAuth }, async (request, reply) => {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Plus, Trash2 } from "lucide-react";
-import { api, qs } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useAuth } from "@/auth";
 import { useToast } from "@/components/toast";
 import { Modal } from "@/components/Modal";
@@ -29,9 +29,11 @@ export function VehiclesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
 
+  const [detailId, setDetailId] = useState<string | null>(null);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["vehicles", statusFilter],
-    queryFn: () => api.get<{ vehicles: Vehicle[] }>("/api/vehicles" + qs({ status: statusFilter })),
+    queryKey: ["vehicles"],
+    queryFn: () => api.get<{ vehicles: Vehicle[] }>("/api/vehicles"),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["vehicles"] });
@@ -69,11 +71,15 @@ export function VehiclesPage() {
   });
 
   const filtered = useMemo(() => {
-    const list = data?.vehicles ?? [];
+    let list = data?.vehicles ?? [];
+    if (statusFilter) list = list.filter((v) => v.status === statusFilter);
     const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((v) => [v.plate, v.brand, v.model, v.owner].join(" ").toLowerCase().includes(q));
-  }, [data, search]);
+    if (q)
+      list = list.filter((v) =>
+        [v.plate, v.brand, v.model, v.owner].join(" ").toLowerCase().includes(q),
+      );
+    return list;
+  }, [data, statusFilter, search]);
 
   const StatusSelect = ({ v }: { v: Vehicle }) => (
     <select
@@ -155,6 +161,7 @@ export function VehiclesPage() {
         items={filtered}
         loading={isLoading}
         keyOf={(v) => v.id}
+        onRowClick={(v) => setDetailId(v.id)}
         rowClassName={(v) =>
           v.status === "Entregado" ? "bg-deep-forest/[0.05] text-charcoal" : undefined
         }
@@ -198,7 +205,111 @@ export function VehiclesPage() {
           }}
         />
       ) : null}
+      {detailId ? <VehicleDetailModal id={detailId} onClose={() => setDetailId(null)} /> : null}
     </div>
+  );
+}
+
+interface VehicleDetail {
+  vehicle: Vehicle;
+  customer: { name: string; phone: string } | null;
+  orders: Array<{
+    id: string;
+    number: number;
+    status: string;
+    total: number;
+    services: string[];
+    entryDate: string;
+  }>;
+  photos: string[];
+}
+
+function VehicleDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
+  const { data } = useQuery({
+    queryKey: ["vehicle-detail", id],
+    queryFn: () => api.get<VehicleDetail>(`/api/vehicles/${id}/detail`),
+  });
+  const v = data?.vehicle;
+
+  return (
+    <Modal open onOpenChange={(o) => !o && onClose()} title={v ? v.plate : "Vehículo"}>
+      {!v ? (
+        <div className="py-8 text-center text-charcoal">Cargando…</div>
+      ) : (
+        <div className="space-y-5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="font-display text-[20px] text-deep-forest">
+                {`${v.brand} ${v.model}`.trim() || "—"}
+              </div>
+              <div className="text-[13px] text-charcoal">
+                {v.owner || "Sin dueño"}
+                {data?.customer?.phone ? ` · ${data.customer.phone}` : ""}
+              </div>
+            </div>
+            <Badge tone={v.status}>{v.status}</Badge>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 text-[13px]">
+            <div>
+              <div className="eyebrow">Kilometraje</div>
+              <div className="text-deep-forest">{v.mileage ? `${v.mileage.toLocaleString("es-AR")} km` : "—"}</div>
+            </div>
+            <div>
+              <div className="eyebrow">Costo</div>
+              <div className="text-deep-forest">{formatCurrency(v.cost)}</div>
+            </div>
+            <div>
+              <div className="eyebrow">Ingreso</div>
+              <div className="text-deep-forest">{formatDate(v.entryDate)}</div>
+            </div>
+          </div>
+
+          {/* Órdenes (historial de trabajo) */}
+          <div className="border-t border-black/10 pt-4">
+            <div className="eyebrow mb-2">Órdenes de este vehículo</div>
+            {(data?.orders.length ?? 0) === 0 ? (
+              <p className="text-[13px] text-charcoal">Sin órdenes cargadas.</p>
+            ) : (
+              <div className="space-y-2">
+                {data!.orders.map((o) => (
+                  <div key={o.id} className="rounded-[12px] bg-pale-sage px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[14px] font-medium text-deep-forest">Orden #{o.number}</span>
+                      <Badge tone={o.status}>{o.status}</Badge>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[12px] text-charcoal">
+                      <span className="truncate">{o.services.join(", ") || "sin servicios"}</span>
+                      <span className="shrink-0">{formatCurrency(o.total)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Fotos */}
+          <div className="border-t border-black/10 pt-4">
+            <div className="eyebrow mb-2">Fotos {data?.photos.length ? `(${data.photos.length})` : ""}</div>
+            {(data?.photos.length ?? 0) === 0 ? (
+              <p className="text-[13px] text-charcoal">Sin fotos todavía.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {data!.photos.map((p) => (
+                  <a key={p} href={`/api/media/${p}`} target="_blank" rel="noreferrer">
+                    <img
+                      src={`/api/media/${p}`}
+                      alt="Foto del vehículo"
+                      className="h-24 w-full rounded-[8px] object-cover"
+                    />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
