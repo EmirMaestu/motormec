@@ -31,7 +31,7 @@ function LogoUploader({ currentPath }: { currentPath?: string }) {
         </span>
         <div>
           <div className="font-medium text-deep-forest">Logo del taller</div>
-          <div className="text-[13px] text-charcoal">Se usa en los presupuestos (PNG, JPG o SVG)</div>
+          <div className="text-[13px] text-charcoal">Se usa en los presupuestos (PNG o JPG)</div>
         </div>
       </div>
       <div className="flex items-center gap-4">
@@ -46,7 +46,7 @@ function LogoUploader({ currentPath }: { currentPath?: string }) {
           <ImageUp size={15} /> {upload.isPending ? "Subiendo…" : "Subir logo"}
           <input
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            accept="image/png,image/jpeg,image/webp"
             className="hidden"
             disabled={upload.isPending}
             onChange={(e) => {

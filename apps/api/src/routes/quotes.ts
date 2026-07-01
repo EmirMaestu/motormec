@@ -24,11 +24,12 @@ const createSchema = z.object({
   validUntil: z.string().max(40).optional(),
 });
 
+// SVG excluido a propósito: un SVG puede llevar scripts (XSS si se abre directo)
+// y pdf-lib no lo puede embeber en el PDF. Solo rasterizados.
 const IMG_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
-  "image/svg+xml": "svg",
 };
 
 export async function quoteRoutes(app: FastifyInstance): Promise<void> {
@@ -69,7 +70,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       const { auth } = authed(request);
       const parsed = z.object({ image: z.string().min(16) }).safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
-      const match = /^data:(image\/(?:jpeg|png|webp|svg\+xml));base64,(.+)$/.exec(parsed.data.image);
+      const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(parsed.data.image);
       if (!match) return reply.code(400).send({ error: "invalid_image" });
       const ext = IMG_EXT[match[1]!] ?? "png";
       const bytes = Buffer.from(match[2]!, "base64");

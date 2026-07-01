@@ -8,6 +8,7 @@ import { resetDb } from "./helpers.js";
 let app: FastifyInstance;
 let adminCookie: string;
 let mechCookie: string;
+let tenantId: string;
 
 beforeAll(async () => {
   app = await buildApp();
@@ -31,6 +32,7 @@ async function loginAs(slug: string, username: string, password: string) {
 beforeEach(async () => {
   await resetDb();
   const t = await createTenant({ name: "Taller A", slug: "taller-a" });
+  tenantId = t.id;
   await createUser({
     tenantId: t.id, name: "Dueño", username: "admin", password: "secret123", role: "admin",
   });
@@ -295,6 +297,28 @@ describe("Phase 2 domain flows", () => {
     ).json().quotes;
     expect(list).toHaveLength(1);
     expect(list[0].customerName).toBe("Juan");
+  });
+
+  it("blocks cross-tenant media access (prefix + path traversal)", async () => {
+    // Otro prefijo de tenant → 403.
+    const other = await app.inject({
+      method: "GET",
+      url: "/api/media/00000000-0000-0000-0000-000000000000/hist/x.jpg",
+      headers: { cookie: adminCookie },
+    });
+    expect(other.statusCode).toBe(403);
+
+    // Traversal desde el propio prefijo hacia otro tenant → 403 (no 200/404).
+    const traversal = await app.inject({
+      method: "GET",
+      url: `/api/media/${tenantId}/..%2f00000000-0000-0000-0000-000000000000/hist/x.jpg`,
+      headers: { cookie: adminCookie },
+    });
+    expect(traversal.statusCode).toBe(403);
+
+    // Sin sesión → 401.
+    const anon = await app.inject({ method: "GET", url: `/api/media/${tenantId}/hist/x.jpg` });
+    expect(anon.statusCode).toBe(401);
   });
 
   it("products: create + update log inventory movements and compute lowStock", async () => {

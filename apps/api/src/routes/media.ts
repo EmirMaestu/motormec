@@ -20,15 +20,27 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
     const { auth } = authed(request);
     const relative = (request.params as Record<string, string>)["*"] ?? "";
 
-    // Enforce tenant ownership: path must start with "<tenantId>/".
-    if (!relative.startsWith(`${auth.tenantId}/`)) {
+    // Enforce tenant ownership: path must start with "<tenantId>/" AND contain no
+    // traversal — else "<myTenant>/../<otherTenant>/x.jpg" passes the prefix
+    // check and resolves into another tenant's folder (cross-tenant leak).
+    if (
+      relative.includes("..") ||
+      relative.includes("\\") ||
+      !relative.startsWith(`${auth.tenantId}/`)
+    ) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
     try {
       const bytes = await localDisk.read(relative);
       const type = CONTENT_TYPES[extname(relative).toLowerCase()] ?? "application/octet-stream";
-      return reply.type(type).send(bytes);
+      // Defense-in-depth: no MIME sniffing + neutralize active content (e.g. a
+      // malicious uploaded SVG) if the media URL is opened directly.
+      return reply
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+        .type(type)
+        .send(bytes);
     } catch {
       return reply.code(404).send({ error: "not_found" });
     }
