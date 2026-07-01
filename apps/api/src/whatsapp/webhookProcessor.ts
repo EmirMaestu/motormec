@@ -18,7 +18,7 @@ import { procesarMensaje, type BotDeps, type WAMessage } from "./stateMachine.js
 
 const SUPPORTED = new Set(["text", "image", "interactive"]);
 
-function makeDeps(ctx: SendCtx, tenantId: string, plan: string): BotDeps {
+function makeDeps(ctx: SendCtx, tenantId: string, plan: string, tallerNombre: string): BotDeps {
   const maxIa = limitsFor(plan).maxIaMonthly;
   return {
     send: (to, texto) => enviarMensaje(ctx, to, texto),
@@ -26,6 +26,7 @@ function makeDeps(ctx: SendCtx, tenantId: string, plan: string): BotDeps {
     parse: (texto) => extraerDatosVehiculo(texto),
     downloadMedia: (mediaId) => descargarMedia(ctx, mediaId),
     storage,
+    tallerNombre,
     iaQuota: {
       check: async () => withinLimit(await getIaUsage(tenantId), maxIa),
       tick: async () => {
@@ -97,7 +98,7 @@ export async function processWhatsAppPayload(payload: MetaPayload): Promise<void
         const tenant = rows[0];
         if (!tenant || !tenant.active) continue;
 
-        const deps = makeDeps(ctx, tenant.id, tenant.plan);
+        const deps = makeDeps(ctx, tenant.id, tenant.plan, tenant.name);
         const tdb = forTenant(tenant.id);
         try {
           await procesarMensaje(tdb, msg, deps);

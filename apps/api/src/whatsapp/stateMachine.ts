@@ -5,6 +5,8 @@ import {
   customers,
   historialTaller,
   numerosAutorizados,
+  vehicles,
+  workOrders,
 } from "../db/schema.js";
 import { createVehicle } from "../domain/vehicles.js";
 import { createOrder } from "../domain/orders.js";
@@ -57,6 +59,8 @@ export interface BotDeps {
     check: () => Promise<boolean>;
     tick: () => Promise<void>;
   };
+  /** Nombre del taller, para personalizar el saludo (opcional). */
+  tallerNombre?: string;
 }
 
 interface ConvDatos extends Partial<DatosVehiculo> {
@@ -90,6 +94,54 @@ function resumen(d: ConvDatos): string {
     `🔧 Tarea: ${d.tarea || "—"}`,
     `👤 Cliente: ${d.cliente || "—"}`,
   ].join("\n");
+}
+
+/** Mensaje de bienvenida/ayuda cuando el mensaje no es un ingreso. */
+function saludoAyuda(nombre?: string): string {
+  const quien = nombre ? ` del taller *${nombre}*` : "";
+  return [
+    `¡Hola! 👋 Soy el asistente${quien}. Puedo ayudarte con:`,
+    "",
+    '📥 *Cargar un ingreso* — "Entró un Gol patente ABC123, cambio de aceite, cliente Juan"',
+    '🔎 *Consultar* — "¿Cómo va la patente ABC123?" o "Qué autos tiene Juan"',
+    '✏️ *Editar una orden* — "estado #12 listo" · "km #12 90000" · "cancelá #12"',
+  ].join("\n");
+}
+
+/** Responde una consulta buscando en vehículos / clientes del taller. */
+async function responderConsulta(tdb: TenantDb, datos: ConvDatos): Promise<string> {
+  const patente = (datos.patente ?? "").toUpperCase().trim();
+  const cliente = (datos.cliente ?? "").trim();
+
+  if (patente) {
+    const vs = await tdb.select(vehicles);
+    const v =
+      vs.find((x) => x.plate.toUpperCase() === patente) ??
+      vs.find((x) => x.plate.toUpperCase().includes(patente));
+    if (!v) return `No encontré ningún vehículo con la patente *${patente}*.`;
+    const ords = (await tdb.select(workOrders, eq(workOrders.vehicleId, v.id))).sort(
+      (a, b) => b.number - a.number,
+    );
+    const last = ords[0];
+    return [
+      `🚗 *${v.plate}* — ${`${v.brand} ${v.model}`.trim() || "—"}`,
+      `Estado: ${v.status}`,
+      `Dueño: ${v.owner || "—"}`,
+      last ? `Última orden #${last.number}: ${last.status} (total $${last.total})` : "Sin órdenes cargadas.",
+    ].join("\n");
+  }
+
+  if (cliente && cliente.length >= 2) {
+    const cust = await buscarClientePorNombre(tdb, cliente);
+    if (!cust) return `No encontré ningún cliente que coincida con *${cliente}*.`;
+    const vs = await tdb.select(vehicles, eq(vehicles.customerId, cust.id));
+    const lista =
+      vs.map((v) => `• ${v.plate} ${`${v.brand} ${v.model}`.trim()} (${v.status})`).join("\n") ||
+      "sin vehículos cargados";
+    return [`👤 *${cust.name}*`, `Tel: ${cust.phone || "—"}`, "Vehículos:", lista].join("\n");
+  }
+
+  return "¿De qué vehículo o cliente querés saber? Pasame la *patente* o el *nombre del cliente*.";
 }
 
 /** Customer lookup by fuzzy name — ported from Convex buscarClientePorNombre. */
@@ -243,6 +295,19 @@ export async function procesarMensaje(
       cliente: datos.cliente || null,
       status: "processed",
     });
+
+    // Ramificación por intención: no registrar un vehículo si el mensaje no es
+    // un ingreso con datos reales (evita "registrar la nada" ante un "Hola").
+    const hayDatos = Boolean(datos.patente || datos.marca_modelo || datos.tarea);
+    const intent = datos.intencion ?? (hayDatos ? "ingreso" : "saludo");
+    if (intent === "consulta") {
+      await deps.send(from, await responderConsulta(tdb, datos));
+      return "consulta";
+    }
+    if (intent !== "ingreso" || !hayDatos) {
+      await deps.send(from, saludoAyuda(deps.tallerNombre));
+      return "saludo";
+    }
 
     const candidato = datos.cliente ? await buscarClientePorNombre(tdb, datos.cliente) : null;
 

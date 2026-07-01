@@ -100,12 +100,40 @@ describe("WhatsApp bot — state machine", () => {
   });
 
   it("is idempotent by wa_message_id", async () => {
-    const { deps } = fakeDeps(EMPTY);
+    const { deps } = fakeDeps({ ...EMPTY, intencion: "ingreso", marca_modelo: "Ford Focus" });
     const r1 = await procesarMensaje(tdb, textMsg("dup1", "Ford Focus"), deps);
     expect(r1).toBe("confirmando");
     const r2 = await procesarMensaje(tdb, textMsg("dup1", "Ford Focus"), deps);
     expect(r2).toBe("duplicate");
     expect(await tdb.count(historialTaller)).toBe(1);
+  });
+
+  it("greets and does NOT register a vehicle on a plain 'Hola'", async () => {
+    const { deps, sent } = fakeDeps({ ...EMPTY, intencion: "saludo" });
+    const r = await procesarMensaje(tdb, textMsg("g1", "Hola"), deps);
+    expect(r).toBe("saludo");
+    expect(sent.join(" ")).toMatch(/asistente/i);
+    expect(await tdb.count(vehicles)).toBe(0); // nada registrado
+    expect(await tdb.count(conversaciones)).toBe(0);
+  });
+
+  it("answers a query about an existing vehicle without registering", async () => {
+    await tdb.insert(vehicles, {
+      plate: "ABC123",
+      brand: "Ford",
+      model: "Gol",
+      owner: "Juan",
+      status: "En Reparación",
+      entryDate: "2026-01-01",
+      services: [],
+      cost: 0,
+    });
+    const { deps, sent } = fakeDeps({ ...EMPTY, intencion: "consulta", patente: "ABC123" });
+    const r = await procesarMensaje(tdb, textMsg("q1", "cómo va la ABC123"), deps);
+    expect(r).toBe("consulta");
+    expect(sent.join(" ")).toContain("ABC123");
+    expect(sent.join(" ")).toMatch(/En Reparación/);
+    expect(await tdb.count(vehicles)).toBe(1); // no creó otro
   });
 
   it("full happy path (new customer): text → confirm → register vehicle", async () => {

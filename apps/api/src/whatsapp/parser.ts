@@ -3,7 +3,11 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { env } from "../config/env.js";
 
+export type Intencion = "ingreso" | "saludo" | "consulta" | "otro";
+
 export interface DatosVehiculo {
+  /** Qué quiere hacer el usuario con este mensaje. */
+  intencion?: Intencion;
   marca_modelo: string;
   kilometraje: string;
   patente: string;
@@ -12,6 +16,7 @@ export interface DatosVehiculo {
 }
 
 const EMPTY: DatosVehiculo = {
+  intencion: "saludo",
   marca_modelo: "",
   kilometraje: "",
   patente: "",
@@ -23,18 +28,25 @@ const EMPTY: DatosVehiculo = {
  * Sistema: mismas reglas de extracción que el bot ya usaba. Con structured
  * outputs no hace falta pedir "solo JSON" — el esquema garantiza la forma.
  */
-const SYSTEM_PROMPT = `Sos un extractor de datos para un taller mecánico argentino.
-El usuario te envía un mensaje informal con la información de un vehículo que ingresa al taller.
-Extraé estos campos:
-- marca_modelo: marca y modelo completos del vehículo (ej: "Chevrolet Aveo", "Ford Focus").
-- kilometraje: solo el número del kilometraje, sin texto (ej: "185444").
-- patente: patente/matrícula en MAYÚSCULAS (ej: "LWE366", "AB123CD").
-- tarea: descripción COMPLETA y LITERAL del trabajo a realizar, copiando todas las palabras del mensaje original. NUNCA abrevies ni resumas.
-- cliente: nombre propio del cliente (ej: "Pedro", "Juan García"), sin la palabra "cliente". Buscalo después de palabras como "cliente", "de", "para".
+const SYSTEM_PROMPT = `Sos el asistente de WhatsApp de un taller mecánico argentino. Recibís mensajes informales de empleados del taller.
 
-Si un campo no aparece en el mensaje, devolvé cadena vacía "". NO inventes datos.`;
+Primero clasificá la INTENCIÓN del mensaje:
+- "ingreso": trae datos de un vehículo que ENTRA al taller (marca/modelo, patente, tarea a realizar). Ej: "Entró un Gol patente ABC123, cambio de aceite, cliente Juan".
+- "consulta": pregunta por el ESTADO o info de un vehículo, cliente u orden ya existente. Ej: "¿Cómo va la patente ABC123?", "qué autos tiene Juan", "estado del Corolla".
+- "saludo": saludo o mensaje sin datos accionables. Ej: "hola", "buenas", "gracias", "ok".
+- "otro": cualquier otra cosa que no encaje.
+
+Luego extraé estos campos (para "ingreso"; para "consulta" poné en patente/cliente lo que se pregunta):
+- marca_modelo: marca y modelo completos (ej: "Chevrolet Aveo", "Ford Focus").
+- kilometraje: solo el número, sin texto (ej: "185444").
+- patente: patente/matrícula en MAYÚSCULAS (ej: "LWE366", "AB123CD").
+- tarea: descripción COMPLETA y LITERAL del trabajo, copiando las palabras del mensaje. NUNCA abrevies.
+- cliente: nombre propio del cliente, sin la palabra "cliente". Buscalo tras "cliente", "de", "para".
+
+Si un campo no aparece, devolvé cadena vacía "". NUNCA inventes datos. Si el mensaje es sólo un saludo, intencion="saludo" y todos los campos vacíos.`;
 
 const DatosSchema = z.object({
+  intencion: z.enum(["ingreso", "saludo", "consulta", "otro"]),
   marca_modelo: z.string(),
   kilometraje: z.string(),
   patente: z.string(),
@@ -71,6 +83,7 @@ export async function extraerDatosVehiculo(texto: string): Promise<DatosVehiculo
     const parsed = res.parsed_output;
     if (!parsed) return { ...EMPTY };
     return {
+      intencion: parsed.intencion ?? "otro",
       marca_modelo: parsed.marca_modelo ?? "",
       kilometraje: parsed.kilometraje ?? "",
       patente: parsed.patente ?? "",
