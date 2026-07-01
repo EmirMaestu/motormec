@@ -14,7 +14,7 @@ import {
 } from "../src/db/schema.js";
 import { createOrder } from "../src/domain/orders.js";
 import { limitsFor, withinLimit } from "../src/domain/plans.js";
-import { currentPeriod, getIaUsage, incIaUsage } from "../src/domain/usage.js";
+import { currentPeriod, getIaTokens, getIaUsage, incIaTokens, incIaUsage } from "../src/domain/usage.js";
 import { notifyOrderStatusChange, toWaNumber } from "../src/domain/notifications.js";
 import { numberKey, sameNumber } from "../src/whatsapp/phone.js";
 import { procesarMensaje, type BotDeps, type WAMessage } from "../src/whatsapp/stateMachine.js";
@@ -68,6 +68,14 @@ describe("usage counter (monthly IA)", () => {
     expect(await incIaUsage(tenantId)).toBe(1);
     expect(await incIaUsage(tenantId)).toBe(2);
     expect(await getIaUsage(tenantId, currentPeriod())).toBe(2);
+  });
+
+  it("accumulates IA input/output tokens", async () => {
+    await incIaTokens(tenantId, 100, 20);
+    await incIaTokens(tenantId, 50, 10);
+    const t = await getIaTokens(tenantId);
+    expect(t.input).toBe(150);
+    expect(t.output).toBe(30);
   });
 });
 

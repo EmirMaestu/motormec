@@ -43,3 +43,37 @@ export async function incIaUsage(
     .returning({ n: usageCounters.iaMessages });
   return rows[0]?.n ?? 0;
 }
+
+/** Suma tokens (input/output) consumidos por una llamada a la IA (upsert). */
+export async function incIaTokens(
+  tenantId: string,
+  inputTokens: number,
+  outputTokens: number,
+  period = currentPeriod(),
+): Promise<void> {
+  if (!inputTokens && !outputTokens) return;
+  await db
+    .insert(usageCounters)
+    .values({ tenantId, period, iaInputTokens: inputTokens, iaOutputTokens: outputTokens })
+    .onConflictDoUpdate({
+      target: [usageCounters.tenantId, usageCounters.period],
+      set: {
+        iaInputTokens: sql`${usageCounters.iaInputTokens} + ${inputTokens}`,
+        iaOutputTokens: sql`${usageCounters.iaOutputTokens} + ${outputTokens}`,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+/** Tokens IA consumidos por el tenant en el período (input/output). */
+export async function getIaTokens(
+  tenantId: string,
+  period = currentPeriod(),
+): Promise<{ input: number; output: number }> {
+  const rows = await db
+    .select({ i: usageCounters.iaInputTokens, o: usageCounters.iaOutputTokens })
+    .from(usageCounters)
+    .where(and(eq(usageCounters.tenantId, tenantId), eq(usageCounters.period, period)))
+    .limit(1);
+  return { input: rows[0]?.i ?? 0, output: rows[0]?.o ?? 0 };
+}

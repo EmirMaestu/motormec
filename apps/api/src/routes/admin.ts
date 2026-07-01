@@ -14,7 +14,7 @@ import { createTenant, createUser } from "../db/admin.js";
 import { encryptSecret } from "../crypto/secrets.js";
 import { env } from "../config/env.js";
 import { PLANS, limitsFor, limitsForJson, withinLimit } from "../domain/plans.js";
-import { getIaUsage } from "../domain/usage.js";
+import { getIaTokens, getIaUsage } from "../domain/usage.js";
 import { sameNumber } from "../whatsapp/phone.js";
 import {
   ADMIN_COOKIE,
@@ -131,7 +131,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       db.select().from(numerosAutorizados).where(eq(numerosAutorizados.tenantId, id)),
       db.select({ c: sql<number>`count(*)::int` }).from(customers).where(eq(customers.tenantId, id)),
     ]);
-    const iaUsed = await getIaUsage(id);
+    const [iaUsed, iaTokens] = await Promise.all([getIaUsage(id), getIaTokens(id)]);
     return reply.send({
       tenant: {
         id: t.id, name: t.name, slug: t.slug, plan: t.plan, active: t.active,
@@ -142,7 +142,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       numbers: tNumbers,
       customers: custCount[0]?.c ?? 0,
       limits: limitsForJson(t.plan),
-      usage: { users: tUsers.length, numbers: tNumbers.length, iaMonthly: iaUsed },
+      usage: {
+        users: tUsers.length,
+        numbers: tNumbers.length,
+        iaMonthly: iaUsed,
+        iaInputTokens: iaTokens.input,
+        iaOutputTokens: iaTokens.output,
+      },
     });
   });
 

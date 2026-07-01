@@ -5,7 +5,7 @@ import { forTenant } from "../db/scope.js";
 import { env } from "../config/env.js";
 import { storage } from "../storage/provider.js";
 import { limitsFor, withinLimit } from "../domain/plans.js";
-import { getIaUsage, incIaUsage } from "../domain/usage.js";
+import { getIaUsage, incIaTokens, incIaUsage } from "../domain/usage.js";
 import {
   descargarMedia,
   enviarMensaje,
@@ -23,7 +23,11 @@ function makeDeps(ctx: SendCtx, tenantId: string, plan: string, tallerNombre: st
   return {
     send: (to, texto) => enviarMensaje(ctx, to, texto),
     sendButtons: (to, texto, botones) => enviarMensajeConBotones(ctx, to, texto, botones),
-    parse: (texto) => extraerDatosVehiculo(texto),
+    parse: async (texto) => {
+      const r = await extraerDatosVehiculo(texto);
+      await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
+      return r.datos;
+    },
     downloadMedia: (mediaId) => descargarMedia(ctx, mediaId),
     storage,
     tallerNombre,

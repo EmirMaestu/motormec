@@ -637,6 +637,8 @@ export const usageCounters = pgTable(
       .references(() => tenants.id, { onDelete: "cascade" }),
     period: text("period").notNull(), // "YYYY-MM"
     iaMessages: integer("ia_messages").notNull().default(0),
+    iaInputTokens: integer("ia_input_tokens").notNull().default(0),
+    iaOutputTokens: integer("ia_output_tokens").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

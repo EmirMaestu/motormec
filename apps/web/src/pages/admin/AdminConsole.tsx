@@ -274,7 +274,13 @@ interface TenantDetail {
     maxNumbers: number | null;
     maxIaMonthly: number | null;
   };
-  usage: { users: number; numbers: number; iaMonthly: number };
+  usage: {
+    users: number;
+    numbers: number;
+    iaMonthly: number;
+    iaInputTokens: number;
+    iaOutputTokens: number;
+  };
 }
 
 /** Una fila de consumo (usado / tope) con barra. `max=null` = ilimitado. */
@@ -402,6 +408,13 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
                 <UsageRow label="Usuarios" used={data.usage.users} max={data.limits.maxUsers} />
                 <UsageRow label="Números WhatsApp" used={data.usage.numbers} max={data.limits.maxNumbers} />
                 <UsageRow label="Mensajes IA (este mes)" used={data.usage.iaMonthly} max={data.limits.maxIaMonthly} />
+                <div className="flex items-center justify-between text-[13px] pt-1 border-t border-black/10">
+                  <span className="text-charcoal">Tokens IA (este mes)</span>
+                  <span className="text-deep-forest">
+                    {data.usage.iaInputTokens.toLocaleString("es-AR")} in ·{" "}
+                    {data.usage.iaOutputTokens.toLocaleString("es-AR")} out
+                  </span>
+                </div>
               </div>
             ) : null}
           </div>

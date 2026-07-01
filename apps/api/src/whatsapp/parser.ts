@@ -61,14 +61,21 @@ function getClient(): Anthropic | null {
   return client;
 }
 
+export interface ExtraccionResultado {
+  datos: DatosVehiculo;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 /**
  * Extrae datos estructurados de un mensaje libre usando la API de Claude
- * (Anthropic). Ante cualquier fallo (sin API key, timeout, error de red),
- * devuelve cadenas vacías: nunca inventa datos.
+ * (Anthropic) y devuelve además el consumo de tokens de esa llamada. Ante
+ * cualquier fallo (sin API key, timeout, error de red) devuelve datos vacíos y
+ * cero tokens: nunca inventa datos.
  */
-export async function extraerDatosVehiculo(texto: string): Promise<DatosVehiculo> {
+export async function extraerDatosVehiculo(texto: string): Promise<ExtraccionResultado> {
   const c = getClient();
-  if (!c) return { ...EMPTY };
+  if (!c) return { datos: { ...EMPTY }, inputTokens: 0, outputTokens: 0 };
   try {
     const res = await c.beta.messages.parse(
       {
@@ -80,17 +87,23 @@ export async function extraerDatosVehiculo(texto: string): Promise<DatosVehiculo
       },
       { timeout: 30_000 },
     );
+    const inputTokens = res.usage?.input_tokens ?? 0;
+    const outputTokens = res.usage?.output_tokens ?? 0;
     const parsed = res.parsed_output;
-    if (!parsed) return { ...EMPTY };
+    if (!parsed) return { datos: { ...EMPTY }, inputTokens, outputTokens };
     return {
-      intencion: parsed.intencion ?? "otro",
-      marca_modelo: parsed.marca_modelo ?? "",
-      kilometraje: parsed.kilometraje ?? "",
-      patente: parsed.patente ?? "",
-      tarea: parsed.tarea ?? "",
-      cliente: parsed.cliente ?? "",
+      datos: {
+        intencion: parsed.intencion ?? "otro",
+        marca_modelo: parsed.marca_modelo ?? "",
+        kilometraje: parsed.kilometraje ?? "",
+        patente: parsed.patente ?? "",
+        tarea: parsed.tarea ?? "",
+        cliente: parsed.cliente ?? "",
+      },
+      inputTokens,
+      outputTokens,
     };
   } catch {
-    return { ...EMPTY };
+    return { datos: { ...EMPTY }, inputTokens: 0, outputTokens: 0 };
   }
 }
