@@ -111,9 +111,9 @@ c "Usuario de sistema y código"
 id "$SVC_USER" >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin "$SVC_USER"
 mkdir -p "$APP_DIR"; chown "$SVC_USER:$SVC_USER" "$APP_DIR"
 if [ -d "$APP_DIR/.git" ]; then
-  sudo -u "$SVC_USER" git -C "$APP_DIR" pull --ff-only
+  sudo -H -u "$SVC_USER" git -C "$APP_DIR" pull --ff-only
 else
-  sudo -u "$SVC_USER" git clone "$REPO_URL" "$APP_DIR"
+  sudo -H -u "$SVC_USER" git clone "$REPO_URL" "$APP_DIR"
 fi
 mkdir -p "$MEDIA_DIR"; chown "$SVC_USER:$SVC_USER" "$MEDIA_DIR"
 ok "Código en $APP_DIR"
@@ -150,13 +150,13 @@ fi
 # ---------------------------------------------------------------- build -----
 c "Build + migraciones + publicación"
 cd "$APP_DIR"
-sudo -u "$SVC_USER" npm install
+sudo -H -u "$SVC_USER" npm install
 cd "$APP_DIR/apps/api"
-sudo -u "$SVC_USER" npm run build
-sudo -u "$SVC_USER" npm run db:migrate
-sudo -u "$SVC_USER" env NODE_ENV=production npm run preflight || warn "Revisá las advertencias del preflight."
+sudo -H -u "$SVC_USER" npm run build
+sudo -H -u "$SVC_USER" npm run db:migrate
+sudo -H -u "$SVC_USER" env NODE_ENV=production npm run preflight || warn "Revisá las advertencias del preflight."
 cd "$APP_DIR/apps/web"
-sudo -u "$SVC_USER" npm run build
+sudo -H -u "$SVC_USER" npm run build
 mkdir -p "$WEB_ROOT/app" "$WEB_ROOT/landing"
 cp -r dist/* "$WEB_ROOT/app/"
 cp -r "$APP_DIR/landing/"* "$WEB_ROOT/landing/"
