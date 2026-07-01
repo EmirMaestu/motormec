@@ -320,6 +320,31 @@ describe("WhatsApp bot — comandos (editar/borrar)", () => {
   });
 });
 
+describe("WhatsApp presupuesto formatting", () => {
+  it("formats a quote verbatim (exact numbers + Momec footer)", async () => {
+    const { formatPresupuesto } = await import("../src/whatsapp/agente.js");
+    const doc = formatPresupuesto("Taller Sur", {
+      number: 7,
+      customerName: "Juan",
+      vehiclePlate: "AB123CD",
+      vehicleInfo: "Ford Focus",
+      items: [
+        { description: "Pastillas", quantity: 1, unitPrice: 15000 },
+        { description: "Mano de obra", quantity: 2, unitPrice: 4000 },
+      ],
+      total: 23000,
+      validUntil: null,
+      notes: null,
+    });
+    expect(doc).toContain("*Presupuesto #7*");
+    expect(doc).toContain("Taller Sur");
+    expect(doc).toContain("Pastillas x1");
+    expect(doc).toContain("Mano de obra x2");
+    expect(doc).toContain("Total: $ 23.000");
+    expect(doc).toContain("momec.pro");
+  });
+});
+
 describe("WhatsApp signature", () => {
   it("verifies a correct HMAC and rejects a wrong one", () => {
     const body = Buffer.from('{"a":1}');

@@ -157,11 +157,39 @@ const TOOLS: Anthropic.Tool[] = [
 
 const ENTREGADOS = new Set(["Entregado", "Suspendido"]);
 
+function fmtMoney(n: number): string {
+  return `$ ${Math.round(n).toLocaleString("es-AR")}`;
+}
+
+/** Presupuesto formateado para WhatsApp (negritas *…*, itálicas _…_). Verbatim. */
+export function formatPresupuesto(
+  tallerNombre: string,
+  q: { number: number; customerName: string; vehiclePlate?: string | null; vehicleInfo?: string | null; items: { description: string; quantity: number; unitPrice: number }[]; total: number; validUntil?: string | null; notes?: string | null },
+): string {
+  const lineas: string[] = [];
+  lineas.push(`📋 *Presupuesto #${q.number}*${tallerNombre ? ` — ${tallerNombre}` : ""}`);
+  if (q.customerName) lineas.push(`Cliente: ${q.customerName}`);
+  const veh = [q.vehicleInfo, q.vehiclePlate].filter(Boolean).join(" · ");
+  if (veh) lineas.push(`Vehículo: ${veh}`);
+  lineas.push("");
+  for (const it of q.items) {
+    lineas.push(`• ${it.description} x${it.quantity} — ${fmtMoney(it.quantity * it.unitPrice)}`);
+  }
+  lineas.push("");
+  lineas.push(`*Total: ${fmtMoney(q.total)}*`);
+  if (q.validUntil) lineas.push(`Válido hasta ${q.validUntil}`);
+  if (q.notes) lineas.push(`Obs: ${q.notes}`);
+  lineas.push("");
+  lineas.push("_Presupuesto hecho con Momec_ · momec.pro");
+  return lineas.join("\n");
+}
+
 async function ejecutarTool(
   tdb: TenantDb,
   name: string,
   input: Record<string, unknown>,
   from: string,
+  tallerNombre: string,
 ): Promise<string> {
   try {
     if (name === "buscar_vehiculo") {
@@ -339,12 +367,13 @@ async function ejecutarTool(
         items,
         notes: input.notas ? String(input.notas) : undefined,
       });
+      const documento = formatPresupuesto(tallerNombre, quote);
       return JSON.stringify({
         ok: true,
         presupuesto: quote.number,
         total: quote.total,
-        link: "https://momec.pro/app/presupuestos",
-        nota: "Presupuesto creado con Momec. Compartí el link para verlo/imprimirlo con el logo del taller.",
+        documento,
+        nota: "El presupuesto YA se le envía al usuario en un mensaje aparte. Confirmá en UNA línea (ej: 'Listo, te paso el presupuesto 👇') SIN repetir los ítems ni el total.",
       });
     }
   } catch {
@@ -374,7 +403,7 @@ export async function agenteConsulta(
   const hoy = new Date().toISOString().split("T")[0];
   const system = `Sos el asistente de WhatsApp del taller ${tallerNombre || "mecánico"}. Atendés al personal del taller. Hoy es ${hoy}.
 - Respondé SOLO con datos reales obtenidos de las herramientas. Nunca inventes patentes, estados, montos ni nombres.
-- HACER UN PRESUPUESTO: si el usuario pide "hacé/armá un presupuesto", "cotizá", "presupuestá" (ej: "presupuestá a Juan: pastillas 15000, mano de obra 8000"), usá "crear_presupuesto" con los ítems (descripción + precio, cantidad si la dice). Al confirmar, mencioná que se hizo con Momec y pasá el link para verlo/imprimirlo con el logo del taller.
+- HACER UN PRESUPUESTO: si el usuario pide "hacé/armá un presupuesto", "cotizá", "presupuestá" (ej: "presupuestá a Juan: pastillas 15000, mano de obra 8000"), usá "crear_presupuesto" con los ítems (descripción + precio, cantidad si la dice). El presupuesto formateado se le ENVÍA SOLO al usuario en el mismo mensaje: vos confirmá en UNA línea (ej: "Listo, te paso el presupuesto 👇") SIN repetir los ítems ni el total.
 - CARGAR UN INGRESO: si el usuario describe un auto que entró o pide agregar uno (ej: "agregá un VW Gol patente ABC123 de Juan, service"), usá la herramienta "registrar_ingreso" y CARGALO DIRECTAMENTE. Sólo la patente es obligatoria; marca, modelo, km, cliente y tarea son opcionales (cargá lo que haya). Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). No pidas que repita el mensaje si ya lo entendiste. Si falta SOLO la patente, pedila. Tras registrar, confirmá con la orden creada y ofrecé mandar fotos del vehículo.
 - Si al registrar el vehículo YA EXISTÍA (yaExistia=true), aclaralo con naturalidad ("ya lo teníamos, le sumé una nueva entrada").
 - CONSULTAS: usá las herramientas para vehículos, clientes, órdenes, entregas o qué hay en el taller. Para "entregados hoy/esta semana" usá "entregados" con "desde" (calculado desde hoy=${hoy}); para "los últimos N" usá "limite".
@@ -384,6 +413,7 @@ export async function agenteConsulta(
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: texto }];
   let inputTokens = 0;
   let outputTokens = 0;
+  let presupuestoDoc = "";
 
   try {
     for (let i = 0; i < 4; i++) {
@@ -400,7 +430,11 @@ export async function agenteConsulta(
           .map((b) => b.text)
           .join("")
           .trim();
-        return { texto: txt || fallback, inputTokens, outputTokens };
+        // El presupuesto se adjunta VERBATIM (números exactos, sin parafrasear).
+        const finalText = presupuestoDoc
+          ? `${txt || "Listo, te paso el presupuesto 👇"}\n\n${presupuestoDoc}`
+          : txt || fallback;
+        return { texto: finalText, inputTokens, outputTokens };
       }
 
       messages.push({ role: "assistant", content: res.content });
@@ -412,7 +446,16 @@ export async function agenteConsulta(
             block.name,
             block.input as Record<string, unknown>,
             from,
+            tallerNombre,
           );
+          if (block.name === "crear_presupuesto") {
+            try {
+              const parsed = JSON.parse(out) as { documento?: string };
+              if (parsed.documento) presupuestoDoc = parsed.documento;
+            } catch {
+              /* ignore */
+            }
+          }
           toolResults.push({ type: "tool_result", tool_use_id: block.id, content: out });
         }
       }
