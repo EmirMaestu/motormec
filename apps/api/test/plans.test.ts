@@ -16,12 +16,23 @@ import { createOrder } from "../src/domain/orders.js";
 import { limitsFor, withinLimit } from "../src/domain/plans.js";
 import { currentPeriod, getIaUsage, incIaUsage } from "../src/domain/usage.js";
 import { notifyOrderStatusChange, toWaNumber } from "../src/domain/notifications.js";
+import { numberKey, sameNumber } from "../src/whatsapp/phone.js";
 import { procesarMensaje, type BotDeps, type WAMessage } from "../src/whatsapp/stateMachine.js";
 import { resetDb } from "./helpers.js";
 
 // El pool es compartido por todo el archivo: se cierra una sola vez al final.
 afterAll(async () => {
   await pool.end();
+});
+
+describe("phone matching (ruteo por remitente)", () => {
+  it("matches AR numbers across formats", () => {
+    expect(sameNumber("2612494123", "5492612494123")).toBe(true);
+    expect(sameNumber("+54 9 261 249-4123", "5492612494123")).toBe(true);
+    expect(sameNumber("02612494123", "5492612494123")).toBe(true);
+    expect(sameNumber("2612494123", "2614351765")).toBe(false);
+    expect(numberKey("5492612494123")).toBe("2612494123");
+  });
 });
 
 describe("plan limits — pure helpers", () => {

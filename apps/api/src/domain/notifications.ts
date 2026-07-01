@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { customers, tenants, vehicles, type WorkOrder } from "../db/schema.js";
-import { decryptSecret } from "../crypto/secrets.js";
+import { env } from "../config/env.js";
 import { enviarMensaje } from "../whatsapp/client.js";
 
 /**
@@ -60,14 +60,6 @@ export function toWaNumber(raw: string): string | null {
   return "549" + local;
 }
 
-function safeDecrypt(value: string): string {
-  try {
-    return decryptSecret(value);
-  } catch {
-    return "";
-  }
-}
-
 /**
  * Envía (si corresponde) el aviso al cliente por el cambio de estado de la orden.
  * Devuelve true si se envió, false en cualquier otro caso (sin throw).
@@ -83,7 +75,8 @@ export async function notifyOrderStatusChange(order: WorkOrder): Promise<boolean
       .limit(1);
     const tenant = tRows[0];
     if (!tenant || !tenant.active) return false;
-    if (!tenant.waPhoneNumberId || !tenant.waAccessToken) return false;
+    // Número ÚNICO de Momec (plataforma). Si no está configurado, no se avisa.
+    if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_ACCESS_TOKEN) return false;
 
     // Toggle (default ON si no está seteado).
     const notify = (tenant.settings as Record<string, unknown> | null)?.notifyCustomers;
@@ -124,7 +117,7 @@ export async function notifyOrderStatusChange(order: WorkOrder): Promise<boolean
     if (!texto) return false;
 
     return await enviarMensaje(
-      { phoneNumberId: tenant.waPhoneNumberId, accessToken: safeDecrypt(tenant.waAccessToken) },
+      { phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID, accessToken: env.WHATSAPP_ACCESS_TOKEN },
       to,
       texto,
     );

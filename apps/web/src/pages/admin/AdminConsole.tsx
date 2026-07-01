@@ -316,9 +316,6 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
   };
 
   const [plan, setPlan] = useState<string | null>(null);
-  const [waPhone, setWaPhone] = useState("");
-  const [waDisplay, setWaDisplay] = useState("");
-  const [waToken, setWaToken] = useState("");
   const [numPhone, setNumPhone] = useState("");
   const [numName, setNumName] = useState("");
 
@@ -328,21 +325,6 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
       refetch();
       toast.success("Actualizado");
     },
-  });
-  const linkWa = useMutation({
-    mutationFn: () =>
-      api.put(`/api/admin/tenants/${id}/whatsapp`, {
-        waPhoneNumberId: waPhone.trim() || undefined,
-        waDisplayNumber: waDisplay.trim() || undefined,
-        waAccessToken: waToken.trim() || undefined,
-      }),
-    onSuccess: () => {
-      refetch();
-      setWaToken("");
-      toast.success("Número ligado al taller");
-    },
-    onError: (e: unknown) =>
-      toast.error(e instanceof ApiError && e.code === "number_already_linked" ? "Ese número ya está en otro taller" : "No se pudo guardar"),
   });
   const addNumber = useMutation({
     mutationFn: () => api.post(`/api/admin/tenants/${id}/numbers`, { phone: numPhone.trim(), name: numName.trim() }),
@@ -424,34 +406,13 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
             ) : null}
           </div>
 
-          {/* WhatsApp linking */}
-          <div className="border-t border-black/10 pt-4">
-            <div className="eyebrow mb-2">Número de WhatsApp del taller</div>
-            <p className="text-[13px] text-charcoal mb-2">
-              {t.waPhoneNumberId ? (
-                <>Ligado: <b>{t.waDisplayNumber || t.waPhoneNumberId}</b> {t.hasAccessToken ? "· token ✓" : "· falta token"}</>
-              ) : (
-                "Sin número ligado. Lo que entre por este número caerá en este taller."
-              )}
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label="Phone Number ID">
-                <Input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder={t.waPhoneNumberId ?? "de Meta"} />
-              </FormField>
-              <FormField label="Número visible">
-                <Input value={waDisplay} onChange={(e) => setWaDisplay(e.target.value)} placeholder={t.waDisplayNumber ?? "+54 9 …"} />
-              </FormField>
-            </div>
-            <FormField label="Access token (se guarda cifrado)">
-              <Input value={waToken} onChange={(e) => setWaToken(e.target.value)} placeholder="dejar vacío para no cambiar" />
-            </FormField>
-            <Button onClick={() => linkWa.mutate()} disabled={linkWa.isPending} className="mt-1">
-              {linkWa.isPending ? "Guardando…" : "Ligar número"}
-            </Button>
-          </div>
-
           {/* Authorized numbers */}
           <div className="border-t border-black/10 pt-4">
+            <div className="rounded-[12px] bg-pale-sage p-3 mb-3 text-[13px] text-charcoal">
+              Momec usa un <b>único número de WhatsApp</b> para todos los talleres. El ruteo se hace por el
+              <b> remitente</b>: agregá acá los números de los empleados de este taller y todo lo que
+              escriban al bot caerá en este taller.
+            </div>
             <div className="eyebrow mb-2">Números autorizados (quién puede cargar por el bot)</div>
             <div className="space-y-2 mb-3">
               {(data?.numbers ?? []).map((n) => (

@@ -49,6 +49,10 @@ const schema = z.object({
 
   WHATSAPP_APP_SECRET: z.string().default(""),
   WHATSAPP_VERIFY_TOKEN: z.string().default(""),
+  // Número ÚNICO de Momec (plataforma). Todos los talleres reciben por acá; el
+  // ruteo al taller se hace por el remitente (número del empleado autorizado).
+  WHATSAPP_PHONE_NUMBER_ID: z.string().default(""),
+  WHATSAPP_ACCESS_TOKEN: z.string().default(""),
 
   // 64 hex chars = 32 bytes for AES-256-GCM.
   SECRETS_KEY: z

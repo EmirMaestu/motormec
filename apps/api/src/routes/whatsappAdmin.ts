@@ -6,6 +6,7 @@ import { historialTaller, numerosAutorizados, tenants } from "../db/schema.js";
 import { authed, requireAuth, requireRole } from "../auth/middleware.js";
 import { encryptSecret } from "../crypto/secrets.js";
 import { limitsFor, withinLimit } from "../domain/plans.js";
+import { sameNumber } from "../whatsapp/phone.js";
 import type { TenantSettings } from "../db/schema.js";
 
 export async function whatsappAdminRoutes(app: FastifyInstance): Promise<void> {
@@ -49,6 +50,16 @@ export async function whatsappAdminRoutes(app: FastifyInstance): Promise<void> {
         error: "plan_limit",
         message: `Tu plan permite hasta ${max} números de WhatsApp. Actualizá el plan para agregar más.`,
       });
+    }
+    // Un número sólo puede pertenecer a UN taller (el bot rutea por remitente).
+    const activos = await db
+      .select({ phone: numerosAutorizados.phone })
+      .from(numerosAutorizados)
+      .where(eq(numerosAutorizados.active, true));
+    if (activos.some((n) => sameNumber(n.phone, parsed.data.phone))) {
+      return reply
+        .code(409)
+        .send({ error: "number_taken", message: "Ese número ya está autorizado en otro taller." });
     }
     const created = await tenantDb.insertOne(numerosAutorizados, {
       phone: parsed.data.phone,

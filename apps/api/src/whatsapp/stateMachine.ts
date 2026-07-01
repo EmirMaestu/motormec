@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { TenantDb } from "../db/scope.js";
 import {
   conversaciones,
@@ -9,6 +9,7 @@ import {
 import { createVehicle } from "../domain/vehicles.js";
 import { createOrder } from "../domain/orders.js";
 import { detectarComando, ejecutarComando } from "./commands.js";
+import { sameNumber } from "./phone.js";
 import type { StorageProvider } from "../storage/provider.js";
 import type { DatosVehiculo } from "./parser.js";
 import {
@@ -186,11 +187,9 @@ export async function procesarMensaje(
   const from = msg.from;
   const texto = extraerTexto(msg);
 
-  // 1. Authorization (per-tenant whitelist).
-  const autorizado = await tdb.selectOne(
-    numerosAutorizados,
-    and(eq(numerosAutorizados.phone, from), eq(numerosAutorizados.active, true)),
-  );
+  // 1. Authorization (whitelist del taller, match tolerante de formato).
+  const activos = await tdb.select(numerosAutorizados, eq(numerosAutorizados.active, true));
+  const autorizado = activos.find((n) => sameNumber(n.phone, from));
   if (!autorizado) {
     await deps.send(
       from,

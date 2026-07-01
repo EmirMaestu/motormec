@@ -15,6 +15,7 @@ import { encryptSecret } from "../crypto/secrets.js";
 import { env } from "../config/env.js";
 import { PLANS, limitsFor, limitsForJson, withinLimit } from "../domain/plans.js";
 import { getIaUsage } from "../domain/usage.js";
+import { sameNumber } from "../whatsapp/phone.js";
 import {
   ADMIN_COOKIE,
   destroyPlatformSession,
@@ -245,6 +246,16 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         error: "plan_limit",
         message: `El plan ${t.plan} permite hasta ${limitsFor(t.plan).maxNumbers} números.`,
       });
+    }
+    // Un número sólo puede pertenecer a UN taller (el bot rutea por remitente).
+    const activos = await db
+      .select({ phone: numerosAutorizados.phone })
+      .from(numerosAutorizados)
+      .where(eq(numerosAutorizados.active, true));
+    if (activos.some((n) => sameNumber(n.phone, parsed.data.phone))) {
+      return reply
+        .code(409)
+        .send({ error: "number_taken", message: "Ese número ya está autorizado en otro taller." });
     }
     const [created] = await db
       .insert(numerosAutorizados)

@@ -83,6 +83,22 @@ describe("WhatsApp bot — state machine", () => {
     expect(await tdb.count(historialTaller)).toBe(0);
   });
 
+  it("authorizes by normalized number (stored without country code)", async () => {
+    // Empleado cargado como "2612494123"; WhatsApp entrega "5492612494123".
+    await tdb.insert(numerosAutorizados, { phone: "2612494123", name: "Empleado", active: true });
+    const { deps } = fakeDeps({ ...EMPTY, marca_modelo: "Fiat", patente: "AA1" });
+    const msg: WAMessage = {
+      id: "norm1",
+      from: "5492612494123",
+      timestamp: "1700000000",
+      type: "text",
+      text: { body: "ingreso" },
+    };
+    const r = await procesarMensaje(tdb, msg, deps);
+    expect(r).not.toBe("unauthorized");
+    expect(r).toBe("confirmando");
+  });
+
   it("is idempotent by wa_message_id", async () => {
     const { deps } = fakeDeps(EMPTY);
     const r1 = await procesarMensaje(tdb, textMsg("dup1", "Ford Focus"), deps);
