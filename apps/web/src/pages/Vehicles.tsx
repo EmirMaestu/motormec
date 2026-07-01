@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Plus, Trash2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { Pause, Play, Plus, Search, Trash2 } from "lucide-react";
+import { api, qs } from "@/lib/api";
 import { useAuth } from "@/auth";
 import { useToast } from "@/components/toast";
 import { Modal } from "@/components/Modal";
@@ -17,7 +17,7 @@ import {
 import { Badge, Button, Input, PageHeader } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { isValidPlate } from "@/lib/validation";
-import type { Service, Vehicle } from "@/lib/types";
+import type { Customer, Service, Vehicle } from "@/lib/types";
 
 const STATUSES = ["Ingresado", "En Reparación", "Listo", "Entregado", "Suspendido"];
 
@@ -320,8 +320,10 @@ function CreateVehicleModal({ onClose, onSaved }: { onClose: () => void; onSaved
   const queryClient = useQueryClient();
   const toast = useToast();
   const [plate, setPlate] = useState("");
+  const [found, setFound] = useState<Vehicle | null>(null);
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
+  const [customerId, setCustomerId] = useState<string | null>(null);
   const [owner, setOwner] = useState("");
   const [phone, setPhone] = useState("");
   const [services, setServices] = useState<string[]>([]);
@@ -335,26 +337,63 @@ function CreateVehicleModal({ onClose, onSaved }: { onClose: () => void; onSaved
   });
   const serviceOptions = (servicesData?.services ?? []).map((s) => s.name);
 
+  const { data: customersData } = useQuery({
+    queryKey: ["customers"],
+    queryFn: () => api.get<{ customers: Customer[] }>("/api/customers"),
+  });
+
   const createService = useMutation({
     mutationFn: (name: string) => api.post("/api/services", { name }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["services"] }),
+  });
+
+  // Al escribir una patente conocida, ofrecemos reutilizar ese vehículo (nueva entrada).
+  const lookup = useMutation({
+    mutationFn: (p: string) =>
+      api.get<{ vehicle: Vehicle | null; customer: Customer | null; visitCount?: number }>(
+        `/api/vehicles/search${qs({ plate: p })}`,
+      ),
+    onSuccess: (res) => {
+      if (res.vehicle) {
+        setFound(res.vehicle);
+        setBrand(res.vehicle.brand ?? "");
+        setModel(res.vehicle.model ?? "");
+        setCustomerId(res.vehicle.customerId ?? null);
+        setOwner(res.customer?.name ?? res.vehicle.owner ?? "");
+        setPhone(res.customer?.phone ?? res.vehicle.phone ?? "");
+        toast.toast(
+          `Patente ya registrada (${res.visitCount ?? 1} visita/s). Se cargará una nueva entrada.`,
+          "info",
+        );
+      } else {
+        setFound(null);
+      }
+    },
   });
 
   const plateError = submitted && !isValidPlate(plate) ? "Patente inválida (AB123CD o AAA123)" : undefined;
 
   const create = useMutation({
     mutationFn: () =>
-      api.post("/api/vehicles", {
-        plate,
-        brand: brand.trim(),
-        model: model.trim(),
-        owner: owner.trim(),
-        phone,
-        services,
-        cost: Number(cost) || 0,
-        mileage: mileage ? Number(mileage) : null,
-        status: "Ingresado",
-      }),
+      found
+        ? api.post("/api/vehicles/new-entry", {
+            plate,
+            services,
+            cost: Number(cost) || 0,
+            mileage: mileage ? Number(mileage) : null,
+          })
+        : api.post("/api/vehicles", {
+            plate,
+            brand: brand.trim(),
+            model: model.trim(),
+            owner: owner.trim(),
+            phone,
+            customerId,
+            services,
+            cost: Number(cost) || 0,
+            mileage: mileage ? Number(mileage) : null,
+            status: "Ingresado",
+          }),
     onSuccess: () => {
       onSaved();
       onClose();
@@ -364,8 +403,14 @@ function CreateVehicleModal({ onClose, onSaved }: { onClose: () => void; onSaved
 
   const submit = () => {
     setSubmitted(true);
-    if (!isValidPlate(plate) || !brand.trim()) return;
+    if (!isValidPlate(plate)) return;
+    if (!found && !brand.trim()) return;
     create.mutate();
+  };
+
+  const onPlateChange = (v: string) => {
+    setPlate(v);
+    if (found) setFound(null); // el usuario editó la patente → salir del modo "reusar"
   };
 
   return (
@@ -379,30 +424,77 @@ function CreateVehicleModal({ onClose, onSaved }: { onClose: () => void; onSaved
             Cancelar
           </Button>
           <Button onClick={submit} disabled={create.isPending}>
-            {create.isPending ? "Guardando…" : "Guardar"}
+            {create.isPending ? "Guardando…" : found ? "Cargar nueva entrada" : "Guardar"}
           </Button>
         </>
       }
     >
       <div className="grid grid-cols-2 gap-3">
-        <FormField label="Patente" required error={plateError}>
-          <PlateInput value={plate} onChange={setPlate} />
+        <FormField
+          label="Patente"
+          required
+          error={plateError}
+          hint={found ? undefined : "Se busca al salir del campo para reutilizar el vehículo"}
+        >
+          <div className="flex gap-2">
+            <PlateInput
+              value={plate}
+              onChange={onPlateChange}
+              onBlur={() => plate.length >= 2 && lookup.mutate(plate)}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="px-3"
+              onClick={() => plate.length >= 2 && lookup.mutate(plate)}
+              disabled={lookup.isPending}
+            >
+              <Search size={16} />
+            </Button>
+          </div>
         </FormField>
         <FormField label="Kilometraje" hint="Solo números">
           <NumberInput value={mileage} onChange={setMileage} placeholder="185000" />
         </FormField>
       </div>
 
-      <BrandModelSelect brand={brand} model={model} onBrand={setBrand} onModel={setModel} />
+      {found ? (
+        <div className="rounded-[12px] bg-pale-sage p-3 text-[13px] text-deep-forest">
+          Reutilizando{" "}
+          <b>
+            {found.brand} {found.model}
+          </b>{" "}
+          de <b>{owner || "—"}</b>. Se registra una <b>nueva entrada</b> con la misma patente y
+          cliente. Cambiá la patente para crear un vehículo distinto.
+        </div>
+      ) : (
+        <>
+          <BrandModelSelect brand={brand} model={model} onBrand={setBrand} onModel={setModel} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <FormField label="Dueño">
-          <Input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Nombre" />
-        </FormField>
-        <FormField label="Teléfono" hint="Solo números">
-          <NumberInput value={phone} onChange={setPhone} placeholder="2611234567" />
-        </FormField>
-      </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Cliente" hint="Buscá uno existente o escribí uno nuevo">
+              <ClientSelect
+                customers={customersData?.customers ?? []}
+                value={owner}
+                linked={Boolean(customerId)}
+                onSelect={(c) => {
+                  setCustomerId(c.id);
+                  setOwner(c.name);
+                  if (c.phone) setPhone(c.phone);
+                }}
+                onNewName={(name) => {
+                  setCustomerId(null);
+                  setOwner(name);
+                }}
+              />
+            </FormField>
+            <FormField label="Teléfono" hint="Solo números">
+              <NumberInput value={phone} onChange={setPhone} placeholder="2611234567" />
+            </FormField>
+          </div>
+        </>
+      )}
 
       <FormField label="Servicios" hint="Elegí o creá servicios; los nuevos se guardan">
         <CreatableMultiSelect
@@ -417,5 +509,90 @@ function CreateVehicleModal({ onClose, onSaved }: { onClose: () => void; onSaved
         <MoneyInput value={cost} onChange={setCost} />
       </FormField>
     </Modal>
+  );
+}
+
+/** Buscador/vinculador de clientes: elegir uno existente o escribir uno nuevo. */
+function ClientSelect({
+  customers,
+  value,
+  linked,
+  onSelect,
+  onNewName,
+}: {
+  customers: Customer[];
+  value: string;
+  linked: boolean;
+  onSelect: (c: Customer) => void;
+  onNewName: (name: string) => void;
+}) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const q = query.toLowerCase().trim();
+  const filtered = (q ? customers.filter((c) => c.name.toLowerCase().includes(q)) : customers).slice(
+    0,
+    8,
+  );
+  const exact = customers.some((c) => c.name.toLowerCase() === q);
+
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-2 rounded-[4px] border border-black/30 bg-paper-white px-2 py-2 focus-within:border-deep-forest">
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            onNewName(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="Nombre del cliente"
+          className="w-full bg-transparent px-1 text-[16px] text-deep-forest outline-none"
+        />
+        {linked ? (
+          <span className="shrink-0 rounded-full bg-vivid-green/30 px-2 py-0.5 text-[11px] text-deep-forest">
+            vinculado
+          </span>
+        ) : null}
+      </div>
+
+      {open ? (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-[4px] border border-black/15 bg-paper-white py-1 shadow-[0_8px_30px_rgba(4,63,46,0.12)]">
+            {filtered.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  onSelect(c);
+                  setQuery(c.name);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center justify-between px-3 py-2 text-[15px] text-deep-forest hover:bg-pale-sage"
+              >
+                <span>{c.name}</span>
+                <span className="text-[12px] text-charcoal">{c.phone}</span>
+              </button>
+            ))}
+            {q && !exact ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onNewName(query.trim());
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-[15px] text-deep-forest hover:bg-pale-sage"
+              >
+                <Plus size={15} /> Usar “{query.trim()}” (cliente nuevo)
+              </button>
+            ) : null}
+            {filtered.length === 0 && !q ? (
+              <div className="px-3 py-2 text-[14px] text-charcoal">Escribí para buscar…</div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
