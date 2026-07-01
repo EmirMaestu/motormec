@@ -24,6 +24,28 @@ openssl rand -hex 32      # SECRETS_KEY  (cifra los tokens de WhatsApp en la DB)
 
 ## 2. Comandos mínimos en el VPS
 
+### Camino rápido — VPS que YA tiene otro proyecto (un comando)
+
+`infra/vps-setup.sh` es aditivo y defensivo: **detecta antes de instalar, crea su
+propia base y usuario, elige un puerto libre para la API, y NO toca tu proxy ni tu
+base existentes**. Pide confirmación antes de cambiar algo.
+
+```bash
+# en el VPS, como root:
+git clone https://github.com/EmirMaestu/motormec.git /opt/momec-setup
+cd /opt/momec-setup
+export MOMEC_DOMAIN=app.tudominio.com
+export ANTHROPIC_API_KEY=sk-ant-...
+export WHATSAPP_APP_SECRET=...          # de tu app de Meta
+export WHATSAPP_VERIFY_TOKEN=momec_xxx  # el que elijas (lo usás en Meta)
+bash infra/vps-setup.sh
+```
+
+Detecta si usás **nginx** o **Caddy** y suma el vhost del subdominio sin tocar el
+resto. Al final imprime los últimos pasos (certbot, super-admin, webhook).
+
+### Camino manual (VPS limpio)
+
 Seguí `DEPLOY.md` pasos 0–3 (instalar Node/Postgres/Caddy, clonar, crear `.env`).
 Después, todo el ciclo build+migrar+publicar+reiniciar es **un solo comando**:
 
