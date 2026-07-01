@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Printer, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
-import { useAuth } from "@/auth";
 import { useToast } from "@/components/toast";
 import { Modal } from "@/components/Modal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -10,7 +9,6 @@ import { CardRow, DataList } from "@/components/DataList";
 import { FormField, MoneyInput, NumberInput } from "@/components/form";
 import { Button, Input, PageHeader, Textarea } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { printDocument } from "@/lib/export";
 import type { Customer } from "@/lib/types";
 
 interface QuoteItem {
@@ -144,53 +142,13 @@ export function QuotesPage() {
   );
 }
 
-/** Genera e imprime el PDF del presupuesto con la marca del taller. */
+/**
+ * Abre el PDF del presupuesto generado por el servidor (mismo documento branded
+ * que manda el bot por WhatsApp). Así web y WhatsApp son idénticos.
+ */
 function usePrintQuote() {
-  const { tenant } = useAuth();
   return (q: Quote) => {
-    const logoPath = (tenant?.settings as { logoPath?: string } | undefined)?.logoPath;
-    const header = (tenant?.settings as { quoteHeader?: { phone?: string; address?: string; email?: string } } | undefined)?.quoteHeader;
-    const logo = logoPath
-      ? `<img src="/api/media/${logoPath}" style="max-height:70px;max-width:220px;object-fit:contain" />`
-      : `<div style="font-family:Georgia,serif;font-size:28px;color:#043f2e">${tenant?.name ?? "Taller"}</div>`;
-    const rows = q.items.map((it) => [
-      it.description,
-      String(it.quantity),
-      formatCurrency(it.unitPrice),
-      formatCurrency(it.quantity * it.unitPrice),
-    ]);
-    const itemsHtml = rows
-      .map(
-        (r) =>
-          `<tr><td>${r[0]}</td><td class="right">${r[1]}</td><td class="right">${r[2]}</td><td class="right">${r[3]}</td></tr>`,
-      )
-      .join("");
-    const contacto = [header?.phone, header?.address, header?.email].filter(Boolean).join(" · ");
-    const body = `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:2px solid #043f2e;padding-bottom:14px">
-        <div>${logo}<div class="muted" style="margin-top:6px">${tenant?.name ?? ""}${contacto ? " · " + contacto : ""}</div></div>
-        <div style="text-align:right">
-          <h2 style="margin:0">Presupuesto #${q.number}</h2>
-          <div class="muted">${new Date(q.createdAt).toLocaleDateString("es-AR")}</div>
-          ${q.validUntil ? `<div class="muted">Válido hasta ${q.validUntil}</div>` : ""}
-        </div>
-      </div>
-      <div style="margin-top:14px">
-        <strong>Cliente:</strong> ${q.customerName || "—"}${q.customerPhone ? " · " + q.customerPhone : ""}<br/>
-        ${q.vehicleInfo || q.vehiclePlate ? `<strong>Vehículo:</strong> ${[q.vehicleInfo, q.vehiclePlate].filter(Boolean).join(" · ")}` : ""}
-      </div>
-      <table>
-        <thead><tr><th>Detalle</th><th class="right">Cant.</th><th class="right">Precio</th><th class="right">Subtotal</th></tr></thead>
-        <tbody>${itemsHtml}</tbody>
-      </table>
-      <div style="display:flex;justify-content:flex-end;margin-top:12px">
-        <div style="font-family:Georgia,serif;font-size:22px;color:#043f2e">Total: ${formatCurrency(q.total)}</div>
-      </div>
-      ${q.notes ? `<div style="margin-top:14px"><strong>Observaciones:</strong><br/>${q.notes.replace(/\n/g, "<br/>")}</div>` : ""}
-      <div style="margin-top:36px;border-top:1px solid #0000001a;padding-top:10px;font-size:11px;color:#6b7280;text-align:center">
-        Presupuesto generado con Momec · <a href="https://momec.pro" style="color:#2a6f2b">momec.pro</a>
-      </div>`;
-    printDocument(`Presupuesto #${q.number}`, body);
+    window.open(`/api/quotes/${q.id}/pdf`, "_blank", "noopener");
   };
 }
 

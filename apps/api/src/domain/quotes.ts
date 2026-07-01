@@ -1,5 +1,16 @@
+import { eq } from "drizzle-orm";
 import type { TenantDb } from "../db/scope.js";
-import { customers, presupuestos, type Presupuesto, type QuoteItem } from "../db/schema.js";
+import { db } from "../db/client.js";
+import {
+  customers,
+  presupuestos,
+  tenants,
+  type Presupuesto,
+  type QuoteItem,
+  type TenantSettings,
+} from "../db/schema.js";
+import { localDisk } from "../storage/provider.js";
+import { renderQuotePdf } from "./quotePdf.js";
 
 export interface CreateQuoteInput {
   customerId?: string | null;
@@ -57,4 +68,33 @@ export async function createQuote(
 export async function listQuotes(tdb: TenantDb): Promise<Presupuesto[]> {
   const rows = await tdb.select(presupuestos);
   return rows.sort((a, b) => b.number - a.number);
+}
+
+/**
+ * Arma el PDF del presupuesto con la marca del taller (nombre + logo + contacto).
+ * ÚNICA fuente del PDF: la usan tanto la web como el bot de WhatsApp, así el
+ * documento es idéntico en los dos canales.
+ */
+export async function buildQuotePdf(tenantId: string, quote: Presupuesto): Promise<Buffer> {
+  const [row] = await db
+    .select({ name: tenants.name, settings: tenants.settings })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+  const settings = (row?.settings as TenantSettings | null) ?? {};
+  let logo: { bytes: Buffer; mime: string } | null = null;
+  const lp = settings.logoPath;
+  if (lp && /\.(png|jpe?g)$/i.test(lp)) {
+    try {
+      const bytes = await localDisk.read(lp);
+      logo = { bytes, mime: lp.toLowerCase().endsWith("png") ? "image/png" : "image/jpeg" };
+    } catch {
+      /* sin logo */
+    }
+  }
+  return renderQuotePdf({
+    tallerNombre: row?.name ?? "Taller",
+    header: settings.quoteHeader ?? null,
+    logo,
+    quote,
+  });
 }

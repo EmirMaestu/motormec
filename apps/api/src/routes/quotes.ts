@@ -46,6 +46,20 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ quote });
   });
 
+  // PDF del presupuesto con la marca del taller (misma fuente que WhatsApp).
+  app.get("/api/quotes/:id/pdf", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb, auth } = authed(request);
+    const { id } = request.params as { id: string };
+    const quote = await tenantDb.findById(presupuestos, id);
+    if (!quote) return reply.code(404).send({ error: "not_found" });
+    const pdf = await Q.buildQuotePdf(auth.tenantId, quote);
+    return reply
+      .header("X-Content-Type-Options", "nosniff")
+      .header("Content-Disposition", `inline; filename="Presupuesto-${quote.number}.pdf"`)
+      .type("application/pdf")
+      .send(pdf);
+  });
+
   app.post("/api/quotes", { preHandler: requireAuth }, async (request, reply) => {
     const { tenantDb, auth } = authed(request);
     const parsed = createSchema.safeParse(request.body);

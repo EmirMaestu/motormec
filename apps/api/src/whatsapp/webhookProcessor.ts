@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { numerosAutorizados, tenants, type TenantSettings } from "../db/schema.js";
+import { numerosAutorizados, tenants } from "../db/schema.js";
 import { forTenant } from "../db/scope.js";
 import { env } from "../config/env.js";
-import { storage, localDisk } from "../storage/provider.js";
+import { storage } from "../storage/provider.js";
 import { limitsFor, withinLimit } from "../domain/plans.js";
 import { getIaUsage, incIaTokens, incIaUsage } from "../domain/usage.js";
-import { renderQuotePdf } from "../domain/quotePdf.js";
+import { buildQuotePdf } from "../domain/quotes.js";
 import {
   descargarMedia,
   enviarDocumento,
@@ -50,30 +50,11 @@ function makeDeps(
     },
     agente: async (from, texto) => {
       const r = await agenteConsulta(tdb, texto, tallerNombre, from, {
-        // Devuelve el presupuesto como PDF con la marca del taller.
+        // Devuelve el presupuesto como PDF con la marca del taller (misma fuente
+        // que la web: buildQuotePdf → PDF idéntico en los dos canales).
         enviarPresupuestoPdf: async (quote) => {
           try {
-            const [row] = await db
-              .select({ settings: tenants.settings })
-              .from(tenants)
-              .where(eq(tenants.id, tenantId));
-            const settings = (row?.settings as TenantSettings | null) ?? {};
-            let logo: { bytes: Buffer; mime: string } | null = null;
-            const lp = settings.logoPath;
-            if (lp && /\.(png|jpe?g)$/i.test(lp)) {
-              try {
-                const bytes = await localDisk.read(lp);
-                logo = { bytes, mime: lp.toLowerCase().endsWith("png") ? "image/png" : "image/jpeg" };
-              } catch {
-                /* sin logo */
-              }
-            }
-            const pdf = await renderQuotePdf({
-              tallerNombre,
-              header: settings.quoteHeader ?? null,
-              logo,
-              quote,
-            });
+            const pdf = await buildQuotePdf(tenantId, quote);
             const filename = `Presupuesto-${quote.number}.pdf`;
             const mediaId = await subirMedia(ctx, pdf, "application/pdf", filename);
             if (!mediaId) return false;

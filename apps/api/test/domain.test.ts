@@ -297,6 +297,16 @@ describe("Phase 2 domain flows", () => {
     ).json().quotes;
     expect(list).toHaveLength(1);
     expect(list[0].customerName).toBe("Juan");
+
+    // El PDF (misma fuente que WhatsApp) se sirve para la web.
+    const pdf = await app.inject({
+      method: "GET",
+      url: `/api/quotes/${quote.id}/pdf`,
+      headers: { cookie: adminCookie },
+    });
+    expect(pdf.statusCode).toBe(200);
+    expect(pdf.headers["content-type"]).toContain("application/pdf");
+    expect(pdf.rawPayload.subarray(0, 5).toString()).toBe("%PDF-");
   });
 
   it("blocks cross-tenant media access (prefix + path traversal)", async () => {
