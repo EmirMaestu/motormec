@@ -172,7 +172,7 @@ export function VehiclesPage() {
           { header: "Vehículo", cell: (v) => `${v.brand} ${v.model}`.trim() || "—" },
           { header: "Dueño", cell: (v) => v.owner || "—" },
           { header: "Estado", cell: (v) => <StatusSelect v={v} /> },
-          { header: "Costo", cell: (v) => formatCurrency(v.cost) },
+          ...(isAdmin ? [{ header: "Costo", cell: (v: Vehicle) => formatCurrency(v.cost) }] : []),
           { header: "Ingreso", cell: (v) => formatDate(v.entryDate) },
           { header: "", align: "right", cell: (v) => <Actions v={v} /> },
         ]}
@@ -186,7 +186,7 @@ export function VehiclesPage() {
               <Badge tone={v.status}>{v.status}</Badge>
             </div>
             <CardRow label="Dueño">{v.owner || "—"}</CardRow>
-            <CardRow label="Costo">{formatCurrency(v.cost)}</CardRow>
+            {isAdmin ? <CardRow label="Costo">{formatCurrency(v.cost)}</CardRow> : null}
             <CardRow label="Ingreso">{formatDate(v.entryDate)}</CardRow>
             <div className="flex items-center justify-between pt-1">
               <StatusSelect v={v} />
@@ -225,6 +225,7 @@ interface VehicleDetail {
 }
 
 function VehicleDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
+  const { isAdmin } = useAuth();
   const { data } = useQuery({
     queryKey: ["vehicle-detail", id],
     queryFn: () => api.get<VehicleDetail>(`/api/vehicles/${id}/detail`),
@@ -255,10 +256,12 @@ function VehicleDetailModal({ id, onClose }: { id: string; onClose: () => void }
               <div className="eyebrow">Kilometraje</div>
               <div className="text-deep-forest">{v.mileage ? `${v.mileage.toLocaleString("es-AR")} km` : "—"}</div>
             </div>
-            <div>
-              <div className="eyebrow">Costo</div>
-              <div className="text-deep-forest">{formatCurrency(v.cost)}</div>
-            </div>
+            {isAdmin ? (
+              <div>
+                <div className="eyebrow">Costo</div>
+                <div className="text-deep-forest">{formatCurrency(v.cost)}</div>
+              </div>
+            ) : null}
             <div>
               <div className="eyebrow">Ingreso</div>
               <div className="text-deep-forest">{formatDate(v.entryDate)}</div>
@@ -280,7 +283,7 @@ function VehicleDetailModal({ id, onClose }: { id: string; onClose: () => void }
                     </div>
                     <div className="mt-1 flex items-center justify-between text-[12px] text-charcoal">
                       <span className="truncate">{o.services.join(", ") || "sin servicios"}</span>
-                      <span className="shrink-0">{formatCurrency(o.total)}</span>
+                      {isAdmin ? <span className="shrink-0">{formatCurrency(o.total)}</span> : null}
                     </div>
                   </div>
                 ))}

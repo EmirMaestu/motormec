@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { api, qs } from "@/lib/api";
+import { useAuth } from "@/auth";
 import { useToast } from "@/components/toast";
 import { Modal } from "@/components/Modal";
 import { CardRow, DataList } from "@/components/DataList";
@@ -373,7 +374,7 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
       </FormField>
 
       <div className="rounded-[4px] bg-deep-forest text-paper-white px-4 py-3 flex items-center justify-between">
-        <span className="eyebrow text-chartreuse-lime">Total estimado</span>
+        <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-chartreuse-lime">Total estimado</span>
         <span className="font-display text-[22px]">
           {formatCurrency((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0))}
         </span>
@@ -386,6 +387,7 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { isAdmin } = useAuth();
   const { data } = useQuery({
     queryKey: ["order", id],
     queryFn: () => api.get<{ order: WorkOrder }>(`/api/orders/${id}`),
@@ -467,6 +469,15 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
     },
     onError: (e: unknown) => toast.error((e as { message?: string })?.message ?? "No se pudo finalizar"),
   });
+  const deleteOrder = useMutation({
+    mutationFn: () => api.del(`/api/orders/${id}`),
+    onSuccess: () => {
+      onChanged();
+      toast.success("Orden borrada");
+      onClose();
+    },
+    onError: () => toast.error("No se pudo borrar"),
+  });
 
   return (
     <Modal
@@ -497,6 +508,17 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
               {finalize.isPending ? "Procesando…" : "Finalizar y entregar"}
             </Button>
           </>
+        ) : isAdmin ? (
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (confirm(`¿Borrar la orden #${order.number}? Se elimina definitivamente.`))
+                deleteOrder.mutate();
+            }}
+            disabled={deleteOrder.isPending}
+          >
+            <Trash2 size={15} /> Borrar orden
+          </Button>
         ) : null
       }
     >
@@ -527,7 +549,7 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
           <div className="rounded-[4px] bg-deep-forest text-paper-white px-4 py-3 flex items-center justify-between">
-            <span className="eyebrow text-chartreuse-lime">Total</span>
+            <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-chartreuse-lime">Total</span>
             <span className="font-display text-[22px]">
               {formatCurrency((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0))}
             </span>

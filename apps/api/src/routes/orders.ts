@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { customers, orderStatus, vehicles, workOrders } from "../db/schema.js";
-import { authed, requireAuth } from "../auth/middleware.js";
+import { authed, requireAuth, requireRole } from "../auth/middleware.js";
 import * as O from "../domain/orders.js";
 import { notifyOrderStatusChange } from "../domain/notifications.js";
 
@@ -98,6 +98,14 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
       void notifyOrderStatusChange(order).catch(() => {});
     }
     return reply.send({ order });
+  });
+
+  app.delete("/api/orders/:id", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const { tenantDb } = authed(request);
+    const { id } = request.params as { id: string };
+    const removed = await tenantDb.deleteById(workOrders, id);
+    if (!removed) return reply.code(404).send({ error: "not_found" });
+    return reply.send({ ok: true });
   });
 
   app.post("/api/orders/:id/finalize", { preHandler: requireAuth }, async (request, reply) => {

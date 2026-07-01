@@ -59,7 +59,7 @@ export function StatCard({
     >
       <div
         className={cn(
-          "eyebrow",
+          "text-[12px] font-medium uppercase tracking-[0.06em]",
           accent ? "text-ink-black/70" : "text-chartreuse-lime",
         )}
       >
