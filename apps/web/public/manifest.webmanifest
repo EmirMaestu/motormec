@@ -1,0 +1,27 @@
+{
+  "name": "Momec — Gestión de taller",
+  "short_name": "Momec",
+  "description": "Gestión de taller mecánico: vehículos, órdenes, presupuestos y finanzas.",
+  "id": "/app/",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef2e3",
+  "theme_color": "#043f2e",
+  "lang": "es-AR",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

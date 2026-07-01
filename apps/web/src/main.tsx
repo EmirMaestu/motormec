@@ -30,3 +30,12 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// PWA: registrar el service worker (instalable + arranque offline del shell).
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+      /* sin SW la app sigue andando igual */
+    });
+  });
+}

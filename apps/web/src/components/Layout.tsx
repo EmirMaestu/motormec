@@ -15,10 +15,10 @@ import {
   MoreHorizontal,
   Settings,
   Users,
-  Wrench,
 } from "lucide-react";
 import { useAuth } from "@/auth";
 import { cn } from "@/lib/utils";
+import { LogoMark } from "@/components/Logo";
 
 interface NavItem {
   to: string;
@@ -69,9 +69,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* ---------------- Desktop sidebar ---------------- */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 z-40 w-60 bg-paper-white border-r border-black/10 flex-col">
         <div className="flex items-center gap-2 px-5 h-16 border-b border-black/10">
-          <div className="grid place-items-center h-9 w-9 rounded-[4px] bg-deep-forest text-chartreuse-lime">
-            <Wrench size={18} />
-          </div>
+          <LogoMark size={36} />
           <div>
             <div className="font-display text-[20px] leading-none text-deep-forest">Momec</div>
             <div className="text-[11px] text-charcoal truncate max-w-[140px]">{tenant?.name ?? ""}</div>

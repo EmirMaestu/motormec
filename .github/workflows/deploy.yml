@@ -1,12 +1,18 @@
 name: Deploy
 
-# Deploys to the VPS on push to main (and manually). It is a no-op until the
-# VPS secrets are configured in the repo (Settings → Secrets and variables →
-# Actions): VPS_HOST, VPS_USER, VPS_SSH_KEY, and optionally VPS_PORT.
+# Deploy por TAG: se dispara al pushear un tag `vX.Y.Z` (release controlado),
+# o manualmente desde Actions (workflow_dispatch). Ya NO deploya en cada push a
+# main. Es un no-op hasta configurar los secrets del VPS (Settings → Secrets and
+# variables → Actions): VPS_HOST, VPS_USER, VPS_SSH_KEY, y opcional VPS_PORT.
+#
+# Para lanzar una versión:
+#   git tag v1.2.3 && git push origin v1.2.3
+# (o "Run workflow" en la pestaña Actions).
 
 on:
   push:
-    branches: [main]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 concurrency:
@@ -22,6 +28,9 @@ jobs:
       VPS_PORT: ${{ secrets.VPS_PORT }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Release info
+        run: echo "Deploying ${GITHUB_REF_NAME} (${GITHUB_SHA})"
 
       - name: Check deploy config
         id: cfg
