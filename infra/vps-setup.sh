@@ -58,13 +58,16 @@ read -r -p "¿Continuar? [y/N] " GO; [ "${GO,,}" = "y" ] || die "Cancelado."
 
 # ---------------------------------------------------------------- deps ------
 c "Dependencias base"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+# Prerrequisitos que un VPS mínimo puede no traer (curl para el instalador de Node).
+apt-get install -y ca-certificates curl git openssl iproute2
+
 if [ "$HAVE_NODE" = "NO" ]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs
   ok "Node instalado: $(node -v)"
 else ok "Node ya estaba"; fi
-
-apt-get install -y git >/dev/null 2>&1 || true
 
 if [ "$HAVE_PG" = "NO" ]; then
   apt-get install -y postgresql
