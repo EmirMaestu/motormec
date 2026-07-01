@@ -1,10 +1,78 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { MessageSquare, LogOut, Building2 } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { MessageSquare, LogOut, Building2, ImageUp } from "lucide-react";
 import { useAuth } from "@/auth";
-import { Card, PageHeader } from "@/components/ui";
+import { api } from "@/lib/api";
+import { useToast } from "@/components/toast";
+import { Button, Card, PageHeader } from "@/components/ui";
+
+/** Logo propio del taller (aparece en los presupuestos). */
+function LogoUploader({ currentPath }: { currentPath?: string }) {
+  const toast = useToast();
+  const [preview, setPreview] = useState<string | null>(currentPath ? `/api/media/${currentPath}` : null);
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const image = await readDataUrl(file);
+      return api.post<{ logoPath: string }>("/api/settings/logo", { image });
+    },
+    onSuccess: (res) => {
+      setPreview(`/api/media/${res.logoPath}`);
+      toast.success("Logo actualizado · aparece en tus próximos presupuestos");
+    },
+    onError: () => toast.error("No se pudo subir el logo (máx 5MB, PNG/JPG/SVG)"),
+  });
+
+  return (
+    <Card>
+      <div className="mb-3 flex items-center gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-[4px] bg-pale-sage text-deep-forest">
+          <ImageUp size={20} />
+        </span>
+        <div>
+          <div className="font-medium text-deep-forest">Logo del taller</div>
+          <div className="text-[13px] text-charcoal">Se usa en los presupuestos (PNG, JPG o SVG)</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="grid h-20 w-40 place-items-center rounded-[8px] border border-black/10 bg-white overflow-hidden">
+          {preview ? (
+            <img src={preview} alt="Logo" className="max-h-full max-w-full object-contain" />
+          ) : (
+            <span className="text-[13px] text-charcoal">Sin logo</span>
+          )}
+        </div>
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-[4px] border border-ink-black px-3 py-1.5 text-[14px] font-medium text-deep-forest hover:bg-pale-sage">
+          <ImageUp size={15} /> {upload.isPending ? "Subiendo…" : "Subir logo"}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            className="hidden"
+            disabled={upload.isPending}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) upload.mutate(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      </div>
+    </Card>
+  );
+}
+
+function readDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
 
 export function SettingsPage() {
   const { user, tenant, isAdmin, logout } = useAuth();
+  const logoPath = (tenant?.settings as { logoPath?: string } | undefined)?.logoPath;
   return (
     <div>
       <PageHeader eyebrow="Cuenta" title="Configuración" />
@@ -31,6 +99,8 @@ export function SettingsPage() {
             </div>
           </dl>
         </Card>
+
+        {isAdmin ? <LogoUploader currentPath={logoPath} /> : null}
 
         {isAdmin ? (
           <Link

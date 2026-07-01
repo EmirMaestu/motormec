@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import type { TenantDb } from "../db/scope.js";
 import { conversaciones, customers, historialTaller, vehicles, workOrders } from "../db/schema.js";
 import { createOrder } from "../domain/orders.js";
+import { createQuote } from "../domain/quotes.js";
 
 const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
 
@@ -121,6 +122,35 @@ const TOOLS: Anthropic.Tool[] = [
         cliente: { type: "string", description: "Nombre del cliente/dueño" },
       },
       required: ["patente"],
+    },
+  },
+  {
+    name: "crear_presupuesto",
+    description:
+      "Crea un presupuesto/cotización para un cliente con uno o más ítems (servicios o repuestos). Usá esto cuando el usuario pide 'hacé un presupuesto', 'cotizá', 'presupuestá' algo. Devolvé el número y el link a la web para verlo/imprimirlo con el logo del taller.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cliente: { type: "string", description: "Nombre del cliente" },
+        telefono: { type: "string", description: "Teléfono del cliente (opcional)" },
+        patente: { type: "string", description: "Patente del vehículo (opcional)" },
+        vehiculo: { type: "string", description: "Vehículo, ej: Ford Focus (opcional)" },
+        items: {
+          type: "array",
+          description: "Ítems del presupuesto",
+          items: {
+            type: "object",
+            properties: {
+              descripcion: { type: "string", description: "Servicio o repuesto" },
+              cantidad: { type: "number", description: "Cantidad (default 1)" },
+              precio: { type: "number", description: "Precio unitario" },
+            },
+            required: ["descripcion", "precio"],
+          },
+        },
+        notas: { type: "string", description: "Observaciones (opcional)" },
+      },
+      required: ["cliente", "items"],
     },
   },
 ];
@@ -282,6 +312,41 @@ async function ejecutarTool(
         nota: "Registrado. Se puede pedir al usuario que mande fotos del vehículo (opcional).",
       });
     }
+
+    if (name === "crear_presupuesto") {
+      const cliente = String(input.cliente ?? "").trim();
+      const rawItems = Array.isArray(input.items) ? input.items : [];
+      const items = rawItems
+        .map((it) => {
+          const o = it as Record<string, unknown>;
+          return {
+            description: String(o.descripcion ?? "").trim(),
+            quantity: Number(o.cantidad) || 1,
+            unitPrice: Number(o.precio) || 0,
+          };
+        })
+        .filter((i) => i.description);
+      if (!cliente || items.length === 0) {
+        return JSON.stringify({ ok: false, motivo: "faltan cliente o ítems" });
+      }
+      const crudo = String(input.vehiculo ?? "").trim();
+      const { marca, modelo } = normalizarMarcaModelo(crudo);
+      const quote = await createQuote(tdb, BOT_ACTOR.userName, {
+        customerName: cliente,
+        customerPhone: input.telefono ? String(input.telefono) : from,
+        vehiclePlate: input.patente ? String(input.patente).toUpperCase().trim() : undefined,
+        vehicleInfo: `${marca} ${modelo}`.trim() || undefined,
+        items,
+        notes: input.notas ? String(input.notas) : undefined,
+      });
+      return JSON.stringify({
+        ok: true,
+        presupuesto: quote.number,
+        total: quote.total,
+        link: "https://momec.pro/app/presupuestos",
+        nota: "Presupuesto creado con Momec. Compartí el link para verlo/imprimirlo con el logo del taller.",
+      });
+    }
   } catch {
     return JSON.stringify({ error: "no se pudo consultar" });
   }
@@ -309,6 +374,7 @@ export async function agenteConsulta(
   const hoy = new Date().toISOString().split("T")[0];
   const system = `Sos el asistente de WhatsApp del taller ${tallerNombre || "mecánico"}. Atendés al personal del taller. Hoy es ${hoy}.
 - Respondé SOLO con datos reales obtenidos de las herramientas. Nunca inventes patentes, estados, montos ni nombres.
+- HACER UN PRESUPUESTO: si el usuario pide "hacé/armá un presupuesto", "cotizá", "presupuestá" (ej: "presupuestá a Juan: pastillas 15000, mano de obra 8000"), usá "crear_presupuesto" con los ítems (descripción + precio, cantidad si la dice). Al confirmar, mencioná que se hizo con Momec y pasá el link para verlo/imprimirlo con el logo del taller.
 - CARGAR UN INGRESO: si el usuario describe un auto que entró o pide agregar uno (ej: "agregá un VW Gol patente ABC123 de Juan, service"), usá la herramienta "registrar_ingreso" y CARGALO DIRECTAMENTE. Sólo la patente es obligatoria; marca, modelo, km, cliente y tarea son opcionales (cargá lo que haya). Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). No pidas que repita el mensaje si ya lo entendiste. Si falta SOLO la patente, pedila. Tras registrar, confirmá con la orden creada y ofrecé mandar fotos del vehículo.
 - Si al registrar el vehículo YA EXISTÍA (yaExistia=true), aclaralo con naturalidad ("ya lo teníamos, le sumé una nueva entrada").
 - CONSULTAS: usá las herramientas para vehículos, clientes, órdenes, entregas o qué hay en el taller. Para "entregados hoy/esta semana" usá "entregados" con "desde" (calculado desde hoy=${hoy}); para "los últimos N" usá "limite".

@@ -14,6 +14,7 @@ import { partnerRoutes } from "./routes/partners.js";
 import { productRoutes } from "./routes/products.js";
 import { mediaRoutes } from "./routes/media.js";
 import { orderRoutes } from "./routes/orders.js";
+import { quoteRoutes } from "./routes/quotes.js";
 import { reportRoutes } from "./routes/reports.js";
 import { serviceRoutes } from "./routes/services.js";
 import { transactionRoutes } from "./routes/transactions.js";
@@ -54,6 +55,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(customerRoutes);
   await app.register(vehicleRoutes);
   await app.register(orderRoutes);
+  await app.register(quoteRoutes);
   await app.register(transactionRoutes);
   await app.register(productRoutes);
   await app.register(partnerRoutes);

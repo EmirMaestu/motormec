@@ -13,6 +13,7 @@ import { PartnersPage } from "./pages/Partners";
 import { ReportsPage } from "./pages/Reports";
 import { WhatsAppPage } from "./pages/WhatsApp";
 import { OrdersPage } from "./pages/Orders";
+import { QuotesPage } from "./pages/Quotes";
 import { SettingsPage } from "./pages/Settings";
 import { AdminConsole } from "./pages/admin/AdminConsole";
 
@@ -54,6 +55,7 @@ function TenantApp() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/vehiculos" element={<VehiclesPage />} />
         <Route path="/ordenes" element={<OrdersPage />} />
+        <Route path="/presupuestos" element={<QuotesPage />} />
         <Route path="/configuracion" element={<SettingsPage />} />
         <Route path="/clientes" element={<CustomersPage />} />
         <Route path="/finanzas" element={<FinancePage />} />

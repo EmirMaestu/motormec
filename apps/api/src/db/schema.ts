@@ -69,7 +69,18 @@ export interface TenantSettings {
   companyDescription?: string;
   copyright?: string;
   branding?: Record<string, unknown>;
+  /** Logo propio del taller (ruta de media) para presupuestos con su marca. */
+  logoPath?: string;
+  /** Datos de contacto que aparecen en el presupuesto. */
+  quoteHeader?: { phone?: string; address?: string; email?: string };
   [key: string]: unknown;
+}
+
+/** Ítem de un presupuesto. */
+export interface QuoteItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -736,6 +747,38 @@ export const historialTaller = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/*  presupuestos — cotizaciones para un cliente, con la marca del taller.      */
+/* -------------------------------------------------------------------------- */
+
+export const presupuestos = pgTable(
+  "presupuestos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    customerName: text("customer_name").notNull().default(""),
+    customerPhone: text("customer_phone"),
+    vehiclePlate: text("vehicle_plate"),
+    vehicleInfo: text("vehicle_info"),
+    items: jsonb("items").$type<QuoteItem[]>().notNull().default([]),
+    notes: text("notes"),
+    subtotal: doublePrecision("subtotal").notNull().default(0),
+    total: doublePrecision("total").notNull().default(0),
+    validUntil: text("valid_until"),
+    status: text("status").notNull().default("borrador"),
+    createdByName: text("created_by_name"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("presupuestos_tenant_idx").on(t.tenantId),
+    uniqueIndex("presupuestos_tenant_number_uq").on(t.tenantId, t.number),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
 /*  BILLING — suscripciones recurrentes con 2 proveedores ruteados por país.  */
 /*  El "suscriptor" es el TENANT (el taller que le paga a Momec). Estas tablas */
 /*  son de plataforma (no tenant-scoped): las maneja el BillingService, no los */
@@ -951,6 +994,7 @@ export const tenantScopedTables = {
   conversaciones,
   historialTaller,
   workOrders,
+  presupuestos,
   usageCounters,
 } as const;
 
@@ -982,3 +1026,4 @@ export type Charge = typeof charges.$inferSelect;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;
 export type Referral = typeof referrals.$inferSelect;
 export type WalletEntry = typeof walletLedger.$inferSelect;
+export type Presupuesto = typeof presupuestos.$inferSelect;

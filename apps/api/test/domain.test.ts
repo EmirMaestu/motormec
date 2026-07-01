@@ -271,6 +271,32 @@ describe("Phase 2 domain flows", () => {
     expect(june3.count).toBe(2);
   });
 
+  it("creates a quote with sequential number and computed total", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/quotes",
+      headers: { cookie: adminCookie, ...J },
+      payload: {
+        customerName: "Juan",
+        vehiclePlate: "QT100",
+        items: [
+          { description: "Pastillas de freno", quantity: 1, unitPrice: 15000 },
+          { description: "Mano de obra", quantity: 2, unitPrice: 4000 },
+        ],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const quote = created.json().quote;
+    expect(quote.number).toBe(1);
+    expect(quote.total).toBe(23000); // 15000 + 2×4000
+
+    const list = (
+      await app.inject({ method: "GET", url: "/api/quotes", headers: { cookie: adminCookie } })
+    ).json().quotes;
+    expect(list).toHaveLength(1);
+    expect(list[0].customerName).toBe("Juan");
+  });
+
   it("products: create + update log inventory movements and compute lowStock", async () => {
     const created = (
       await app.inject({

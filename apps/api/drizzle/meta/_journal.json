@@ -50,6 +50,13 @@
       "when": 1782895165269,
       "tag": "0006_colossal_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782900231181,
+      "tag": "0007_colossal_master_chief",
+      "breakpoints": true
     }
   ]
 }
