@@ -21,7 +21,7 @@ interface AdminTenant {
   counts: { users: number; vehicles: number; orders: number };
 }
 
-const PLANS = ["arranque", "pro", "cadena", "enterprise"];
+const PLANS = ["starter", "pro", "max", "standard"];
 
 export function AdminConsole() {
   const { admin, isLoading } = useAdminAuth();
@@ -175,7 +175,7 @@ function CreateTenantModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [form, setForm] = useState({
     name: "",
     slug: "",
-    plan: "arranque",
+    plan: "starter",
     adminName: "",
     adminUsername: "admin",
     adminPassword: "",

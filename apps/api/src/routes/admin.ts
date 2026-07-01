@@ -93,7 +93,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           .min(2)
           .max(60)
           .regex(/^[a-z0-9-]+$/, "slug: solo minúsculas, números y guiones"),
-        plan: z.enum(PLANS).default("arranque"),
+        plan: z.enum(PLANS).default("starter"),
         adminName: z.string().min(1).max(120),
         adminUsername: z.string().min(1).max(60),
         adminPassword: z.string().min(6).max(200),

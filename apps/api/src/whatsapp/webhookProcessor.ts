@@ -50,6 +50,8 @@ function makeDeps(
     },
     agente: async (from, texto) => {
       const r = await agenteConsulta(tdb, texto, tallerNombre, from, {
+        // Modelo del bot según el plan: Starter→Haiku, Pro→Sonnet 5, Max→Opus.
+        model: limitsFor(plan).model,
         // Devuelve el presupuesto como PDF con la marca del taller (misma fuente
         // que la web: buildQuotePdf → PDF idéntico en los dos canales).
         enviarPresupuestoPdf: async (quote) => {

@@ -398,6 +398,8 @@ export interface AgenteResultado {
 }
 
 export interface AgenteHooks {
+  /** Modelo de Claude a usar (según el plan del taller). Default: env. */
+  model?: string;
   /** Envía el presupuesto en PDF. Devuelve true si se envió (para no duplicar en texto). */
   enviarPresupuestoPdf?: (quote: Presupuesto) => Promise<boolean>;
 }
@@ -434,7 +436,13 @@ export async function agenteConsulta(
   try {
     for (let i = 0; i < 4; i++) {
       const res = await c.messages.create(
-        { model: env.CLAUDE_MODEL_AGENT, max_tokens: 1024, system, tools: TOOLS, messages },
+        {
+          model: hooks?.model || env.CLAUDE_MODEL_AGENT,
+          max_tokens: 1024,
+          system,
+          tools: TOOLS,
+          messages,
+        },
         { timeout: 30_000 },
       );
       inputTokens += res.usage?.input_tokens ?? 0;

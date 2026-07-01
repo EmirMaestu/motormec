@@ -42,9 +42,17 @@ describe("plan limits — pure helpers", () => {
     expect(withinLimit(99999, Infinity)).toBe(true);
   });
 
-  it("limitsFor falls back to 'arranque' for unknown plans", () => {
-    expect(limitsFor("no-existe").maxUsers).toBe(limitsFor("arranque").maxUsers);
-    expect(limitsFor("enterprise").maxUsers).toBe(Infinity);
+  it("limitsFor falls back to Starter for unknown plans", () => {
+    expect(limitsFor("no-existe").maxUsers).toBe(limitsFor("starter").maxUsers);
+    expect(limitsFor("max").maxUsers).toBe(Infinity);
+  });
+
+  it("el modelo del bot escala con el plan (Starter→Haiku, Pro→Sonnet 5, Max→Opus)", () => {
+    expect(limitsFor("starter").model).toBe("claude-haiku-4-5");
+    expect(limitsFor("pro").model).toBe("claude-sonnet-5");
+    expect(limitsFor("max").model).toBe("claude-opus-4-8");
+    expect(limitsFor("starter").dataMigration).toBe(false);
+    expect(limitsFor("pro").dataMigration).toBe(true);
   });
 
   it("toWaNumber normalizes AR numbers to 549<area><local>", () => {
