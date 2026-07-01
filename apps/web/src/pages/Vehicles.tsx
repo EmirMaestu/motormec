@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Plus, Search, Trash2 } from "lucide-react";
 import { api, qs } from "@/lib/api";
@@ -231,17 +232,40 @@ interface VehicleDetail {
     total: number;
     services: string[];
     entryDate: string;
+    photos: string[];
   }>;
   photos: string[];
+  loosePhotos: string[];
+}
+
+function PhotoGrid({ photos }: { photos: string[] }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {photos.map((p) => (
+        <a key={p} href={`/api/media/${p}`} target="_blank" rel="noreferrer">
+          <img
+            src={`/api/media/${p}`}
+            alt="Foto del vehículo"
+            className="h-24 w-full rounded-[8px] object-cover"
+          />
+        </a>
+      ))}
+    </div>
+  );
 }
 
 function VehicleDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
   const { isAdmin } = useAuth();
+  const navigate = useNavigate();
   const { data } = useQuery({
     queryKey: ["vehicle-detail", id],
     queryFn: () => api.get<VehicleDetail>(`/api/vehicles/${id}/detail`),
   });
   const v = data?.vehicle;
+  const openOrder = (number: number) => {
+    onClose();
+    navigate(`/ordenes?q=${encodeURIComponent(`#${number}`)}`);
+  };
 
   return (
     <Modal open onOpenChange={(o) => !o && onClose()} title={v ? v.plate : "Vehículo"}>
@@ -287,7 +311,12 @@ function VehicleDetailModal({ id, onClose }: { id: string; onClose: () => void }
             ) : (
               <div className="space-y-2">
                 {data!.orders.map((o) => (
-                  <div key={o.id} className="rounded-[12px] bg-pale-sage px-3 py-2">
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => openOrder(o.number)}
+                    className="w-full rounded-[12px] bg-pale-sage px-3 py-2 text-left transition hover:bg-vivid-green/20"
+                  >
                     <div className="flex items-center justify-between">
                       <span className="text-[14px] font-medium text-deep-forest">Orden #{o.number}</span>
                       <Badge tone={o.status}>{o.status}</Badge>
@@ -296,31 +325,27 @@ function VehicleDetailModal({ id, onClose }: { id: string; onClose: () => void }
                       <span className="truncate">{o.services.join(", ") || "sin servicios"}</span>
                       {isAdmin ? <span className="shrink-0">{formatCurrency(o.total)}</span> : null}
                     </div>
-                  </div>
+                    {o.photos.length ? (
+                      <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="mb-1 text-[11px] text-charcoal">
+                          Fotos del ingreso ({o.photos.length})
+                        </div>
+                        <PhotoGrid photos={o.photos} />
+                      </div>
+                    ) : null}
+                  </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Fotos */}
-          <div className="border-t border-black/10 pt-4">
-            <div className="eyebrow mb-2">Fotos {data?.photos.length ? `(${data.photos.length})` : ""}</div>
-            {(data?.photos.length ?? 0) === 0 ? (
-              <p className="text-[13px] text-charcoal">Sin fotos todavía.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {data!.photos.map((p) => (
-                  <a key={p} href={`/api/media/${p}`} target="_blank" rel="noreferrer">
-                    <img
-                      src={`/api/media/${p}`}
-                      alt="Foto del vehículo"
-                      className="h-24 w-full rounded-[8px] object-cover"
-                    />
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Fotos sin orden vinculada (historial viejo) */}
+          {data?.loosePhotos?.length ? (
+            <div className="border-t border-black/10 pt-4">
+              <div className="eyebrow mb-2">Otras fotos ({data.loosePhotos.length})</div>
+              <PhotoGrid photos={data.loosePhotos} />
+            </div>
+          ) : null}
         </div>
       )}
     </Modal>

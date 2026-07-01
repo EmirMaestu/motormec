@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { api, qs } from "@/lib/api";
@@ -25,8 +26,9 @@ import { ORDER_STATUSES, type OrderPart, type Product, type Service, type Vehicl
 export function OrdersPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState("");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [showCreate, setShowCreate] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
 

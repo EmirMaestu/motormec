@@ -260,6 +260,7 @@ async function ejecutarTool(
         tarea: tarea || null,
         cliente: cliente || null,
         vehicleId: order.vehicleId,
+        workOrderId: order.id,
         status: "linked",
         fotoPaths: [],
       });

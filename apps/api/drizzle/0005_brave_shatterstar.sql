@@ -1,0 +1,2 @@
+ALTER TABLE "historial_taller" ADD COLUMN "work_order_id" uuid;--> statement-breakpoint
+ALTER TABLE "historial_taller" ADD CONSTRAINT "historial_taller_work_order_id_work_orders_id_fk" FOREIGN KEY ("work_order_id") REFERENCES "public"."work_orders"("id") ON DELETE set null ON UPDATE no action;

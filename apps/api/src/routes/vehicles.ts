@@ -198,12 +198,26 @@ export async function vehicleRoutes(app: FastifyInstance): Promise<void> {
     const customer = vehicle.customerId
       ? await tenantDb.findById(customers, vehicle.customerId)
       : null;
-    const orders = (await tenantDb.select(workOrders, eq(workOrders.vehicleId, id))).sort(
+    const orderRows = (await tenantDb.select(workOrders, eq(workOrders.vehicleId, id))).sort(
       (a, b) => b.number - a.number,
     );
     const hist = await tenantDb.select(historialTaller, eq(historialTaller.vehicleId, id));
-    const photos = hist.flatMap((h) => h.fotoPaths ?? []);
-    return reply.send({ vehicle, customer, orders, photos });
+    // Fotos agrupadas por orden (el "momento" del ingreso). Las que no tienen
+    // orden vinculada (historial viejo) van a un bucket general.
+    const photosByOrder = new Map<string, string[]>();
+    const loosePhotos: string[] = [];
+    for (const h of hist) {
+      const fotos = h.fotoPaths ?? [];
+      if (!fotos.length) continue;
+      if (h.workOrderId) {
+        photosByOrder.set(h.workOrderId, [...(photosByOrder.get(h.workOrderId) ?? []), ...fotos]);
+      } else {
+        loosePhotos.push(...fotos);
+      }
+    }
+    const orders = orderRows.map((o) => ({ ...o, photos: photosByOrder.get(o.id) ?? [] }));
+    const photos = hist.flatMap((h) => h.fotoPaths ?? []); // compat: todas las fotos
+    return reply.send({ vehicle, customer, orders, photos, loosePhotos });
   });
 
   app.post("/api/vehicles", { preHandler: requireAuth }, async (request, reply) => {

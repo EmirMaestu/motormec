@@ -228,6 +228,8 @@ describe("WhatsApp bot — state machine", () => {
     expect(orders).toHaveLength(1);
     expect(orders[0]?.vehicleId).toBe(vs[0]?.id);
     expect(orders[0]?.services).toEqual(["cambio de aceite"]);
+    // The historial (and thus its photos) is tied to that order — the "moment".
+    expect(linked?.workOrderId).toBe(orders[0]?.id);
   });
 
   it("customer-found path: verificando_cliente → sí → confirmando", async () => {

@@ -231,7 +231,7 @@ async function crearVehiculoDesdeConversacion(
   });
 
   // Each WhatsApp intake also generates a Work Order (reusing this vehicle).
-  await createOrder(tdb, BOT_ACTOR, {
+  const order = await createOrder(tdb, BOT_ACTOR, {
     vehicleId: vehicle.id,
     customerId: vehicle.customerId ?? null,
     customerName: datos.cliente || "Sin nombre",
@@ -244,6 +244,7 @@ async function crearVehiculoDesdeConversacion(
     status: "linked",
     vehicleId: vehicle.id,
     customerId: vehicle.customerId ?? null,
+    workOrderId: order.id,
     fotoPaths: datos.fotoPaths ?? [],
   });
 }

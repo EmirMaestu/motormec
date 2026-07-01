@@ -713,6 +713,10 @@ export const historialTaller = pgTable(
     customerId: uuid("customer_id").references(() => customers.id, {
       onDelete: "set null",
     }),
+    // Orden de trabajo a la que pertenecen estas fotos (el "momento" del ingreso).
+    workOrderId: uuid("work_order_id").references(() => workOrders.id, {
+      onDelete: "set null",
+    }),
     status: text("status", { enum: historialStatus })
       .notNull()
       .default("pending"),
