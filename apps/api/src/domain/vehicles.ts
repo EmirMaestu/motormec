@@ -3,18 +3,103 @@ import { randomUUID } from "node:crypto";
 import type { TenantDb } from "../db/scope.js";
 import {
   customers,
+  transactions,
   vehicles,
+  workOrders,
   type VehicleCosts,
   type VehiclePart,
   type VehicleResponsible,
   type Vehicle,
+  type WorkOrder,
 } from "../db/schema.js";
+import { categorizeService } from "./categorize.js";
 import { recalcCustomerMetrics } from "./customerMetrics.js";
 import { logVehicleMovement, type Actor } from "./movements.js";
+import { finalizeOrder } from "./orders.js";
 
 const DELIVERED = "Entregado";
 const SUSPENDED = "Suspendido";
 const IN_REPAIR = "En Reparación";
+
+// Estado del vehículo (5) → estado de la orden (7). Mantiene ambos en sync.
+const VEH_TO_ORDER: Record<string, WorkOrder["status"]> = {
+  Ingresado: "Pendiente",
+  "En Reparación": "En reparación",
+  Listo: "Listo para entregar",
+  Entregado: "Entregado",
+  Suspendido: "Cancelado",
+};
+
+/**
+ * Al cambiar el estado del vehículo, sincroniza su última orden y, si se entrega,
+ * genera el ingreso en finanzas (finaliza la orden, o crea el movimiento con el
+ * costo del vehículo si no hay orden). Evita ingresos duplicados.
+ */
+async function syncOrderAndFinance(
+  tdb: TenantDb,
+  actor: Actor,
+  vehicle: Vehicle,
+): Promise<void> {
+  const orders = (await tdb.select(workOrders, eq(workOrders.vehicleId, vehicle.id))).sort(
+    (a, b) => b.number - a.number,
+  );
+  const latest = orders[0];
+
+  if (vehicle.status === DELIVERED) {
+    if (latest && !latest.finalizedAt) {
+      try {
+        await finalizeOrder(tdb, actor, latest.id);
+      } catch {
+        // Falta de stock u otro problema: al menos dejamos la orden entregada.
+        await tdb.updateById(workOrders, latest.id, {
+          status: "Entregado",
+          deliveryDate: todayDate(),
+          updatedAt: new Date(),
+        });
+      }
+      return;
+    }
+    if (!latest && (vehicle.cost ?? 0) > 0) {
+      // Vehículo entregado sin orden → generar ingreso con el costo del vehículo,
+      // salvo que ya exista un ingreso activo para este vehículo.
+      const yaHay = await tdb.selectOne(
+        transactions,
+        and(
+          eq(transactions.vehicleId, vehicle.id),
+          eq(transactions.type, "Ingreso"),
+          eq(transactions.active, true),
+        ),
+      );
+      if (!yaHay) {
+        await tdb.insert(transactions, {
+          date: todayDate(),
+          description: `${vehicle.plate} - ${`${vehicle.brand} ${vehicle.model}`.trim()} (${vehicle.owner})`,
+          type: "Ingreso",
+          category: categorizeService(vehicle.services ?? []),
+          amount: vehicle.cost,
+          active: true,
+          vehicleId: vehicle.id,
+          vehicleDetails: {
+            plate: vehicle.plate,
+            brand: vehicle.brand,
+            model: vehicle.model,
+            customer: vehicle.owner,
+          },
+          paymentMethod: "Efectivo",
+        });
+      }
+    }
+    return;
+  }
+
+  // Estados de trabajo: reflejar en la última orden (sin re-tocar el vehículo).
+  if (latest && latest.status !== "Entregado" && latest.status !== "Cancelado") {
+    const target = VEH_TO_ORDER[vehicle.status];
+    if (target && latest.status !== target) {
+      await tdb.updateById(workOrders, latest.id, { status: target, updatedAt: new Date() });
+    }
+  }
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -207,6 +292,11 @@ export async function updateVehicle(
       previousServices: existing.services,
       newServices: updated.services,
     });
+  }
+
+  // Sincronizar la orden y finanzas cuando cambió el estado del vehículo.
+  if (input.status && input.status !== existing.status) {
+    await syncOrderAndFinance(tdb, actor, updated);
   }
 
   return updated;

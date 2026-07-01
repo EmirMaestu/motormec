@@ -124,6 +124,7 @@ describe("Phase 2 domain flows", () => {
       })
     ).json().vehicle;
 
+    // Entregar el vehículo genera el ingreso en finanzas automáticamente.
     const delivered = await app.inject({
       method: "PATCH",
       url: `/api/vehicles/${v.id}`,
@@ -133,24 +134,6 @@ describe("Phase 2 domain flows", () => {
     expect(delivered.json().vehicle.inTaller).toBe(false);
     expect(delivered.json().vehicle.exitDate).toBeTruthy();
 
-    const tx = await app.inject({
-      method: "POST",
-      url: "/api/transactions/vehicle",
-      headers: { cookie: adminCookie, ...J },
-      payload: {
-        vehicleId: v.id,
-        vehiclePlate: "DEL999",
-        vehicleBrand: "X",
-        vehicleModel: "Y",
-        customerName: "Cliente",
-        services: ["Frenos"],
-        amount: 30000,
-        deliveryDate: "2026-06-02",
-      },
-    });
-    expect(tx.statusCode).toBe(201);
-    expect(tx.json().transaction.category).toBe("Frenos");
-
     const summary = (
       await app.inject({
         method: "GET",
@@ -159,6 +142,16 @@ describe("Phase 2 domain flows", () => {
       })
     ).json();
     expect(summary.totalIngresos).toBe(30000);
+
+    // El ingreso quedó categorizado por el servicio y no se duplica al re-entregar.
+    const txs = (
+      await app.inject({ method: "GET", url: "/api/transactions", headers: { cookie: adminCookie } })
+    ).json();
+    const ingresos = txs.transactions.filter(
+      (t: { type: string; amount: number }) => t.type === "Ingreso" && t.amount === 30000,
+    );
+    expect(ingresos).toHaveLength(1);
+    expect(ingresos[0].category).toBe("Frenos");
   });
 
   it("products: create + update log inventory movements and compute lowStock", async () => {

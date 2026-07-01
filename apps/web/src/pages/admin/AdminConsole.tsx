@@ -324,6 +324,10 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
   const [plan, setPlan] = useState<string | null>(null);
   const [numPhone, setNumPhone] = useState("");
   const [numName, setNumName] = useState("");
+  const [nuName, setNuName] = useState("");
+  const [nuUser, setNuUser] = useState("");
+  const [nuPass, setNuPass] = useState("");
+  const [nuRole, setNuRole] = useState("mecanico");
 
   const updateTenant = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.patch(`/api/admin/tenants/${id}`, body),
@@ -359,6 +363,30 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
       toast.success("Rol actualizado");
     },
     onError: () => toast.error("No se pudo actualizar el rol"),
+  });
+  const createUser = useMutation({
+    mutationFn: () =>
+      api.post(`/api/admin/tenants/${id}/users`, {
+        name: nuName.trim(),
+        username: nuUser.trim(),
+        password: nuPass,
+        role: nuRole,
+      }),
+    onSuccess: () => {
+      refetch();
+      setNuName("");
+      setNuUser("");
+      setNuPass("");
+      toast.success("Usuario creado");
+    },
+    onError: (e: unknown) =>
+      toast.error(
+        e instanceof ApiError && e.code === "username_taken"
+          ? "Ese usuario ya existe"
+          : e instanceof ApiError && e.code === "plan_limit"
+            ? (e.message ?? "Alcanzaste el límite de usuarios del plan")
+            : "No se pudo crear el usuario",
+      ),
   });
 
   return (
@@ -482,6 +510,35 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
             <p className="mt-2 text-[12px] text-charcoal">
               Admin ve todo (incluida Finanzas). Mecánico no ve Finanzas/Reportes.
             </p>
+
+            <div className="mt-3 rounded-[12px] bg-pale-sage p-3">
+              <div className="eyebrow mb-2">Agregar usuario</div>
+              <div className="grid grid-cols-2 gap-2">
+                <Input value={nuName} onChange={(e) => setNuName(e.target.value)} placeholder="Nombre" />
+                <Input value={nuUser} onChange={(e) => setNuUser(e.target.value)} placeholder="Usuario" />
+                <Input
+                  type="password"
+                  value={nuPass}
+                  onChange={(e) => setNuPass(e.target.value)}
+                  placeholder="Contraseña (mín. 6)"
+                />
+                <Select value={nuRole} onChange={setNuRole}>
+                  <option value="mecanico">mecánico</option>
+                  <option value="admin">admin</option>
+                </Select>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2"
+                onClick={() => createUser.mutate()}
+                disabled={
+                  !nuName.trim() || !nuUser.trim() || nuPass.length < 6 || createUser.isPending
+                }
+              >
+                <Plus size={15} /> {createUser.isPending ? "Creando…" : "Agregar usuario"}
+              </Button>
+            </div>
           </div>
         </div>
       )}
