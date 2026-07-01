@@ -233,6 +233,18 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ user: { id: user.id, username: user.username, role: user.role } });
   });
 
+  /* --------------------- cambiar rol / estado de un usuario ------------ */
+  app.patch("/api/admin/users/:id", { preHandler: requirePlatformAdmin }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = z
+      .object({ role: z.enum(["admin", "mecanico"]).optional(), active: z.boolean().optional() })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+    const [updated] = await db.update(users).set(parsed.data).where(eq(users.id, id)).returning();
+    if (!updated) return reply.code(404).send({ error: "not_found" });
+    return reply.send({ user: { id: updated.id, role: updated.role, active: updated.active } });
+  });
+
   /* --------------- authorized numbers (per tenant) --------------------- */
   app.post("/api/admin/tenants/:id/numbers", { preHandler: requirePlatformAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string };

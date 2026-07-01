@@ -99,6 +99,20 @@ describe("WhatsApp bot — state machine", () => {
     expect(r).toBe("confirmando");
   });
 
+  it("routes a vehicle message to intake even if the model mislabels the intent", async () => {
+    // Trae datos de vehículo pero el modelo lo etiquetó "otro" → igual es ingreso.
+    const { deps } = fakeDeps({
+      intencion: "otro",
+      marca_modelo: "VW Gol",
+      patente: "ABC123",
+      kilometraje: "",
+      tarea: "service",
+      cliente: "Cristián",
+    });
+    const r = await procesarMensaje(tdb, textMsg("mis1", "Agregá un VW Gol patente ABC123"), deps);
+    expect(r).toBe("confirmando");
+  });
+
   it("is idempotent by wa_message_id", async () => {
     const { deps } = fakeDeps({ ...EMPTY, intencion: "ingreso", marca_modelo: "Ford Focus" });
     const r1 = await procesarMensaje(tdb, textMsg("dup1", "Ford Focus"), deps);

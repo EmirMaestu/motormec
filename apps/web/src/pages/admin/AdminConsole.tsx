@@ -351,6 +351,15 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
     mutationFn: (nid: string) => api.del(`/api/admin/numbers/${nid}`),
     onSuccess: refetch,
   });
+  const setRole = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      api.patch(`/api/admin/users/${userId}`, { role }),
+    onSuccess: () => {
+      refetch();
+      toast.success("Rol actualizado");
+    },
+    onError: () => toast.error("No se pudo actualizar el rol"),
+  });
 
   return (
     <Modal open onOpenChange={(v) => !v && onClose()} title={t ? t.name : "Taller"}>
@@ -454,14 +463,25 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
             <div className="eyebrow mb-2">Usuarios del taller</div>
             <div className="space-y-2">
               {(data?.users ?? []).map((u) => (
-                <div key={u.id} className="flex items-center justify-between text-[14px]">
-                  <span>
+                <div key={u.id} className="flex items-center justify-between gap-2 text-[14px]">
+                  <span className="min-w-0 truncate">
                     {u.name} · <span className="text-charcoal">{u.username}</span>
                   </span>
-                  <Badge tone="processed">{u.role}</Badge>
+                  <select
+                    value={u.role}
+                    onChange={(e) => setRole.mutate({ userId: u.id, role: e.target.value })}
+                    disabled={setRole.isPending}
+                    className="shrink-0 rounded-[4px] border border-black/20 bg-pale-sage px-2 py-1 text-[13px]"
+                  >
+                    <option value="admin">admin</option>
+                    <option value="mecanico">mecánico</option>
+                  </select>
                 </div>
               ))}
             </div>
+            <p className="mt-2 text-[12px] text-charcoal">
+              Admin ve todo (incluida Finanzas). Mecánico no ve Finanzas/Reportes.
+            </p>
           </div>
         </div>
       )}

@@ -317,19 +317,19 @@ export async function procesarMensaje(
       status: "processed",
     });
 
-    // Ramificación por intención: no registrar un vehículo si el mensaje no es
-    // un ingreso con datos reales (evita "registrar la nada" ante un "Hola").
+    // Ruteo: es un INGRESO si trae datos de vehículo y NO es una consulta.
+    // (Evita registrar ante un "Hola" y evita que un ingreso caiga en el agente
+    // de solo-lectura.)
     const hayDatos = Boolean(datos.patente || datos.marca_modelo || datos.tarea);
-    const intent = datos.intencion ?? (hayDatos ? "ingreso" : "saludo");
-    // No es un ingreso con datos reales → conversación libre.
-    if (intent !== "ingreso" || !hayDatos) {
-      // Agente con herramientas (consulta cualquier cosa con datos reales).
+    const esConsulta = datos.intencion === "consulta";
+    if (!hayDatos || esConsulta) {
+      // Conversación libre → agente con herramientas (consulta datos reales).
       if (deps.agente) {
         await deps.send(from, await deps.agente(texto));
-        return intent === "consulta" ? "consulta" : "saludo";
+        return esConsulta ? "consulta" : "saludo";
       }
       // Respaldo sin agente (tests): plantillas.
-      if (intent === "consulta") {
+      if (esConsulta) {
         await deps.send(from, await natural(deps, await responderConsulta(tdb, datos)));
         return "consulta";
       }

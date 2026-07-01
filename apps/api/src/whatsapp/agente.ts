@@ -53,6 +53,18 @@ const TOOLS: Anthropic.Tool[] = [
       required: ["numero"],
     },
   },
+  {
+    name: "entregados",
+    description:
+      "Lista vehículos ENTREGADOS, del más reciente al más viejo. Para 'hoy'/'esta semana' pasá 'desde' (calculá la fecha con la fecha de hoy del sistema). Para 'los últimos N' pasá 'limite'. Se pueden combinar.",
+    input_schema: {
+      type: "object",
+      properties: {
+        desde: { type: "string", description: "Fecha mínima de entrega, formato YYYY-MM-DD (opcional)" },
+        limite: { type: "number", description: "Máximo de resultados (opcional)" },
+      },
+    },
+  },
 ];
 
 const ENTREGADOS = new Set(["Entregado", "Suspendido"]);
@@ -130,6 +142,28 @@ async function ejecutarTool(
         servicios: o.services,
       });
     }
+
+    if (name === "entregados") {
+      const desde = String(input.desde ?? "").trim();
+      const limite = Number(input.limite) || 0;
+      const vs = await tdb.select(vehicles);
+      const fecha = (v: (typeof vs)[number]) => v.exitDate || v.entryDate || "";
+      let entregados = vs.filter((v) => v.status === "Entregado");
+      if (desde) entregados = entregados.filter((v) => fecha(v) >= desde);
+      entregados.sort((a, b) => (fecha(a) < fecha(b) ? 1 : -1));
+      if (limite > 0) entregados = entregados.slice(0, limite);
+      return JSON.stringify({
+        cantidad: entregados.length,
+        vehiculos: entregados.map((v) => ({
+          patente: v.plate,
+          marca: v.brand,
+          modelo: v.model,
+          dueño: v.owner,
+          entregado: fecha(v),
+          costo: v.cost,
+        })),
+      });
+    }
   } catch {
     return JSON.stringify({ error: "no se pudo consultar" });
   }
@@ -153,10 +187,13 @@ export async function agenteConsulta(
     "Puedo ayudarte a cargar un ingreso, consultar un vehículo o cliente, o ver el estado de una orden. Contame qué necesitás. 🙂";
   if (!c) return { texto: fallback, inputTokens: 0, outputTokens: 0 };
 
-  const system = `Sos el asistente de WhatsApp del taller ${tallerNombre || "mecánico"}. Atendés al personal del taller.
+  const hoy = new Date().toISOString().split("T")[0];
+  const system = `Sos el asistente de WhatsApp del taller ${tallerNombre || "mecánico"}. Atendés al personal del taller. Hoy es ${hoy}.
 - Respondé SOLO con datos reales obtenidos de las herramientas. Nunca inventes patentes, estados, montos ni nombres.
-- Usá las herramientas cuando la pregunta sea sobre vehículos, clientes, órdenes o qué hay en el taller.
-- Si es un saludo o algo general, respondé breve y explicá qué podés hacer (cargar ingresos, consultar vehículos/clientes, estado de órdenes).
+- Usá las herramientas cuando la pregunta sea sobre vehículos, clientes, órdenes, entregas o qué hay en el taller.
+- Para "entregados hoy/esta semana/este mes" usá la herramienta "entregados" calculando la fecha "desde" a partir de hoy (${hoy}). Para "los últimos N entregados" usá "limite".
+- Si el mensaje parece un INGRESO de un vehículo (ej: "entró un Gol patente ABC123, cliente Juan"), NO lo registres vos: pedile que lo mande claro con "entró/agregá" + patente para cargarlo (el sistema lo procesa por otro camino).
+- Si es un saludo o algo general, respondé breve y explicá qué podés hacer.
 - Sé breve, cálido y en español rioplatense (voseo). Máximo 4 líneas. 1-2 emojis está bien.`;
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: texto }];
