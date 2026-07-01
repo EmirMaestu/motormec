@@ -8,7 +8,7 @@ import {
   transactions,
   vehicles,
 } from "../db/schema.js";
-import { authed, requireRole } from "../auth/middleware.js";
+import { authed, requireAuth, requireRole } from "../auth/middleware.js";
 
 function daysBetween(a: Date, b: Date): number {
   return Math.ceil((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
@@ -338,5 +338,47 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
         prediccionIngresosMensual: ingresosRecientes / 3,
       },
     });
+  });
+
+  // ---- Calendario de ingresos: qué vehículos entraron cada día de un mes ----
+  app.get("/api/reports/intake-calendar", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb } = authed(request);
+    const q = request.query as { month?: string };
+    // month = "YYYY-MM"; por defecto el mes actual (UTC).
+    const now = new Date();
+    const month =
+      q.month && /^\d{4}-\d{2}$/.test(q.month)
+        ? q.month
+        : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+    const start = `${month}-01`;
+    const [y, m] = month.split("-").map(Number);
+    const lastDay = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+    const end = `${month}-${String(lastDay).padStart(2, "0")}`;
+
+    const rows = await tenantDb.select(
+      vehicles,
+      and(gte(vehicles.entryDate, start), lte(vehicles.entryDate, end)) as ReturnType<typeof and>,
+    );
+
+    const byDay = new Map<
+      string,
+      { plate: string; brand: string; model: string; owner: string; status: string }[]
+    >();
+    for (const v of rows) {
+      const day = v.entryDate.slice(0, 10);
+      const list = byDay.get(day) ?? [];
+      list.push({
+        plate: v.plate,
+        brand: v.brand,
+        model: v.model,
+        owner: v.owner,
+        status: v.status,
+      });
+      byDay.set(day, list);
+    }
+    const days = [...byDay.entries()]
+      .map(([date, items]) => ({ date, count: items.length, vehicles: items }))
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+    return reply.send({ month, total: rows.length, days });
   });
 }

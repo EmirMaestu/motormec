@@ -244,6 +244,33 @@ describe("Phase 2 domain flows", () => {
     expect(detail.photos[0]).toMatch(/\.png$/);
   });
 
+  it("intake calendar groups vehicles by entry day for a month", async () => {
+    for (const [plate, date] of [
+      ["CAL001", "2026-06-03"],
+      ["CAL002", "2026-06-03"],
+      ["CAL003", "2026-06-20"],
+      ["CAL004", "2026-07-01"],
+    ] as const) {
+      await app.inject({
+        method: "POST",
+        url: "/api/vehicles",
+        headers: { cookie: adminCookie, ...J },
+        payload: { plate, entryDate: date },
+      });
+    }
+    const res = (
+      await app.inject({
+        method: "GET",
+        url: "/api/reports/intake-calendar?month=2026-06",
+        headers: { cookie: adminCookie },
+      })
+    ).json();
+    expect(res.month).toBe("2026-06");
+    expect(res.total).toBe(3); // los de junio (julio queda afuera)
+    const june3 = res.days.find((d: { date: string }) => d.date === "2026-06-03");
+    expect(june3.count).toBe(2);
+  });
+
   it("products: create + update log inventory movements and compute lowStock", async () => {
     const created = (
       await app.inject({
