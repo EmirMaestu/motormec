@@ -1,12 +1,16 @@
 name: Deploy
 
-# Deploy por TAG: se dispara al pushear un tag `vX.Y.Z` (release controlado),
-# o manualmente desde Actions (workflow_dispatch). Ya NO deploya en cada push a
-# main. Es un no-op hasta configurar los secrets del VPS (Settings → Secrets and
-# variables → Actions): VPS_HOST, VPS_USER, VPS_SSH_KEY, y opcional VPS_PORT.
+# Deploy por TAG: se dispara al pushear un tag `vX.Y.Z`, o manualmente desde
+# Actions (workflow_dispatch). Deploya el ÚLTIMO commit de `main` (el tag es el
+# disparador; taggeá el HEAD de main). Es un no-op hasta configurar los secrets
+# del VPS (Settings → Secrets and variables → Actions): VPS_HOST, VPS_USER,
+# VPS_SSH_KEY, y opcional VPS_PORT.
 #
-# Para lanzar una versión:
-#   git tag v1.2.3 && git push origin v1.2.3
+# El VPS necesita: (1) la clave pública en ~/.ssh/authorized_keys del VPS_USER,
+# (2) sudo sin contraseña para ese usuario (deploy no interactivo).
+#
+# Lanzar una versión:
+#   git tag v1.4.0 && git push origin v1.4.0
 # (o "Run workflow" en la pestaña Actions).
 
 on:
@@ -27,8 +31,6 @@ jobs:
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_PORT: ${{ secrets.VPS_PORT }}
     steps:
-      - uses: actions/checkout@v4
-
       - name: Release info
         run: echo "Deploying ${GITHUB_REF_NAME} (${GITHUB_SHA})"
 
@@ -42,19 +44,6 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@v4
-        if: steps.cfg.outputs.enabled == 'true'
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Build
-        if: steps.cfg.outputs.enabled == 'true'
-        run: |
-          npm ci
-          npm run build --workspace @motormec/api
-          npm run build --workspace @motormec/web
-
       - name: Setup SSH
         if: steps.cfg.outputs.enabled == 'true'
         run: |
@@ -63,28 +52,26 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -p "${VPS_PORT:-22}" "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Sync code to VPS
-        if: steps.cfg.outputs.enabled == 'true'
-        run: |
-          rsync -az --delete \
-            --exclude '.git' --exclude 'node_modules' --exclude 'apps/*/node_modules' \
-            --exclude '.env' --exclude 'apps/api/.env' --exclude 'apps/api/media' \
-            -e "ssh -i ~/.ssh/id_deploy -p ${VPS_PORT:-22} -o StrictHostKeyChecking=accept-new" \
-            ./ "$VPS_USER@$VPS_HOST:/opt/motormec/"
-
-      - name: Install runtime deps, migrate, publish, restart
+      # Corre EXACTAMENTE el flujo manual que ya funciona en el VPS: pull como
+      # motormec, npm ci en la RAÍZ (workspaces), build api+web, migrar, publicar
+      # y reiniciar. sudo sin password lo permite el sudoers del VPS_USER.
+      - name: Deploy on VPS
         if: steps.cfg.outputs.enabled == 'true'
         run: |
           ssh -i ~/.ssh/id_deploy -p "${VPS_PORT:-22}" -o StrictHostKeyChecking=accept-new \
             "$VPS_USER@$VPS_HOST" bash -lc '
             set -e
             cd /opt/motormec
-            npm ci --omit=dev
-            # Migrate with the compiled runner (tsx is a dev dep, not installed in prod)
-            ( cd apps/api && node dist/db/migrate.js )
-            sudo mkdir -p /var/www/motormec/app /var/www/motormec/landing
+            sudo -H -u motormec git checkout -- package-lock.json 2>/dev/null || true
+            sudo -H -u motormec git fetch --prune --tags origin
+            sudo -H -u motormec git pull --ff-only origin main
+            sudo -H -u motormec npm ci
+            sudo -H -u motormec npm run build --workspace @motormec/api
+            sudo -H -u motormec npm run db:migrate --workspace @motormec/api
+            sudo -H -u motormec npm run build --workspace @motormec/web
             sudo cp -r apps/web/dist/* /var/www/motormec/app/
             sudo cp -r landing/* /var/www/motormec/landing/
             sudo systemctl restart motormec-api
-            echo "Deploy OK"
+            sleep 2
+            curl -fsS http://127.0.0.1:3002/api/health && echo " — Deploy OK"
           '
