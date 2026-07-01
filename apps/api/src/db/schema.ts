@@ -736,6 +736,203 @@ export const historialTaller = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/*  BILLING — suscripciones recurrentes con 2 proveedores ruteados por país.  */
+/*  El "suscriptor" es el TENANT (el taller que le paga a Momec). Estas tablas */
+/*  son de plataforma (no tenant-scoped): las maneja el BillingService, no los */
+/*  usuarios del taller.                                                       */
+/* -------------------------------------------------------------------------- */
+
+export const billingCountry = ["AR", "CL"] as const;
+export type BillingCountry = (typeof billingCountry)[number];
+export const billingProviderName = ["mobbex", "rebill"] as const;
+export type BillingProviderName = (typeof billingProviderName)[number];
+export const billingCurrency = ["ARS", "CLP", "USD"] as const;
+export const paymentMethodType = ["debin", "transferencia", "tarjeta"] as const;
+export type PaymentMethodType = (typeof paymentMethodType)[number];
+export const subscriptionStatus = [
+  "pending",
+  "active",
+  "past_due",
+  "paused",
+  "cancelled",
+] as const;
+export const chargeStatus = [
+  "pending",
+  "approved",
+  "rejected",
+  "expired",
+  "refunded",
+] as const;
+export const billingCycle = ["monthly", "annual"] as const;
+
+/** El suscriptor (1:1 con tenant): país, identificación fiscal, moneda, wallet. */
+export const billingCustomers = pgTable(
+  "billing_customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    country: text("country", { enum: billingCountry }).notNull(),
+    currency: text("currency", { enum: billingCurrency }).notNull(),
+    // CUIT/CUIL (AR, requerido para DEBIN) o RUT (CL).
+    taxId: text("tax_id"),
+    provider: text("provider", { enum: billingProviderName }).notNull(),
+    // Id del suscriptor en el proveedor (Mobbex Wallet / Rebill customer).
+    providerCustomerId: text("provider_customer_id"),
+    email: text("email"),
+    name: text("name"),
+    // Referidos: código propio + quién lo trajo. Wallet en su moneda.
+    referralCode: text("referral_code").notNull(),
+    referredByTenantId: uuid("referred_by_tenant_id").references(() => tenants.id, {
+      onDelete: "set null",
+    }),
+    walletBalance: doublePrecision("wallet_balance").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("billing_customers_tenant_uq").on(t.tenantId),
+    uniqueIndex("billing_customers_referral_code_uq").on(t.referralCode),
+  ],
+);
+
+/** Método de pago tokenizado. `hasDiscount` marca los que aplican descuento. */
+export const paymentMethods = pgTable(
+  "payment_methods",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    type: text("type", { enum: paymentMethodType }).notNull(),
+    // Solo el token del proveedor — nunca datos de tarjeta en crudo (PCI).
+    providerToken: text("provider_token"),
+    hasDiscount: boolean("has_discount").notNull().default(false),
+    brand: text("brand"),
+    last4: text("last4"),
+    isDefault: boolean("is_default").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("payment_methods_tenant_idx").on(t.tenantId)],
+);
+
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: billingProviderName }).notNull(),
+    externalId: text("external_id"),
+    plan: text("plan").notNull(),
+    status: text("status", { enum: subscriptionStatus }).notNull().default("pending"),
+    cycle: text("cycle", { enum: billingCycle }).notNull().default("monthly"),
+    amount: doublePrecision("amount").notNull(),
+    currency: text("currency", { enum: billingCurrency }).notNull(),
+    paymentMethodId: uuid("payment_method_id").references(() => paymentMethods.id, {
+      onDelete: "set null",
+    }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("subscriptions_tenant_idx").on(t.tenantId),
+    index("subscriptions_status_idx").on(t.status),
+  ],
+);
+
+/** Un cobro por ciclo. Guarda bruto, descuento, neto y moneda de liquidación. */
+export const charges = pgTable(
+  "charges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    subscriptionId: uuid("subscription_id").references(() => subscriptions.id, {
+      onDelete: "set null",
+    }),
+    provider: text("provider", { enum: billingProviderName }).notNull(),
+    externalId: text("external_id"),
+    period: text("period"), // ej. "2026-07"
+    status: text("status", { enum: chargeStatus }).notNull().default("pending"),
+    grossAmount: doublePrecision("gross_amount").notNull(),
+    discountAmount: doublePrecision("discount_amount").notNull().default(0),
+    netAmount: doublePrecision("net_amount").notNull(),
+    currency: text("currency", { enum: billingCurrency }).notNull(),
+    settlementCurrency: text("settlement_currency", { enum: billingCurrency }),
+    attempt: integer("attempt").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("charges_tenant_idx").on(t.tenantId),
+    index("charges_subscription_idx").on(t.subscriptionId),
+    index("charges_status_idx").on(t.status),
+  ],
+);
+
+/** Idempotencia de webhooks: dedup por (provider, event_id). */
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: text("provider", { enum: billingProviderName }).notNull(),
+    eventId: text("event_id").notNull(),
+    type: text("type"),
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("webhook_events_provider_event_uq").on(t.provider, t.eventId)],
+);
+
+export const referralStatus = ["pending", "rewarded"] as const;
+
+/** Referido: quién trajo a quién. Se premia cuando el referido paga. */
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    referrerTenantId: uuid("referrer_tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    referredTenantId: uuid("referred_tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    status: text("status", { enum: referralStatus }).notNull().default("pending"),
+    rewardChargeId: uuid("reward_charge_id").references(() => charges.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("referrals_referred_uq").on(t.referredTenantId)],
+);
+
+/** Libro de wallet (append-only): créditos por referido, débitos por descuento. */
+export const walletLedger = pgTable(
+  "wallet_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    amount: doublePrecision("amount").notNull(), // + crédito / − consumo
+    currency: text("currency", { enum: billingCurrency }).notNull(),
+    reason: text("reason").notNull(),
+    referralId: uuid("referral_id").references(() => referrals.id, { onDelete: "set null" }),
+    chargeId: uuid("charge_id").references(() => charges.id, { onDelete: "set null" }),
+    balanceAfter: doublePrecision("balance_after").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("wallet_ledger_tenant_idx").on(t.tenantId)],
+);
+
+/* -------------------------------------------------------------------------- */
 /*  Convenience: the set of tenant-scoped data tables.                        */
 /*  tenants / users / sessions are auth/infra and handled explicitly.         */
 /* -------------------------------------------------------------------------- */
@@ -778,3 +975,10 @@ export type WorkOrder = typeof workOrders.$inferSelect;
 export type NewWorkOrder = typeof workOrders.$inferInsert;
 export type PlatformAdmin = typeof platformAdmins.$inferSelect;
 export type UsageCounter = typeof usageCounters.$inferSelect;
+export type BillingCustomer = typeof billingCustomers.$inferSelect;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type PaymentMethod = typeof paymentMethods.$inferSelect;
+export type Charge = typeof charges.$inferSelect;
+export type WebhookEvent = typeof webhookEvents.$inferSelect;
+export type Referral = typeof referrals.$inferSelect;
+export type WalletEntry = typeof walletLedger.$inferSelect;

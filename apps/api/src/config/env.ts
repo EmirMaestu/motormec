@@ -68,6 +68,25 @@ const schema = z.object({
   CLAUDE_MODEL_AGENT: z.string().default("claude-opus-4-8"),
 
   MEDIA_ROOT: z.string().default("./media"),
+
+  /* ----------------------------- Billing ------------------------------- */
+  // Mobbex (Argentina — DEBIN/transferencia/tarjeta). Sandbox: mobbex.dev.
+  MOBBEX_API_KEY: z.string().default(""),
+  MOBBEX_ACCESS_TOKEN: z.string().default(""),
+  MOBBEX_WEBHOOK_SECRET: z.string().default(""),
+  MOBBEX_BASE_URL: z.string().default("https://api.mobbex.com"),
+  // Rebill (Chile — cobra CLP, liquida USD).
+  REBILL_API_KEY: z.string().default(""),
+  REBILL_WEBHOOK_SECRET: z.string().default(""),
+  REBILL_BASE_URL: z.string().default("https://api.rebill.com"),
+  // Descuento por pagar con transferencia/DEBIN (0.10 = 10%). Atributo del método.
+  DESCUENTO_TRANSFERENCIA: z.coerce.number().min(0).max(1).default(0.1),
+  // Crédito de referido: % del pago del referido acreditado al que lo trajo.
+  REFERRAL_REWARD_PCT: z.coerce.number().min(0).max(1).default(0.2),
+  // Reintentos (dunning) antes de marcar la suscripción como past_due.
+  BILLING_MAX_RETRIES: z.coerce.number().int().min(0).default(3),
+  // Sandbox de proveedores (no golpea producción). Default true por seguridad.
+  BILLING_SANDBOX: boolish.default("true"),
 });
 
 const parsed = schema.safeParse(process.env);

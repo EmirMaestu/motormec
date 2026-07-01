@@ -5,6 +5,7 @@ import { env } from "./config/env.js";
 import { attachPlatformAdmin, attachSession } from "./auth/middleware.js";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
+import { billingRoutes } from "./routes/billing.js";
 import { categoryRoutes } from "./routes/categories.js";
 import { customerRoutes } from "./routes/customers.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
@@ -61,6 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(reportRoutes);
   await app.register(whatsappAdminRoutes);
   await app.register(mediaRoutes);
+  await app.register(billingRoutes);
   await app.register(webhookRoutes);
 
   return app;

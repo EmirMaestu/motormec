@@ -5,6 +5,13 @@ import { db } from "../src/db/client.js";
 export async function resetDb(): Promise<void> {
   await db.execute(sql`
     TRUNCATE TABLE
+      wallet_ledger,
+      referrals,
+      webhook_events,
+      charges,
+      subscriptions,
+      payment_methods,
+      billing_customers,
       usage_counters,
       work_orders,
       historial_taller,
