@@ -2,7 +2,48 @@ import Anthropic from "@anthropic-ai/sdk";
 import { eq } from "drizzle-orm";
 import { env } from "../config/env.js";
 import type { TenantDb } from "../db/scope.js";
-import { customers, vehicles, workOrders } from "../db/schema.js";
+import { conversaciones, customers, historialTaller, vehicles, workOrders } from "../db/schema.js";
+import { createOrder } from "../domain/orders.js";
+
+const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
+
+// Normalización de marcas comunes (abreviaturas → nombre completo).
+const MARCAS: Record<string, string> = {
+  vw: "Volkswagen",
+  volkswagen: "Volkswagen",
+  chevy: "Chevrolet",
+  chevrolet: "Chevrolet",
+  ford: "Ford",
+  fiat: "Fiat",
+  peugeot: "Peugeot",
+  renault: "Renault",
+  toyota: "Toyota",
+  honda: "Honda",
+  nissan: "Nissan",
+  citroen: "Citroën",
+  "citroën": "Citroën",
+  mercedes: "Mercedes-Benz",
+  bmw: "BMW",
+  audi: "Audi",
+  jeep: "Jeep",
+  ram: "RAM",
+};
+
+function normalizarMarcaModelo(s: string): { marca: string; modelo: string } {
+  const partes = (s ?? "").trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return { marca: "", modelo: "" };
+  const primera = partes[0]!.toLowerCase();
+  const marca = MARCAS[primera] ?? partes[0]!;
+  return { marca, modelo: partes.slice(1).join(" ") };
+}
+
+function parseKm(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const s = String(v).toLowerCase();
+  const n = Number.parseInt(s.replace(/[^\d]/g, ""), 10);
+  if (!Number.isFinite(n)) return null;
+  return /mil/.test(s) && n < 1000 ? n * 1000 : n;
+}
 
 /**
  * Agente conversacional del bot (Haiku con herramientas). Responde CUALQUIER
@@ -65,6 +106,23 @@ const TOOLS: Anthropic.Tool[] = [
       },
     },
   },
+  {
+    name: "registrar_ingreso",
+    description:
+      "Registra el ingreso de un vehículo al taller (crea el vehículo si es nuevo o reusa el existente por patente, y crea una orden de trabajo). SOLO la patente es obligatoria; el resto es opcional. Usá esto cuando el usuario describe un auto que entró/hay que agregar.",
+    input_schema: {
+      type: "object",
+      properties: {
+        patente: { type: "string", description: "Patente (obligatorio)" },
+        marca: { type: "string", description: "Marca (ej: Volkswagen). Normalizá abreviaturas (VW→Volkswagen)" },
+        modelo: { type: "string", description: "Modelo (ej: Gol)" },
+        kilometraje: { type: "number", description: "Kilometraje en número (ej: 10000)" },
+        tarea: { type: "string", description: "Trabajo a realizar (ej: service, cambio de aceite)" },
+        cliente: { type: "string", description: "Nombre del cliente/dueño" },
+      },
+      required: ["patente"],
+    },
+  },
 ];
 
 const ENTREGADOS = new Set(["Entregado", "Suspendido"]);
@@ -73,6 +131,7 @@ async function ejecutarTool(
   tdb: TenantDb,
   name: string,
   input: Record<string, unknown>,
+  from: string,
 ): Promise<string> {
   try {
     if (name === "buscar_vehiculo") {
@@ -164,6 +223,64 @@ async function ejecutarTool(
         })),
       });
     }
+
+    if (name === "registrar_ingreso") {
+      const patente = String(input.patente ?? "").toUpperCase().trim();
+      if (!patente) return JSON.stringify({ ok: false, motivo: "falta la patente" });
+
+      const crudo = [input.marca, input.modelo].filter(Boolean).join(" ").trim();
+      const { marca, modelo } = normalizarMarcaModelo(crudo);
+      const km = parseKm(input.kilometraje);
+      const tarea = String(input.tarea ?? "").trim();
+      const cliente = String(input.cliente ?? "").trim();
+
+      const existente = (await tdb.select(vehicles)).find(
+        (v) => v.plate.toUpperCase() === patente,
+      );
+
+      const order = await createOrder(tdb, BOT_ACTOR, {
+        plate: patente,
+        brand: marca || existente?.brand || "",
+        model: modelo || existente?.model || "",
+        customerName: cliente || existente?.owner || "",
+        phone: from,
+        services: tarea ? [tarea] : [],
+        mileage: km,
+      });
+
+      // Historial (para el panel y para adjuntar fotos) + modo "esperando foto".
+      const h = await tdb.insertOne(historialTaller, {
+        waMessageId: `agent-${order.id}`,
+        waFrom: from,
+        waTimestamp: String(Math.floor(Date.now() / 1000)),
+        rawMessage: null,
+        marcaModelo: `${marca} ${modelo}`.trim() || null,
+        patente,
+        kilometraje: km != null ? String(km) : null,
+        tarea: tarea || null,
+        cliente: cliente || null,
+        vehicleId: order.vehicleId,
+        status: "linked",
+        fotoPaths: [],
+      });
+      await tdb.delete(conversaciones, eq(conversaciones.phone, from));
+      await tdb.insert(conversaciones, {
+        phone: from,
+        etapa: "esperando_foto",
+        datos: { fotoPaths: [] },
+        historialId: h.id,
+      });
+
+      return JSON.stringify({
+        ok: true,
+        patente,
+        vehiculo: `${marca} ${modelo}`.trim() || "vehículo",
+        cliente: cliente || existente?.owner || null,
+        yaExistia: Boolean(existente),
+        orden: order.number,
+        nota: "Registrado. Se puede pedir al usuario que mande fotos del vehículo (opcional).",
+      });
+    }
   } catch {
     return JSON.stringify({ error: "no se pudo consultar" });
   }
@@ -181,6 +298,7 @@ export async function agenteConsulta(
   tdb: TenantDb,
   texto: string,
   tallerNombre: string,
+  from: string,
 ): Promise<AgenteResultado> {
   const c = getClient();
   const fallback =
@@ -190,9 +308,9 @@ export async function agenteConsulta(
   const hoy = new Date().toISOString().split("T")[0];
   const system = `Sos el asistente de WhatsApp del taller ${tallerNombre || "mecánico"}. Atendés al personal del taller. Hoy es ${hoy}.
 - Respondé SOLO con datos reales obtenidos de las herramientas. Nunca inventes patentes, estados, montos ni nombres.
-- Usá las herramientas cuando la pregunta sea sobre vehículos, clientes, órdenes, entregas o qué hay en el taller.
-- Para "entregados hoy/esta semana/este mes" usá la herramienta "entregados" calculando la fecha "desde" a partir de hoy (${hoy}). Para "los últimos N entregados" usá "limite".
-- Si el mensaje parece un INGRESO de un vehículo (ej: "entró un Gol patente ABC123, cliente Juan"), NO lo registres vos: pedile que lo mande claro con "entró/agregá" + patente para cargarlo (el sistema lo procesa por otro camino).
+- CARGAR UN INGRESO: si el usuario describe un auto que entró o pide agregar uno (ej: "agregá un VW Gol patente ABC123 de Juan, service"), usá la herramienta "registrar_ingreso" y CARGALO DIRECTAMENTE. Sólo la patente es obligatoria; marca, modelo, km, cliente y tarea son opcionales (cargá lo que haya). Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). No pidas que repita el mensaje si ya lo entendiste. Si falta SOLO la patente, pedila. Tras registrar, confirmá con la orden creada y ofrecé mandar fotos del vehículo.
+- Si al registrar el vehículo YA EXISTÍA (yaExistia=true), aclaralo con naturalidad ("ya lo teníamos, le sumé una nueva entrada").
+- CONSULTAS: usá las herramientas para vehículos, clientes, órdenes, entregas o qué hay en el taller. Para "entregados hoy/esta semana" usá "entregados" con "desde" (calculado desde hoy=${hoy}); para "los últimos N" usá "limite".
 - Si es un saludo o algo general, respondé breve y explicá qué podés hacer.
 - Sé breve, cálido y en español rioplatense (voseo). Máximo 4 líneas. 1-2 emojis está bien.`;
 
@@ -222,7 +340,12 @@ export async function agenteConsulta(
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       for (const block of res.content) {
         if (block.type === "tool_use") {
-          const out = await ejecutarTool(tdb, block.name, block.input as Record<string, unknown>);
+          const out = await ejecutarTool(
+            tdb,
+            block.name,
+            block.input as Record<string, unknown>,
+            from,
+          );
           toolResults.push({ type: "tool_result", tool_use_id: block.id, content: out });
         }
       }

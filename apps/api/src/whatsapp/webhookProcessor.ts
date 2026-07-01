@@ -45,8 +45,8 @@ function makeDeps(
       await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
       return r.texto;
     },
-    agente: async (texto) => {
-      const r = await agenteConsulta(tdb, texto, tallerNombre);
+    agente: async (from, texto) => {
+      const r = await agenteConsulta(tdb, texto, tallerNombre, from);
       await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
       return r.texto;
     },

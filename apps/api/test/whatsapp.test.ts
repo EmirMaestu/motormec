@@ -113,6 +113,44 @@ describe("WhatsApp bot — state machine", () => {
     expect(r).toBe("confirmando");
   });
 
+  it("routes fresh messages to the agent when present (prod path)", async () => {
+    const { deps, sent } = fakeDeps(EMPTY);
+    deps.agente = async () => "respuesta del agente";
+    const r = await procesarMensaje(tdb, textMsg("ag1", "cómo va todo"), deps);
+    expect(r).toBe("agente");
+    expect(sent.join(" ")).toContain("respuesta del agente");
+  });
+
+  it("saves a photo while in esperando_foto (post agent registration)", async () => {
+    const h = await tdb.insertOne(historialTaller, {
+      waMessageId: "reg-1",
+      waFrom: AUTH_PHONE,
+      waTimestamp: "1700000000",
+      patente: "ZZ999",
+      status: "linked",
+      fotoPaths: [],
+    });
+    await tdb.insert(conversaciones, {
+      phone: AUTH_PHONE,
+      etapa: "esperando_foto",
+      datos: { fotoPaths: [] },
+      historialId: h.id,
+    });
+    const { deps, sent } = fakeDeps(EMPTY);
+    const img: WAMessage = {
+      id: "pf1",
+      from: AUTH_PHONE,
+      timestamp: "1700000000",
+      type: "image",
+      image: { id: "media1" },
+    };
+    const r = await procesarMensaje(tdb, img, deps);
+    expect(r).toBe("foto");
+    expect(sent.join(" ")).toMatch(/foto guardada/i);
+    const after = await tdb.findById(historialTaller, h.id);
+    expect(after?.fotoPaths.length).toBe(1);
+  });
+
   it("is idempotent by wa_message_id", async () => {
     const { deps } = fakeDeps({ ...EMPTY, intencion: "ingreso", marca_modelo: "Ford Focus" });
     const r1 = await procesarMensaje(tdb, textMsg("dup1", "Ford Focus"), deps);

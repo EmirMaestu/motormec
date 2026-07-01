@@ -71,7 +71,7 @@ export interface BotDeps {
    * ("cómo va la patente X", "qué autos hay", etc.) con datos reales. Si no se
    * provee, se cae a las plantillas de saludo/consulta.
    */
-  agente?: (texto: string) => Promise<string>;
+  agente?: (from: string, texto: string) => Promise<string>;
 }
 
 /** Reescribe `base` en tono natural si hay redactor; si no, devuelve `base`. */
@@ -282,6 +282,29 @@ export async function procesarMensaje(
     conv = null;
   }
 
+  // 3b. Modo "esperando foto" (tras un registro hecho por el agente).
+  if (conv && conv.etapa === "esperando_foto") {
+    if (msg.type === "image" && msg.image?.id) {
+      const datos = (conv.datos ?? {}) as ConvDatos;
+      const bytes = await deps.downloadMedia(msg.image.id);
+      const fotoPaths = [...(datos.fotoPaths ?? [])];
+      if (bytes && conv.historialId) {
+        const path = await deps.storage.save(tdb.tenantId, conv.historialId, bytes, "jpg");
+        fotoPaths.push(path);
+        await tdb.updateById(historialTaller, conv.historialId, { fotoPaths });
+      }
+      await tdb.updateById(conversaciones, conv.id, {
+        datos: { ...datos, fotoPaths },
+        updatedAt: new Date(),
+      });
+      await deps.send(from, `📸 Foto guardada (${fotoPaths.length}). Mandá más si querés. 👍`);
+      return "foto";
+    }
+    // Cualquier texto → salir del modo foto y procesar como mensaje nuevo.
+    await tdb.deleteById(conversaciones, conv.id);
+    conv = null;
+  }
+
   // 4. New message, no active conversation.
   if (!conv) {
     // 4a. ¿Es un comando de edición/borrado? (cancelar/estado/km/mano de obra)
@@ -306,6 +329,16 @@ export async function procesarMensaje(
       );
       return "ia_quota";
     }
+
+    // 4b. PROD: el agente hace todo (consultar, registrar el ingreso, pedir foto).
+    if (deps.agente) {
+      if (deps.iaQuota) await deps.iaQuota.tick();
+      await tdb.updateById(historialTaller, historialId, { status: "processed" });
+      await deps.send(from, await deps.agente(from, texto));
+      return "agente";
+    }
+
+    // 4c. Fallback sin agente (tests): extracción con parser + flujo de confirmación.
     const datos = await deps.parse(texto);
     if (deps.iaQuota) await deps.iaQuota.tick();
     await tdb.updateById(historialTaller, historialId, {
@@ -323,12 +356,7 @@ export async function procesarMensaje(
     const hayDatos = Boolean(datos.patente || datos.marca_modelo || datos.tarea);
     const esConsulta = datos.intencion === "consulta";
     if (!hayDatos || esConsulta) {
-      // Conversación libre → agente con herramientas (consulta datos reales).
-      if (deps.agente) {
-        await deps.send(from, await deps.agente(texto));
-        return esConsulta ? "consulta" : "saludo";
-      }
-      // Respaldo sin agente (tests): plantillas.
+      // Respaldo sin agente (tests): plantillas de consulta/saludo.
       if (esConsulta) {
         await deps.send(from, await natural(deps, await responderConsulta(tdb, datos)));
         return "consulta";
