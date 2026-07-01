@@ -47,10 +47,10 @@ describe("plan limits — pure helpers", () => {
     expect(limitsFor("max").maxUsers).toBe(Infinity);
   });
 
-  it("el modelo del bot escala con el plan (Starter→Haiku, Pro→Sonnet 5, Max→Opus)", () => {
+  it("el modelo del bot escala con el plan (Starter→Haiku, Pro y Max→Sonnet 5)", () => {
     expect(limitsFor("starter").model).toBe("claude-haiku-4-5");
     expect(limitsFor("pro").model).toBe("claude-sonnet-5");
-    expect(limitsFor("max").model).toBe("claude-opus-4-8");
+    expect(limitsFor("max").model).toBe("claude-sonnet-5");
     expect(limitsFor("starter").dataMigration).toBe(false);
     expect(limitsFor("pro").dataMigration).toBe(true);
   });

@@ -5,7 +5,7 @@
  *
  * `Infinity` = sin tope. Precios USD/mes (referencia comercial; la facturación
  * real se integra aparte). El modelo del bot escala con el plan: Starter → Haiku
- * (rápido/barato), Pro → Sonnet 5 (más capaz), Max → Opus (el más capaz).
+ * (rápido/barato), Pro y Max → Sonnet 5 (más capaz).
  */
 
 export interface PlanLimits {
@@ -50,9 +50,8 @@ const MAX: PlanLimits = {
   priceUsd: 99,
   maxUsers: Infinity,
   maxNumbers: 20,
-  // Opus es ~5× más caro; el tope acota el costo de IA por taller.
-  maxIaMonthly: 3000,
-  model: "claude-opus-4-8",
+  maxIaMonthly: 6000,
+  model: "claude-sonnet-5",
   dataMigration: true,
 };
 
