@@ -20,6 +20,7 @@ import {
 } from "@/components/form";
 import { Badge, Button, IconButton, Input, PageHeader } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { compressImage } from "@/lib/image";
 import { isValidPlate } from "@/lib/validation";
 import { ORDER_STATUSES, type OrderPart, type Product, type Service, type Vehicle, type WorkOrder } from "@/lib/types";
 
@@ -393,9 +394,10 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
   const { isAdmin } = useAuth();
   const { data } = useQuery({
     queryKey: ["order", id],
-    queryFn: () => api.get<{ order: WorkOrder }>(`/api/orders/${id}`),
+    queryFn: () => api.get<{ order: WorkOrder; photos: string[] }>(`/api/orders/${id}`),
   });
   const order = data?.order;
+  const photos = data?.photos ?? [];
   const { data: servicesData } = useQuery({
     queryKey: ["services"],
     queryFn: () => api.get<{ services: Service[] }>("/api/services"),
@@ -482,6 +484,22 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
     },
     onError: () => toast.error("No se pudo borrar"),
   });
+  const uploadPhoto = useMutation({
+    mutationFn: async (file: File) => {
+      const image = await compressImage(file);
+      return api.post(`/api/orders/${id}/photos`, { image });
+    },
+    onSuccess: () => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ["vehicle-detail"] });
+      toast.success("Foto agregada");
+    },
+    onError: () => toast.error("No se pudo subir la foto"),
+  });
+  const onPickPhotos = (files: FileList | null) => {
+    if (!files?.length) return;
+    for (const f of Array.from(files)) uploadPhoto.mutate(f);
+  };
 
   return (
    <>
@@ -627,6 +645,45 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
           <div className="grid grid-cols-2 gap-2 text-[13px] text-charcoal">
             <div>Ingreso: {formatDate(order.entryDate)}</div>
             <div>Entrega: {formatDate(order.deliveryDate)}</div>
+          </div>
+
+          {/* Fotos de este ingreso (el "momento") */}
+          <div className="border-t border-black/10 pt-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="eyebrow">Fotos del ingreso {photos.length ? `(${photos.length})` : ""}</span>
+              <label className="cursor-pointer text-[13px] font-medium text-deep-forest hover:underline">
+                {uploadPhoto.isPending ? "Subiendo…" : "+ Agregar foto"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  className="hidden"
+                  disabled={uploadPhoto.isPending}
+                  onChange={(e) => {
+                    onPickPhotos(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            {photos.length === 0 ? (
+              <p className="text-[13px] text-charcoal">
+                Sin fotos. Sacá o subí fotos del estado del vehículo al ingresar.
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {photos.map((p) => (
+                  <a key={p} href={`/api/media/${p}`} target="_blank" rel="noreferrer">
+                    <img
+                      src={`/api/media/${p}`}
+                      alt="Foto del ingreso"
+                      className="h-24 w-full rounded-[8px] object-cover"
+                    />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

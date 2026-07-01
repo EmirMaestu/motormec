@@ -215,6 +215,35 @@ describe("Phase 2 domain flows", () => {
     expect(summary.totalIngresos).toBe(0);
   });
 
+  it("uploads a photo to an order (linked to that order's moment)", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/vehicles",
+      headers: { cookie: adminCookie, ...J },
+      payload: { plate: "PIC001", brand: "VW", model: "Gol" },
+    });
+    const order = (
+      await app.inject({ method: "GET", url: "/api/orders", headers: { cookie: adminCookie } })
+    ).json().orders[0];
+
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const up = await app.inject({
+      method: "POST",
+      url: `/api/orders/${order.id}/photos`,
+      headers: { cookie: adminCookie, ...J },
+      payload: { image: png },
+    });
+    expect(up.statusCode).toBe(201);
+    expect(up.json().photos).toHaveLength(1);
+
+    const detail = (
+      await app.inject({ method: "GET", url: `/api/orders/${order.id}`, headers: { cookie: adminCookie } })
+    ).json();
+    expect(detail.photos).toHaveLength(1);
+    expect(detail.photos[0]).toMatch(/\.png$/);
+  });
+
   it("products: create + update log inventory movements and compute lowStock", async () => {
     const created = (
       await app.inject({
