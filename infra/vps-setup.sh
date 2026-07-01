@@ -92,11 +92,22 @@ else ok "Postgres ya estaba (uso la instancia existente)"; fi
 
 # ---------------------------------------------------------------- db --------
 c "Base de datos '$PGDB'"
+ENV_FILE="$APP_DIR/apps/api/.env"
 PGPASS="$(openssl rand -hex 16)"
-# Idempotente: crea rol y base sólo si no existen. No toca otras bases.
-sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$PGUSER'" | grep -q 1 \
-  && { warn "El rol '$PGUSER' ya existía (no cambio su contraseña)."; PGPASS=""; } \
-  || sudo -u postgres psql -c "CREATE USER $PGUSER WITH PASSWORD '$PGPASS';"
+# Idempotente y re-run-safe. No toca otras bases.
+if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$PGUSER'" | grep -q 1; then
+  if [ -f "$ENV_FILE" ]; then
+    warn "Rol '$PGUSER' y .env ya existían → no toco la contraseña."
+    PGPASS=""
+  else
+    # Re-run sin .env: reseteo la contraseña para poder escribir un .env válido.
+    sudo -u postgres psql -c "ALTER USER $PGUSER WITH PASSWORD '$PGPASS';"
+    warn "Rol '$PGUSER' existía sin .env → reseteé su contraseña para reconfigurar."
+  fi
+else
+  sudo -u postgres psql -c "CREATE USER $PGUSER WITH PASSWORD '$PGPASS';"
+  ok "Rol '$PGUSER' creado"
+fi
 sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$PGDB'" | grep -q 1 \
   && ok "Base '$PGDB' ya existía" \
   || { sudo -u postgres psql -c "CREATE DATABASE $PGDB OWNER $PGUSER;"; ok "Base '$PGDB' creada"; }
