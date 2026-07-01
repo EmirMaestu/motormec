@@ -1,0 +1,81 @@
+name: Deploy
+
+# Deploys to the VPS on push to main (and manually). It is a no-op until the
+# VPS secrets are configured in the repo (Settings → Secrets and variables →
+# Actions): VPS_HOST, VPS_USER, VPS_SSH_KEY, and optionally VPS_PORT.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check deploy config
+        id: cfg
+        run: |
+          if [ -z "$VPS_HOST" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "VPS secrets not set — skipping deploy (this is expected until configured)."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.enabled == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          npm ci
+          npm run build --workspace @motormec/api
+          npm run build --workspace @motormec/web
+
+      - name: Setup SSH
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "${VPS_PORT:-22}" "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Sync code to VPS
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          rsync -az --delete \
+            --exclude '.git' --exclude 'node_modules' --exclude 'apps/*/node_modules' \
+            --exclude '.env' --exclude 'apps/api/.env' --exclude 'apps/api/media' \
+            -e "ssh -i ~/.ssh/id_deploy -p ${VPS_PORT:-22} -o StrictHostKeyChecking=accept-new" \
+            ./ "$VPS_USER@$VPS_HOST:/opt/motormec/"
+
+      - name: Install runtime deps, migrate, publish, restart
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${VPS_PORT:-22}" -o StrictHostKeyChecking=accept-new \
+            "$VPS_USER@$VPS_HOST" bash -lc '
+            set -e
+            cd /opt/motormec
+            npm ci --omit=dev
+            # Migrate with the compiled runner (tsx is a dev dep, not installed in prod)
+            ( cd apps/api && node dist/db/migrate.js )
+            sudo mkdir -p /var/www/motormec/app /var/www/motormec/landing
+            sudo cp -r apps/web/dist/* /var/www/motormec/app/
+            sudo cp -r landing/* /var/www/motormec/landing/
+            sudo systemctl restart motormec-api
+            echo "Deploy OK"
+          '

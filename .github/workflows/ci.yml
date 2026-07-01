@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Postgres for the API test suite (isolation, auth, domain, bot, orders).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: motormec
+          POSTGRES_PASSWORD: motormec
+          POSTGRES_DB: motormec
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U motormec"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # vitest.config.ts reads TEST_DATABASE_URL; globalSetup creates motormec_test + migrates.
+      TEST_DATABASE_URL: postgres://motormec:motormec@localhost:5432/motormec_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck API
+        run: npm run typecheck --workspace @motormec/api
+
+      - name: Test API (38+ tests, real Postgres)
+        run: npm test --workspace @motormec/api
+
+      - name: Build API
+        run: npm run build --workspace @motormec/api
+
+      - name: Build web (typecheck + vite)
+        run: npm run build --workspace @motormec/web

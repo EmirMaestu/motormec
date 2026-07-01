@@ -1,0 +1,28 @@
+[Unit]
+Description=MotorMec API (Fastify)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=motormec
+Group=motormec
+WorkingDirectory=/opt/motormec/apps/api
+EnvironmentFile=/opt/motormec/apps/api/.env
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# The app writes uploaded photos here; allow it.
+ReadWritePaths=/var/www/motormec-media
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

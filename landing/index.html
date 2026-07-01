@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Momec — El taller, bajo control</title>
+    <meta
+      name="description"
+      content="Momec: software de gestión para talleres mecánicos con bot de WhatsApp y Telegram que carga los vehículos con IA. Órdenes, clientes, inventario y finanzas en un solo lugar."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --pale-sage: #eef2e3;
+        --paper-white: #fcfcfc;
+        --ink-black: #000000;
+        --charcoal: #242423;
+        --deep-forest: #043f2e;
+        --chartreuse: #c8f169;
+        --forest-mid: #2a6f2b;
+        --vivid-green: #78c51c;
+        --lilac: #c9c4f6;
+        --sky: #b9c9f0;
+        --blush: #f3b9bd;
+        --font-display: "Fraunces", Georgia, serif;
+        --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { scroll-behavior: smooth; }
+      body {
+        font-family: var(--font-sans);
+        background: var(--pale-sage);
+        color: var(--deep-forest);
+        font-size: 16px; line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      img, svg { max-width: 100%; display: block; }
+      a { color: inherit; text-decoration: none; }
+      .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+      .display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.03em; line-height: 0.98; }
+      .serif { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.02em; line-height: 1.05; }
+      .eyebrow { font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+      .section-title { font-size: 40px; color: var(--deep-forest); }
+      .mt8 { margin-top: 8px; } .mt16 { margin-top: 16px; } .mt40 { margin-top: 40px; }
+      section { padding: 80px 0; }
+      .center { text-align: center; }
+
+      /* ---------- Scroll progress bar ---------- */
+      #progress { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--chartreuse); z-index: 60; transition: width .08s linear; }
+
+      /* ---------- Buttons ---------- */
+      .btn { position: relative; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; font-size: 16px; padding: 12px 22px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; transition: transform .18s var(--ease), background .18s, color .18s; }
+      .btn:hover { transform: translateY(-2px); }
+      .btn:active { transform: translateY(0); }
+      .btn-primary { background: var(--chartreuse); color: var(--ink-black); }
+      .btn-primary:hover { background: var(--forest-mid); color: var(--paper-white); }
+      .btn-ghost { background: transparent; border-color: var(--ink-black); color: var(--deep-forest); }
+      .btn-ghost:hover { background: rgba(0,0,0,.05); }
+
+      /* ---------- Nav ---------- */
+      header.nav { position: fixed; inset: 0 0 auto 0; z-index: 50; transition: background .25s, border-color .25s, box-shadow .25s; border-bottom: 1px solid transparent; }
+      header.nav.scrolled { background: rgba(252,252,252,.9); backdrop-filter: blur(12px); border-color: rgba(0,0,0,.08); }
+      .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+      .logo { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 22px; }
+      .logo .mark { width: 34px; height: 34px; border-radius: 4px; background: var(--deep-forest); color: var(--chartreuse); display: grid; place-items: center; transition: transform .4s var(--ease); }
+      .logo:hover .mark { transform: rotate(-12deg) scale(1.06); }
+      .nav-links { display: flex; align-items: center; gap: 26px; }
+      .nav-links a.link { position: relative; font-weight: 500; font-size: 15px; padding: 4px 0; }
+      .nav-links a.link::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--deep-forest); transition: width .25s var(--ease); }
+      .nav-links a.link:hover::after { width: 100%; }
+      .nav-cta { display: flex; align-items: center; gap: 12px; }
+      @media (max-width: 880px) {
+        .nav-links { display: none; }
+        .nav-cta .link { display: none; }
+        .nav-cta .btn { padding: 9px 16px; font-size: 14px; }
+      }
+
+      /* ---------- Reveal on scroll ---------- */
+      .reveal { opacity: 0; transform: translateY(28px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+      .reveal.in { opacity: 1; transform: none; }
+      .reveal.d1 { transition-delay: .08s; } .reveal.d2 { transition-delay: .16s; }
+      .reveal.d3 { transition-delay: .24s; } .reveal.d4 { transition-delay: .32s; }
+
+      /* ---------- Hero ---------- */
+      .hero { background: var(--deep-forest); color: var(--paper-white); padding: 128px 0 72px; }
+      .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; }
+      .hero h1 { font-size: 76px; }
+      .hero .word { display: inline-block; opacity: 0; transform: translateY(40px); animation: rise .8s var(--ease) forwards; }
+      .hero .lead { margin-top: 22px; font-size: 19px; max-width: 34ch; color: rgba(252,252,252,.82); }
+      .hero .cta-row { margin-top: 30px; display: flex; gap: 12px; flex-wrap: wrap; }
+      .hero .note { margin-top: 16px; font-size: 13px; color: rgba(252,252,252,.6); }
+      @keyframes rise { to { opacity: 1; transform: none; } }
+      @media (max-width: 880px) { .hero-grid { grid-template-columns: 1fr; gap: 36px; } .hero h1 { font-size: 46px; } }
+
+      /* chat mock */
+      .phone { background: var(--paper-white); border-radius: 16px; padding: 16px; }
+      .chat { background: var(--pale-sage); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-height: 320px; }
+      .bubble { max-width: 88%; padding: 10px 13px; border-radius: 14px; font-size: 14px; line-height: 1.35; opacity: 0; transform: translateY(10px) scale(.98); }
+      .bubble.show { animation: pop .4s var(--ease) forwards; }
+      @keyframes pop { to { opacity: 1; transform: none; } }
+      .bubble.in { align-self: flex-start; background: var(--paper-white); border: 1px solid rgba(0,0,0,.07); border-bottom-left-radius: 4px; color: var(--deep-forest); }
+      .bubble.out { align-self: flex-end; background: var(--chartreuse); color: var(--ink-black); border-bottom-right-radius: 4px; }
+      .bubble.card { align-self: flex-start; background: var(--deep-forest); color: var(--paper-white); width: 94%; max-width: 94%; }
+      .typing { align-self: flex-start; display: flex; gap: 4px; padding: 12px 14px; background: var(--paper-white); border-radius: 14px; border-bottom-left-radius: 4px; }
+      .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--charcoal); opacity: .35; animation: blink 1.2s infinite; }
+      .typing span:nth-child(2){animation-delay:.2s} .typing span:nth-child(3){animation-delay:.4s}
+      @keyframes blink { 0%,60%,100%{opacity:.25;transform:translateY(0)} 30%{opacity:.9;transform:translateY(-3px)} }
+
+      /* hero animated chart */
+      .chartcard { background: var(--forest-mid); border-radius: 12px; padding: 16px; margin-top: 14px; }
+      .chartcard .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--chartreuse); }
+      .bars { display: flex; align-items: flex-end; gap: 6px; height: 86px; margin-top: 10px; }
+      .bars i { flex: 1; background: var(--chartreuse); border-radius: 3px; height: 0; transition: height .9s var(--ease); display: block; }
+      .chartcard.play .bars i { height: var(--h); }
+
+      /* ---------- Stats band ---------- */
+      .band-forest { background: var(--deep-forest); color: var(--paper-white); }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+      .stat .n { font-family: var(--font-display); font-size: 46px; color: var(--chartreuse); line-height: 1; }
+      .stat .l { margin-top: 8px; font-size: 14px; opacity: .85; }
+      @media (max-width: 700px) { .stats { grid-template-columns: repeat(2, 1fr); gap: 28px 16px; } }
+
+      /* ---------- Bot section ---------- */
+      .bot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+      .steps { display: flex; flex-direction: column; gap: 18px; margin-top: 28px; }
+      .step { display: flex; gap: 14px; align-items: flex-start; }
+      .step .num { flex: none; width: 30px; height: 30px; border-radius: 4px; background: var(--chartreuse); color: var(--ink-black); display: grid; place-items: center; font-weight: 600; font-size: 14px; }
+      .step h4 { font-size: 17px; } .step p { font-size: 14px; color: var(--charcoal); }
+      @media (max-width: 880px) { .bot-grid { grid-template-columns: 1fr; gap: 32px; } }
+
+      /* ---------- Layered data stack ---------- */
+      .stack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+      .stack { position: relative; height: 320px; }
+      .layer { position: absolute; left: 50%; width: 260px; height: 76px; border-radius: 16px; transform: translateX(-50%) translateY(40px); opacity: 0; transition: transform .8s var(--ease), opacity .6s var(--ease); display: flex; align-items: center; gap: 12px; padding: 0 18px; font-weight: 500; color: var(--deep-forest); }
+      .stack.in .layer { transform: translateX(-50%); opacity: 1; }
+      .layer .dot { width: 12px; height: 12px; border-radius: 3px; }
+      .l0 { top: 8px; background: var(--chartreuse); } .l0 .dot{background:var(--deep-forest)}
+      .l1 { top: 78px; background: var(--lilac); } .l1 .dot{background:#6f63d6}
+      .l2 { top: 148px; background: var(--sky); } .l2 .dot{background:#3c5bb0}
+      .l3 { top: 218px; background: var(--blush); } .l3 .dot{background:#c0545a}
+      .stack.in .l0{transition-delay:0s} .stack.in .l1{transition-delay:.1s} .stack.in .l2{transition-delay:.2s} .stack.in .l3{transition-delay:.3s}
+      @media (max-width: 880px) { .stack-grid { grid-template-columns: 1fr; gap: 32px; } }
+
+      /* ---------- Notebook migration (highlight) ---------- */
+      .mig { background: var(--deep-forest); color: var(--paper-white); }
+      .mig-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 24px; align-items: center; }
+      .sheet { border-radius: 16px; padding: 22px; min-height: 240px; }
+      .cuaderno { background: #fbf7e9; color: #5b5535; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); transform: rotate(-1.5deg); position: relative; font-family: var(--font-display); }
+      .cuaderno .line { height: 14px; border-bottom: 1px solid #d9d2af; margin-bottom: 12px; position: relative; }
+      .cuaderno .scribble { position: absolute; top: -10px; height: 11px; background: #8a8454; border-radius: 6px; opacity: .55; width: 0; transition: width .7s var(--ease); }
+      .mig.in .cuaderno .scribble { width: var(--w); }
+      .arrow { display: grid; place-items: center; }
+      .arrow .ring { width: 54px; height: 54px; border-radius: 50%; background: var(--chartreuse); color: var(--ink-black); display: grid; place-items: center; transform: scale(.6); opacity: 0; transition: transform .6s var(--ease) .5s, opacity .6s .5s; }
+      .mig.in .arrow .ring { transform: scale(1); opacity: 1; }
+      .clean { background: var(--paper-white); color: var(--deep-forest); transform: rotate(1deg); }
+      .row { display: flex; align-items: center; justify-content: space-between; padding: 11px 13px; border-radius: 8px; background: var(--pale-sage); margin-bottom: 10px; opacity: 0; transform: translateX(16px); transition: opacity .6s var(--ease), transform .6s var(--ease); }
+      .mig.in .clean .row { opacity: 1; transform: none; }
+      .mig.in .clean .row:nth-child(2){transition-delay:.55s} .mig.in .clean .row:nth-child(3){transition-delay:.7s} .mig.in .clean .row:nth-child(4){transition-delay:.85s}
+      .row b { font-size: 14px; } .row .chip { font-size: 11px; background: var(--chartreuse); color: var(--ink-black); padding: 2px 8px; border-radius: 999px; }
+      @media (max-width: 880px) { .mig-grid { grid-template-columns: 1fr; } .arrow .ring { transform: rotate(90deg) scale(1); } .cuaderno,.clean{transform:none} }
+
+      /* ---------- Features ---------- */
+      .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+      .card { background: var(--paper-white); border: 1px solid rgba(0,0,0,.08); border-radius: 16px; padding: 24px; transition: transform .25s var(--ease), border-color .25s; }
+      .card:hover { transform: translateY(-6px); border-color: var(--deep-forest); }
+      .card .ico { width: 40px; height: 40px; border-radius: 4px; background: var(--deep-forest); color: var(--chartreuse); display: grid; place-items: center; margin-bottom: 14px; }
+      .card h3 { font-family: var(--font-display); font-size: 22px; margin-bottom: 8px; }
+      .card p { font-size: 14px; color: var(--charcoal); }
+      @media (max-width: 880px) { .feat-grid { grid-template-columns: 1fr; } }
+
+      /* ---------- Big M ---------- */
+      .bigm { background: var(--deep-forest); color: var(--paper-white); padding: 96px 0; overflow: hidden; }
+      .m-stage { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; }
+      .m-shape { position: relative; }
+      .m-shape svg { width: 100%; height: auto; }
+      .m-shape svg path { fill: var(--chartreuse); stroke-dasharray: 1; stroke-dashoffset: 1; }
+      .m-shape.in svg path { animation: draw 1.4s var(--ease) forwards; }
+      @keyframes draw { to { stroke-dashoffset: 0; } }
+      .m-chips { position: absolute; inset: 0; }
+      .chip-f { position: absolute; background: var(--deep-forest); color: var(--paper-white); border: 1px solid rgba(252,252,252,.25); border-radius: 12px; padding: 10px 14px; font-size: 13px; opacity: 0; transform: scale(.8); transition: opacity .5s var(--ease), transform .5s var(--ease); }
+      .chip-f b { font-family: var(--font-display); font-size: 20px; color: var(--chartreuse); display: block; }
+      .m-shape.in .chip-f { opacity: 1; transform: none; }
+      .m-shape.in .c1{transition-delay:.6s} .m-shape.in .c2{transition-delay:.8s} .m-shape.in .c3{transition-delay:1s}
+      .c1 { top: 16%; left: 8%; } .c2 { top: 54%; left: 38%; } .c3 { top: 24%; right: 8%; }
+      .m-copy h2 { font-family: var(--font-display); font-size: 52px; }
+      @media (max-width: 880px) { .m-stage { grid-template-columns: 1fr; } .m-copy h2{font-size:38px} .chip-f{position:static;opacity:1;transform:none;display:inline-block;margin:4px} .m-chips{position:static;display:flex;flex-wrap:wrap;margin-top:16px} }
+
+      /* ---------- Pricing ---------- */
+      .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
+      .price { background: var(--paper-white); border: 1px solid rgba(0,0,0,.1); border-radius: 16px; padding: 28px; display: flex; flex-direction: column; transition: transform .25s var(--ease); }
+      .price:hover { transform: translateY(-6px); }
+      .price.featured { background: var(--deep-forest); color: var(--paper-white); border: 0; }
+      .price.featured h3 { color: var(--paper-white); }
+      .price .tag { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--forest-mid); }
+      .price.featured .tag { color: var(--chartreuse); }
+      .price h3 { font-family: var(--font-display); font-size: 26px; margin: 10px 0 4px; }
+      .price .amount { font-family: var(--font-display); font-size: 48px; line-height: 1; }
+      .price .amount small { font-size: 15px; font-family: var(--font-sans); opacity: .7; }
+      .price ul { list-style: none; margin: 20px 0; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+      .price li { font-size: 14px; display: flex; gap: 9px; align-items: flex-start; }
+      .price li .ck { color: var(--vivid-green); flex: none; }
+      .price.featured li .ck { color: var(--chartreuse); }
+      @media (max-width: 880px) { .price-grid { grid-template-columns: 1fr; } }
+
+      /* ---------- FAQ + CTA + footer ---------- */
+      .faq { max-width: 760px; margin: 0 auto; }
+      details { background: var(--paper-white); border: 1px solid rgba(0,0,0,.08); border-radius: 16px; padding: 18px 22px; margin-bottom: 12px; }
+      summary { font-weight: 500; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+      summary::-webkit-details-marker { display: none; }
+      details p { margin-top: 12px; font-size: 14px; color: var(--charcoal); }
+      details[open] summary .plus { transform: rotate(45deg); }
+      .plus { transition: transform .2s; }
+      .cta-band { background: var(--chartreuse); border-radius: 16px; padding: 56px 32px; text-align: center; }
+      .cta-band h2 { font-family: var(--font-display); font-size: 44px; color: var(--ink-black); }
+      .cta-band p { margin: 14px auto 26px; max-width: 50ch; color: var(--charcoal); }
+      footer { background: var(--paper-white); border-top: 1px solid rgba(0,0,0,.08); padding: 40px 0; }
+      .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--charcoal); }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+        .reveal, .bubble, .word, .layer, .row, .chip-f { opacity: 1 !important; transform: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="progress"></div>
+
+    <!-- Nav -->
+    <header class="nav" id="nav">
+      <div class="wrap nav-inner">
+        <a href="#top" class="logo">
+          <span class="mark" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 20V5l8 9 8-9v15"/></svg>
+          </span>
+          Momec
+        </a>
+        <nav class="nav-links">
+          <a class="link" href="#bot">Bot con IA</a>
+          <a class="link" href="#migracion">Migración</a>
+          <a class="link" href="#funciones">Funciones</a>
+          <a class="link" href="#precios">Precios</a>
+        </nav>
+        <div class="nav-cta">
+          <a class="link" href="/app/" style="font-weight:500">Ingresar</a>
+          <a class="btn btn-primary" href="/app/">Probar gratis</a>
+        </div>
+      </div>
+    </header>
+
+    <a id="top"></a>
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <div class="eyebrow" style="color:var(--chartreuse)">Gestión de taller · multi-taller</div>
+          <h1 class="display mt16" id="heroH1"><span class="word">El</span> <span class="word">taller,</span><br /><span class="word">bajo</span> <span class="word">control.</span></h1>
+          <p class="lead reveal d2">Cargá los autos por <strong>WhatsApp</strong> y la IA arma la orden sola. Clientes, órdenes, inventario y finanzas — todo en Momec.</p>
+          <div class="cta-row reveal d3">
+            <a class="btn btn-primary" href="/app/">Probar gratis 14 días</a>
+            <a class="btn btn-ghost" href="#bot" style="border-color:rgba(252,252,252,.4);color:var(--paper-white)">Ver cómo funciona</a>
+          </div>
+          <p class="note reveal d4">Sin tarjeta. Migramos tu cuaderno sin costo.</p>
+        </div>
+
+        <div class="reveal d2">
+          <div class="phone" aria-hidden="true">
+            <div class="chat" id="chat"></div>
+          </div>
+          <div class="chartcard" id="chart">
+            <div class="lbl">Ingresos del taller</div>
+            <div class="bars">
+              <i style="--h:34%"></i><i style="--h:46%"></i><i style="--h:40%"></i><i style="--h:58%"></i>
+              <i style="--h:52%"></i><i style="--h:70%"></i><i style="--h:64%"></i><i style="--h:88%"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="band-forest" style="padding:52px 0">
+      <div class="wrap stats">
+        <div class="stat reveal"><div class="n" data-countup="30" data-suffix=" seg">0</div><div class="l">para cargar un auto por WhatsApp</div></div>
+        <div class="stat reveal d1"><div class="n" data-countup="0">0</div><div class="l">cuadernos y planillas perdidos</div></div>
+        <div class="stat reveal d2"><div class="n" data-countup="100" data-suffix="%">0</div><div class="l">stock y finanzas automáticos</div></div>
+        <div class="stat reveal d3"><div class="n">24/7</div><div class="l">el bot recibe ingresos siempre</div></div>
+      </div>
+    </section>
+
+    <!-- Bot -->
+    <section id="bot">
+      <div class="wrap bot-grid">
+        <div class="reveal">
+          <div class="eyebrow" style="color:var(--forest-mid)">La feature estrella</div>
+          <h2 class="serif section-title mt16">Cargá autos por WhatsApp.<br />La IA hace el resto.</h2>
+          <p class="mt16" style="color:var(--charcoal);max-width:46ch">Tu mecánico escribe como habla. Una IA (Claude) entiende marca, modelo, patente, kilometraje y la tarea — y crea la orden vinculada al cliente. También en Telegram.</p>
+          <div class="steps">
+            <div class="step reveal d1"><div class="num">1</div><div><h4>Escribí natural</h4><p>"Entró un Gol patente LWE366, service de 10.000, cliente Juan."</p></div></div>
+            <div class="step reveal d2"><div class="num">2</div><div><h4>La IA extrae los datos</h4><p>Marca, modelo, patente en mayúscula, km y la tarea literal — sin inventar nada.</p></div></div>
+            <div class="step reveal d3"><div class="num">3</div><div><h4>Confirmás y listo</h4><p>El bot busca al cliente, pide fotos opcionales y crea la orden. Queda en el sistema.</p></div></div>
+          </div>
+        </div>
+        <div class="reveal d1" style="background:var(--pale-sage);border-radius:16px;padding:10px">
+          <div class="phone" style="padding:14px">
+            <div class="chat" style="min-height:0">
+              <div class="bubble out show">Gol patente LWE366, service 10.000 km, cliente Juan</div>
+              <div class="bubble in show">📋 VW Gol · 🔢 LWE366<br/>📏 10.000 km · 🔧 Service 10.000 km · 👤 Juan</div>
+              <div class="bubble in show">¿Confirmás el ingreso? <span style="color:var(--forest-mid)">[✅ Confirmar] [❌ Cancelar]</span></div>
+              <div class="bubble out show">✅ Confirmar</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Notebook migration (highlight) -->
+    <section id="migracion" class="mig">
+      <div class="wrap">
+        <div class="center reveal" style="max-width:48ch;margin:0 auto 40px">
+          <div class="eyebrow" style="color:var(--chartreuse)">Del papel al sistema</div>
+          <h2 class="serif section-title mt8" style="color:var(--paper-white)">Tu cuaderno, ordenado en minutos.</h2>
+          <p class="mt8" style="color:rgba(252,252,252,.8)">Importamos tu cuaderno o planilla y lo convertimos en clientes, vehículos e historial — sin perder nada. Gratis.</p>
+        </div>
+        <div class="mig-grid reveal d1">
+          <div class="sheet cuaderno">
+            <div style="font-size:18px;margin-bottom:14px">Cuaderno del taller</div>
+            <div class="line"><span class="scribble" style="--w:70%;left:0"></span></div>
+            <div class="line"><span class="scribble" style="--w:55%;left:0"></span></div>
+            <div class="line"><span class="scribble" style="--w:80%;left:0"></span></div>
+            <div class="line"><span class="scribble" style="--w:45%;left:0"></span></div>
+            <div class="line"><span class="scribble" style="--w:62%;left:0"></span></div>
+          </div>
+          <div class="arrow"><div class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div></div>
+          <div class="sheet clean">
+            <div style="font-family:var(--font-display);font-size:18px;margin-bottom:14px">En Momec</div>
+            <div class="row"><b>Banda Viajera</b><span class="chip">Cliente</span></div>
+            <div class="row"><b>KGN-944 · VW Vento</b><span class="chip">Vehículo</span></div>
+            <div class="row"><b>Orden #128 · $70.000</b><span class="chip">Historial</span></div>
+            <div class="row"><b>Aceite · Filtro</b><span class="chip">Servicios</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Layered stack -->
+    <section style="background:var(--pale-sage)">
+      <div class="wrap stack-grid">
+        <div class="reveal">
+          <div class="eyebrow" style="color:var(--forest-mid)">Una sola plataforma</div>
+          <h2 class="serif section-title mt8">Cada capa del taller, conectada.</h2>
+          <p class="mt16" style="color:var(--charcoal);max-width:42ch">Lo que entra por WhatsApp baja solo hasta tus finanzas. Sin recargar, sin planillas paralelas.</p>
+        </div>
+        <div class="stack" id="stack">
+          <div class="layer l0"><span class="dot"></span> WhatsApp + IA</div>
+          <div class="layer l1"><span class="dot"></span> Órdenes de trabajo</div>
+          <div class="layer l2"><span class="dot"></span> Inventario</div>
+          <div class="layer l3"><span class="dot"></span> Finanzas</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="funciones">
+      <div class="wrap">
+        <div class="reveal" style="max-width:36ch">
+          <div class="eyebrow" style="color:var(--forest-mid)">Todo el taller</div>
+          <h2 class="serif section-title mt8">Un sistema, no diez planillas.</h2>
+        </div>
+        <div class="feat-grid mt40">
+          <div class="card reveal">
+            <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v5a1 1 0 0 1-1 1h-1a2 2 0 0 1-4 0H9a2 2 0 0 1-4 0H4a1 1 0 0 1-1-1z"/></svg></div>
+            <h3>Órdenes de trabajo</h3><p>El vehículo existe una vez; cada ingreso es una orden con estado, repuestos, mano de obra y total. Historial completo que nunca se pierde.</p>
+          </div>
+          <div class="card reveal d1">
+            <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/></svg></div>
+            <h3>Clientes y vehículos</h3><p>Un cliente con todos sus autos. Reutilizás el vehículo cuando vuelve y ves métricas: gastado, visitas, última vez.</p>
+          </div>
+          <div class="card reveal d2">
+            <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg></div>
+            <h3>Inventario que se descuenta solo</h3><p>Elegís repuestos del stock; al cerrar la orden se descuentan, se bloquea lo que no hay y queda el movimiento.</p>
+          </div>
+          <div class="card reveal">
+            <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <h3>Finanzas automáticas</h3><p>Cada orden entregada genera el ingreso. Balance e indicadores al día, sin cargar dos veces.</p>
+          </div>
+          <div class="card reveal d1">
+            <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l3-4 4 3 5-7"/></svg></div>
+            <h3>Reportes en vivo</h3><p>Financiero, operacional y estratégico calculados al vuelo. Qué servicios rinden y qué clientes vuelven.</p>
+          </div>
+          <div class="card reveal d2">
+            <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+            <h3>Cronómetro de mecánicos</h3><p>Responsables por vehículo con tiempo real de trabajo. Sabés cuánto lleva cada reparación y quién la hizo.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Big M -->
+    <section class="bigm">
+      <div class="wrap m-stage">
+        <div class="m-shape" id="bigM">
+          <svg viewBox="0 0 320 240" aria-hidden="true">
+            <path d="M24 224 V40 a14 14 0 0 1 24 -10 L160 150 L272 30 a14 14 0 0 1 24 10 V224 h-44 V108 L176 196 a16 16 0 0 1 -32 0 L68 108 V224 Z" stroke="var(--chartreuse)" stroke-width="0" pathLength="1"/>
+          </svg>
+          <div class="m-chips">
+            <div class="chip-f c1"><b>+128</b> órdenes este mes</div>
+            <div class="chip-f c2"><b>30 seg</b> por ingreso</div>
+            <div class="chip-f c3"><b>$1.2M</b> facturado</div>
+          </div>
+        </div>
+        <div class="m-copy reveal">
+          <div class="eyebrow" style="color:var(--chartreuse)">Momec</div>
+          <h2 class="mt8">Sacá más<br />de tu taller.</h2>
+          <p class="mt16" style="color:rgba(252,252,252,.82);max-width:36ch">Empezá hoy: cargá el primer auto por WhatsApp y mirá cómo se ordena solo.</p>
+          <a class="btn btn-primary mt40" href="/app/">Probar gratis →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="precios">
+      <div class="wrap">
+        <div class="center reveal" style="max-width:46ch;margin:0 auto">
+          <div class="eyebrow" style="color:var(--forest-mid)">Precios</div>
+          <h2 class="serif section-title mt8">Simple y por taller.</h2>
+          <p class="mt8" style="color:var(--charcoal)">Precios en USD. En Argentina, el equivalente en pesos por MercadoPago. Plan anual: 2 meses gratis.</p>
+        </div>
+        <div class="price-grid mt40">
+          <div class="price reveal">
+            <span class="tag">Arranque</span><h3>Para empezar</h3><div class="amount">$20<small>/mes</small></div>
+            <ul><li><span class="ck">✓</span> 1 taller · 2 usuarios</li><li><span class="ck">✓</span> Bot de WhatsApp con IA</li><li><span class="ck">✓</span> Órdenes, clientes, inventario, finanzas</li><li><span class="ck">✓</span> Reportes básicos</li></ul>
+            <a class="btn btn-ghost" href="/app/">Probar gratis</a>
+          </div>
+          <div class="price featured reveal d1">
+            <span class="tag">Pro · el más elegido</span><h3>Para el taller</h3><div class="amount">$49<small>/mes</small></div>
+            <ul><li><span class="ck">✓</span> Hasta 6 usuarios</li><li><span class="ck">✓</span> Bot WhatsApp <b>+ Telegram</b></li><li><span class="ck">✓</span> Órdenes ilimitadas · IA de sobra</li><li><span class="ck">✓</span> Reportes avanzados + importación</li><li><span class="ck">✓</span> Avisos al cliente</li></ul>
+            <a class="btn btn-primary" href="/app/">Probar gratis</a>
+          </div>
+          <div class="price reveal d2">
+            <span class="tag">Cadena</span><h3>Varias sucursales</h3><div class="amount">$99<small>/mes</small></div>
+            <ul><li><span class="ck">✓</span> Hasta 5 sucursales</li><li><span class="ck">✓</span> Varios números WhatsApp/Telegram</li><li><span class="ck">✓</span> IA prioritaria + plantillas</li><li><span class="ck">✓</span> Roles avanzados + export</li><li><span class="ck">✓</span> Soporte dedicado</li></ul>
+            <a class="btn btn-ghost" href="/app/">Probar gratis</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section style="background:var(--paper-white)">
+      <div class="wrap">
+        <div class="center reveal" style="margin-bottom:32px"><div class="eyebrow" style="color:var(--forest-mid)">Preguntas</div><h2 class="serif section-title mt8">Lo que todos preguntan</h2></div>
+        <div class="faq reveal d1">
+          <details open><summary>¿Cómo carga los autos el bot? <span class="plus">+</span></summary><p>Tu mecánico escribe por WhatsApp o Telegram. Una IA (Claude) extrae marca, modelo, patente, kilometraje y la tarea, busca al cliente y crea la orden. Podés mandar fotos y quedan adjuntas.</p></details>
+          <details><summary>¿Funciona en el celular? <span class="plus">+</span></summary><p>Sí. Pensada mobile-first: barra inferior, tarjetas en vez de tablas y formularios cómodos para una mano. Se siente como app nativa.</p></details>
+          <details><summary>¿Puedo migrar mi cuaderno? <span class="plus">+</span></summary><p>Sí, gratis. Importamos tu cuaderno o planilla (CSV) y, si venías de otro sistema, migramos clientes, vehículos e historial sin perder nada.</p></details>
+          <details><summary>¿Mis datos están separados de otros talleres? <span class="plus">+</span></summary><p>Totalmente. Cada taller es un inquilino aislado: el aislamiento está forzado en la base de datos y cubierto por tests.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA + footer -->
+    <section>
+      <div class="wrap"><div class="cta-band reveal"><h2>Empezá hoy. Cargá el primer auto por WhatsApp.</h2><p>Probá Momec 14 días gratis. Sin tarjeta, sin instalación. Te ayudamos a migrar tu cuaderno.</p><a class="btn btn-ghost" href="/app/" style="border-color:var(--ink-black)">Probar gratis →</a></div></div>
+    </section>
+
+    <footer>
+      <div class="wrap foot">
+        <div class="logo" style="font-size:18px"><span class="mark" style="width:28px;height:28px" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 20V5l8 9 8-9v15"/></svg></span>Momec</div>
+        <div>Software de gestión para talleres · Argentina y exterior</div>
+        <div>© <span id="y"></span> Momec</div>
+      </div>
+    </footer>
+
+    <script>
+      document.getElementById("y").textContent = new Date().getFullYear();
+      var nav = document.getElementById("nav");
+      var prog = document.getElementById("progress");
+      function onScroll() {
+        nav.classList.toggle("scrolled", window.scrollY > 24);
+        var h = document.documentElement;
+        var p = h.scrollTop / (h.scrollHeight - h.clientHeight || 1);
+        prog.style.width = (p * 100) + "%";
+      }
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+
+      // Stagger the hero headline words
+      document.querySelectorAll("#heroH1 .word").forEach(function (w, i) {
+        w.style.animationDelay = (0.15 + i * 0.09) + "s";
+      });
+
+      // Reveal-on-scroll + per-element triggers (countup, chart, stack, M, migration)
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          var el = e.target;
+          el.classList.add("in", "play");
+          if (el.dataset.countup !== undefined) countUp(el);
+          io.unobserve(el);
+        });
+      }, { threshold: 0.18 });
+      document.querySelectorAll(".reveal,#chart,#stack,#bigM,.mig,[data-countup]").forEach(function (el) { io.observe(el); });
+
+      function countUp(el) {
+        var target = parseFloat(el.dataset.countup) || 0;
+        var suffix = el.dataset.suffix || "";
+        var start = performance.now(), dur = 1100;
+        function tick(now) {
+          var t = Math.min(1, (now - start) / dur);
+          var val = Math.round(target * (1 - Math.pow(1 - t, 3)));
+          el.textContent = val + suffix;
+          if (t < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      }
+
+      // Hero chat sequence (the bot as hero feature)
+      var seq = [
+        { c: "bubble out", t: "Entró un Ford Focus, patente AB123CD, 185.000 km. Cambio de aceite y filtro. Cliente Pedro." },
+        { typing: true },
+        { c: "bubble in", t: "Encontré a <b style='color:#043f2e'>Pedro Gómez</b>. ¿Es este cliente?" },
+        { c: "bubble out", t: "Sí, es él 👍" },
+        { typing: true },
+        { c: "bubble card", t: "<div style='font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#c8f169'>Orden #128 creada</div><div style='margin-top:6px;font-size:15px'>Ford Focus · <b style='color:#c8f169'>AB123CD</b></div><div style='font-size:13px;opacity:.9'>Cambio de aceite · Filtro · Pedro Gómez · 185.000 km</div>" },
+      ];
+      var chat = document.getElementById("chat");
+      var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      function play(i) {
+        if (i >= seq.length) return;
+        var s = seq[i];
+        if (s.typing) {
+          var t = document.createElement("div");
+          t.className = "typing"; t.innerHTML = "<span></span><span></span><span></span>";
+          chat.appendChild(t);
+          setTimeout(function () { t.remove(); play(i + 1); }, reduce ? 0 : 850);
+        } else {
+          var b = document.createElement("div");
+          b.className = s.c + " show"; b.innerHTML = s.t;
+          chat.appendChild(b);
+          setTimeout(function () { play(i + 1); }, reduce ? 0 : 700);
+        }
+      }
+      setTimeout(function () { play(0); }, 600);
+    </script>
+  </body>
+</html>

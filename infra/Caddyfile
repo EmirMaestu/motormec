@@ -1,0 +1,39 @@
+# MotorMec — Caddy reverse proxy (TLS + security headers + SPA + API)
+# Set the domain via the DOMAIN env var when launching Caddy, e.g.
+#   DOMAIN=taller.midominio.com caddy run --config /etc/caddy/Caddyfile
+# Caddy obtains/renews TLS automatically.
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# --- Security headers (applied to every response) ---
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; script-src 'self'; base-uri 'self'; frame-ancestors 'none'"
+		-Server
+	}
+
+	# --- API + WhatsApp webhook → Fastify (incl. authenticated /api/media) ---
+	@backend path /api/* /webhooks/*
+	handle @backend {
+		reverse_proxy 127.0.0.1:3001
+	}
+
+	# --- SPA (built with base '/app/') ---
+	handle_path /app/* {
+		root * /var/www/motormec/app
+		try_files {path} /index.html
+		file_server
+	}
+
+	# --- Marketing landing (static) served at the root ---
+	handle {
+		root * /var/www/motormec/landing
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: motormec-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: motormec
+      POSTGRES_PASSWORD: motormec
+      POSTGRES_DB: motormec
+    ports:
+      - "5433:5432"
+    volumes:
+      - motormec_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U motormec -d motormec"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  motormec_pgdata:

@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Per-tenant media (uploaded photos)
+apps/api/media
+apps/api/media-test
+media/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

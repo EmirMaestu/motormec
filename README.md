@@ -1,69 +1,81 @@
-# React + TypeScript + Vite
+# MotorMec — SaaS multi-taller
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema de gestión para talleres mecánicos (Argentina) con **bot de WhatsApp** y
+**dashboard web**, reconstruido como **SaaS multi-inquilino** sobre un stack propio
+para correr en un VPS (sin Convex, sin Clerk, sin facturación por uso).
 
-Currently, two official plugins are available:
+> Reescritura completa según [`docs/PROMPT_REBUILD.md`](docs/PROMPT_REBUILD.md) y
+> [`docs/specs/2026-06-28-motormec-rebuild-design.md`](docs/specs/2026-06-28-motormec-rebuild-design.md).
+> El código Convex/Vite original queda en `convex/` y `src/` solo como referencia.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Stack
 
-## Expanding the ESLint configuration
+| Capa | Tecnología |
+|------|------------|
+| Backend | Node + TypeScript + **Fastify** + **Drizzle ORM** |
+| Base de datos | **Postgres** (multi-taller por `tenant_id`) |
+| Auth | Propia — cookie de sesión httponly+secure+samesite, hash **PBKDF2-HMAC-SHA256**, rate-limit |
+| Frontend | **React 19** + Vite + Tailwind v4 + Radix (sigue la guía de diseño en `docs/`) |
+| IA (parser WhatsApp) | **Groq** `llama-3.1-8b-instant` |
+| Storage fotos | Disco del VPS detrás de `StorageProvider` (camino a R2) |
+| Deploy | VPS + **Caddy** + **systemd** + Postgres ([`DEPLOY.md`](DEPLOY.md)) |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Estructura (monorepo npm workspaces)
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+apps/
+  api/   Fastify + Drizzle + Postgres — API, auth, bot WhatsApp, migración
+  web/   SPA React (base '/app/') siguiendo la guía de diseño
+infra/   docker-compose (Postgres), Caddyfile, systemd, backups
+docs/    spec, prompt de reconstrucción y guía de diseño
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Detalle del backend y decisiones de diseño: [`apps/api/README.md`](apps/api/README.md).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Quick start (local)
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run db:up                 # Postgres en Docker (puerto host 5433)
+
+# API
+cd apps/api
+cp .env.example .env
+npm run db:migrate
+npm run seed:dev              # crea tenant 'taller-demo' (admin/admin123)
+npm run dev                   # Fastify en :3001
+
+# Web (otra terminal)
+cd apps/web
+npm run dev                   # Vite en :5173 (proxea /api y /webhooks → :3001)
 ```
+
+Abrí http://localhost:5173/app/ e ingresá con `taller-demo` / `admin` / `admin123`.
+
+## Tests
+
+```bash
+cd apps/api && npm test       # incluye tests de aislamiento entre talleres
+```
+
+## Funcionalidad
+
+- **Vehículos:** alta/edición/baja, estados, historial de movimientos, responsables
+  con cronómetro, costos (mano de obra + repuestos), repuestos, kilometraje, fotos.
+- **Clientes:** CRUD, documento, métricas (vehículos, gastado, visitas), merge.
+- **Finanzas:** ingresos/egresos, categorías, métodos de pago, suspensión.
+- **Stock:** productos, punto de reorden, alerta de stock bajo, historial de inventario.
+- **Socios, Servicios, Categorías** configurables.
+- **Reportes y métricas** calculados al vuelo.
+- **Bot WhatsApp** multi-taller: webhook único con firma verificada, idempotencia,
+  máquina de estados, botones, parser Groq y descarga de fotos.
+
+## Migración desde Convex
+
+```bash
+cd apps/api
+npm run migrate:convex -- /ruta/dev-export.zip <slug> "Nombre Taller"
+```
+
+Mapea ids de Convex → uuids preservando referencias y valida conteos por tabla.
+Correr primero en staging. Ver [`DEPLOY.md`](DEPLOY.md).
