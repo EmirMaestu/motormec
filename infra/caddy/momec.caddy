@@ -1,0 +1,41 @@
+# Momec — bloque de sitio para AÑADIR a un Caddyfile existente (coexistencia).
+#
+# Si tu proyecto ya usa Caddy, NO reemplaces su Caddyfile. En su lugar:
+#   1) Reemplazá  __DOMAIN__  por tu subdominio (ej. app.tudominio.com).
+#   2) Si la API no está en 3001, cambiá el puerto en reverse_proxy.
+#   3) Pegá este bloque al final de /etc/caddy/Caddyfile
+#      (o guardalo como /etc/caddy/momec.caddy y agregá  `import momec.caddy`).
+#   4) sudo systemctl reload caddy
+#   Caddy pide y renueva el TLS del subdominio solo.
+
+__DOMAIN__ {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# API + webhook de WhatsApp → Fastify
+	@backend path /api/* /webhooks/*
+	handle @backend {
+		reverse_proxy 127.0.0.1:3001
+	}
+
+	# SPA del taller (build con base '/app/')
+	handle_path /app/* {
+		root * /var/www/motormec/app
+		try_files {path} /index.html
+		file_server
+	}
+
+	# Landing en la raíz del subdominio
+	handle {
+		root * /var/www/motormec/landing
+		try_files {path} /index.html
+		file_server
+	}
+}
