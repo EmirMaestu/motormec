@@ -66,6 +66,12 @@ export interface BotDeps {
    * cambiar los datos. Si no se provee, se usa el texto base tal cual.
    */
   redactar?: (base: string) => Promise<string>;
+  /**
+   * Agente conversacional con herramientas (opcional). Responde consultas libres
+   * ("cómo va la patente X", "qué autos hay", etc.) con datos reales. Si no se
+   * provee, se cae a las plantillas de saludo/consulta.
+   */
+  agente?: (texto: string) => Promise<string>;
 }
 
 /** Reescribe `base` en tono natural si hay redactor; si no, devuelve `base`. */
@@ -315,12 +321,18 @@ export async function procesarMensaje(
     // un ingreso con datos reales (evita "registrar la nada" ante un "Hola").
     const hayDatos = Boolean(datos.patente || datos.marca_modelo || datos.tarea);
     const intent = datos.intencion ?? (hayDatos ? "ingreso" : "saludo");
-    if (intent === "consulta") {
-      const base = await responderConsulta(tdb, datos);
-      await deps.send(from, await natural(deps, base));
-      return "consulta";
-    }
+    // No es un ingreso con datos reales → conversación libre.
     if (intent !== "ingreso" || !hayDatos) {
+      // Agente con herramientas (consulta cualquier cosa con datos reales).
+      if (deps.agente) {
+        await deps.send(from, await deps.agente(texto));
+        return intent === "consulta" ? "consulta" : "saludo";
+      }
+      // Respaldo sin agente (tests): plantillas.
+      if (intent === "consulta") {
+        await deps.send(from, await natural(deps, await responderConsulta(tdb, datos)));
+        return "consulta";
+      }
       await deps.send(from, await natural(deps, saludoAyuda(deps.tallerNombre)));
       return "saludo";
     }

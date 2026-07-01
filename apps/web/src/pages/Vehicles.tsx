@@ -155,6 +155,9 @@ export function VehiclesPage() {
         items={filtered}
         loading={isLoading}
         keyOf={(v) => v.id}
+        rowClassName={(v) =>
+          v.status === "Entregado" ? "bg-deep-forest/[0.05] text-charcoal" : undefined
+        }
         emptyTitle="No hay vehículos"
         emptyHint="Agregá el primer ingreso con el botón Nuevo."
         columns={[

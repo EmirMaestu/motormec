@@ -19,6 +19,7 @@ export function DataList<T>({
   columns,
   card,
   onRowClick,
+  rowClassName,
   loading,
   emptyTitle = "Sin resultados",
   emptyHint,
@@ -28,6 +29,8 @@ export function DataList<T>({
   columns: Column<T>[];
   card: (row: T) => ReactNode;
   onRowClick?: (row: T) => void;
+  /** Extra classes per row/card (e.g. to tint delivered vehicles). */
+  rowClassName?: (row: T) => string | undefined;
   loading?: boolean;
   emptyTitle?: string;
   emptyHint?: string;
@@ -46,6 +49,7 @@ export function DataList<T>({
             className={cn(
               "rounded-[16px] bg-paper-white border border-black/10 p-4",
               onRowClick && "active:bg-pale-sage transition cursor-pointer",
+              rowClassName?.(row),
             )}
           >
             {card(row)}
@@ -70,7 +74,10 @@ export function DataList<T>({
               <tr
                 key={keyOf(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={onRowClick ? "cursor-pointer hover:bg-pale-sage/60" : undefined}
+                className={cn(
+                  onRowClick && "cursor-pointer hover:bg-pale-sage/60",
+                  rowClassName?.(row),
+                )}
               >
                 {columns.map((c, i) => (
                   <Td key={i} className={cn(c.align === "right" && "text-right", c.className)}>

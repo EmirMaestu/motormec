@@ -14,12 +14,20 @@ import {
 } from "./client.js";
 import { extraerDatosVehiculo } from "./parser.js";
 import { redactarNatural } from "./responder.js";
+import { agenteConsulta } from "./agente.js";
 import { sameNumber } from "./phone.js";
 import { procesarMensaje, type BotDeps, type WAMessage } from "./stateMachine.js";
+import type { TenantDb } from "../db/scope.js";
 
 const SUPPORTED = new Set(["text", "image", "interactive"]);
 
-function makeDeps(ctx: SendCtx, tenantId: string, plan: string, tallerNombre: string): BotDeps {
+function makeDeps(
+  ctx: SendCtx,
+  tdb: TenantDb,
+  tenantId: string,
+  plan: string,
+  tallerNombre: string,
+): BotDeps {
   const maxIa = limitsFor(plan).maxIaMonthly;
   return {
     send: (to, texto) => enviarMensaje(ctx, to, texto),
@@ -34,6 +42,11 @@ function makeDeps(ctx: SendCtx, tenantId: string, plan: string, tallerNombre: st
     tallerNombre,
     redactar: async (base) => {
       const r = await redactarNatural(base);
+      await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
+      return r.texto;
+    },
+    agente: async (texto) => {
+      const r = await agenteConsulta(tdb, texto, tallerNombre);
       await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
       return r.texto;
     },
@@ -108,8 +121,8 @@ export async function processWhatsAppPayload(payload: MetaPayload): Promise<void
         const tenant = rows[0];
         if (!tenant || !tenant.active) continue;
 
-        const deps = makeDeps(ctx, tenant.id, tenant.plan, tenant.name);
         const tdb = forTenant(tenant.id);
+        const deps = makeDeps(ctx, tdb, tenant.id, tenant.plan, tenant.name);
         try {
           await procesarMensaje(tdb, msg, deps);
         } catch (err) {
