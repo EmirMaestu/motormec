@@ -101,6 +101,11 @@ sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$PGDB'" | g
   && ok "Base '$PGDB' ya existía" \
   || { sudo -u postgres psql -c "CREATE DATABASE $PGDB OWNER $PGUSER;"; ok "Base '$PGDB' creada"; }
 
+# Detectar el puerto REAL del cluster (Ubuntu puede asignar 5433+ si 5432 está tomado).
+PG_PORT="$(sudo -u postgres psql -tAc 'SHOW port;' 2>/dev/null | tr -d '[:space:]')"
+PG_PORT="${PG_PORT:-5432}"
+ok "Postgres escuchando en puerto $PG_PORT"
+
 # ---------------------------------------------------------------- user/code -
 c "Usuario de sistema y código"
 id "$SVC_USER" >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin "$SVC_USER"
@@ -126,7 +131,7 @@ else
 NODE_ENV=production
 PORT=$API_PORT
 HOST=127.0.0.1
-DATABASE_URL=postgres://$PGUSER:$PGPASS@localhost:5432/$PGDB
+DATABASE_URL=postgres://$PGUSER:$PGPASS@localhost:${PG_PORT:-5432}/$PGDB
 SESSION_SECRET=$SESSION_SECRET
 COOKIE_SECURE=true
 SESSION_TTL_DAYS=30
@@ -167,8 +172,11 @@ sleep 2
 if curl -fsS "http://127.0.0.1:$API_PORT/api/health" >/dev/null; then ok "API viva en :$API_PORT"; else warn "La API no respondió aún; mirá: journalctl -u motormec-api -n 50"; fi
 
 # ---------------------------------------------------------------- proxy -----
-c "Reverse proxy ($PROXY) — subdominio $MOMEC_DOMAIN"
-if [ "$PROXY" = "nginx" ]; then
+c "Reverse proxy ($PROXY) — dominio $MOMEC_DOMAIN"
+if [ "${MOMEC_SKIP_PROXY:-0}" = "1" ]; then
+  warn "MOMEC_SKIP_PROXY=1 → no toco el reverse proxy. Config lista en infra/caddy/momec.caddy /"
+  warn "infra/nginx/momec.conf para aplicar a mano. API escuchando en 127.0.0.1:$API_PORT."
+elif [ "$PROXY" = "nginx" ]; then
   sed "s/__DOMAIN__/$MOMEC_DOMAIN/g; s#127.0.0.1:3001#127.0.0.1:$API_PORT#g" \
     "$APP_DIR/infra/nginx/momec.conf" > /etc/nginx/sites-available/momec.conf
   ln -sf /etc/nginx/sites-available/momec.conf /etc/nginx/sites-enabled/momec.conf
