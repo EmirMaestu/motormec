@@ -2,7 +2,15 @@ import Anthropic from "@anthropic-ai/sdk";
 import { eq } from "drizzle-orm";
 import { env } from "../config/env.js";
 import type { TenantDb } from "../db/scope.js";
-import { conversaciones, customers, historialTaller, vehicles, workOrders } from "../db/schema.js";
+import {
+  conversaciones,
+  customers,
+  historialTaller,
+  presupuestos,
+  vehicles,
+  workOrders,
+  type Presupuesto,
+} from "../db/schema.js";
 import { createOrder } from "../domain/orders.js";
 import { createQuote } from "../domain/quotes.js";
 
@@ -370,6 +378,7 @@ async function ejecutarTool(
       const documento = formatPresupuesto(tallerNombre, quote);
       return JSON.stringify({
         ok: true,
+        id: quote.id,
         presupuesto: quote.number,
         total: quote.total,
         documento,
@@ -388,12 +397,18 @@ export interface AgenteResultado {
   outputTokens: number;
 }
 
+export interface AgenteHooks {
+  /** Envía el presupuesto en PDF. Devuelve true si se envió (para no duplicar en texto). */
+  enviarPresupuestoPdf?: (quote: Presupuesto) => Promise<boolean>;
+}
+
 /** Corre el agente sobre un mensaje libre. Devuelve la respuesta y los tokens. */
 export async function agenteConsulta(
   tdb: TenantDb,
   texto: string,
   tallerNombre: string,
   from: string,
+  hooks?: AgenteHooks,
 ): Promise<AgenteResultado> {
   const c = getClient();
   const fallback =
@@ -414,6 +429,7 @@ export async function agenteConsulta(
   let inputTokens = 0;
   let outputTokens = 0;
   let presupuestoDoc = "";
+  let presupuestoId = "";
 
   try {
     for (let i = 0; i < 4; i++) {
@@ -430,10 +446,17 @@ export async function agenteConsulta(
           .map((b) => b.text)
           .join("")
           .trim();
-        // El presupuesto se adjunta VERBATIM (números exactos, sin parafrasear).
-        const finalText = presupuestoDoc
-          ? `${txt || "Listo, te paso el presupuesto 👇"}\n\n${presupuestoDoc}`
-          : txt || fallback;
+        // Presupuesto: intentar mandar el PDF; si no se pudo, adjuntar el texto
+        // VERBATIM (números exactos, sin parafrasear) como respaldo.
+        let finalText = txt || (presupuestoId ? "Listo, te paso el presupuesto 👇" : fallback);
+        if (presupuestoId) {
+          let enviadoPdf = false;
+          if (hooks?.enviarPresupuestoPdf) {
+            const q = await tdb.findById(presupuestos, presupuestoId);
+            if (q) enviadoPdf = await hooks.enviarPresupuestoPdf(q);
+          }
+          if (!enviadoPdf && presupuestoDoc) finalText = `${finalText}\n\n${presupuestoDoc}`;
+        }
         return { texto: finalText, inputTokens, outputTokens };
       }
 
@@ -450,8 +473,9 @@ export async function agenteConsulta(
           );
           if (block.name === "crear_presupuesto") {
             try {
-              const parsed = JSON.parse(out) as { documento?: string };
+              const parsed = JSON.parse(out) as { documento?: string; id?: string };
               if (parsed.documento) presupuestoDoc = parsed.documento;
+              if (parsed.id) presupuestoId = parsed.id;
             } catch {
               /* ignore */
             }

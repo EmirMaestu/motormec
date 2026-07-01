@@ -80,6 +80,50 @@ export async function enviarMensajeConBotones(
   return enviarMensaje(ctx, to, fallback);
 }
 
+/**
+ * Sube un archivo a Meta y devuelve el media_id (para reenviarlo como documento
+ * sin exponer una URL pública). Multipart con el fetch/FormData nativos de Node.
+ */
+export async function subirMedia(
+  ctx: SendCtx,
+  bytes: Buffer,
+  mime: string,
+  filename: string,
+): Promise<string | null> {
+  try {
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("type", mime);
+    form.append("file", new Blob([new Uint8Array(bytes)], { type: mime }), filename);
+    const res = await fetch(`${GRAPH}/${ctx.phoneNumberId}/media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${ctx.accessToken}` },
+      body: form,
+    });
+    if (!res.ok) return null;
+    const info = (await res.json()) as { id?: string };
+    return info.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Envía un documento (PDF, etc.) ya subido, por su media_id. */
+export async function enviarDocumento(
+  ctx: SendCtx,
+  to: string,
+  mediaId: string,
+  filename: string,
+  caption?: string,
+): Promise<boolean> {
+  return post(ctx, {
+    messaging_product: "whatsapp",
+    to: normalizarNumeroEnvio(to),
+    type: "document",
+    document: { id: mediaId, filename, caption },
+  });
+}
+
 /** Download a media object from Meta (two-step: get URL, then fetch bytes). */
 export async function descargarMedia(
   ctx: SendCtx,
