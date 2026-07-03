@@ -65,7 +65,7 @@ export function StatCard({
       >
         {label}
       </div>
-      <div className="font-display mt-2 text-[36px] leading-none">{value}</div>
+      <div className="font-display mt-2 text-[26px] sm:text-[36px] leading-none break-words">{value}</div>
       {hint ? <div className="mt-2 text-[14px] opacity-80">{hint}</div> : null}
     </div>
   );
