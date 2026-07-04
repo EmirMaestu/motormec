@@ -41,7 +41,7 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 | 24 | BOT-5 cuota por tokens | ✅ hecho | 117f835 | suite 114 passed |
 | 25 | BOT-6 anti-replay + fallback modelo | ✅ hecho | 5f5d15f | suite 118; Plan 04 completo |
 | 26 | SEC-1 rate limit por ruta | pendiente | — | |
-| 27 | SEC-2 password policy + lockout | pendiente | — | |
+| 27 | SEC-2 password policy + lockout | ✅ hecho | 1b587d5 | suite 123; migración 0010 |
 | 28 | SEC-4 tests aislamiento billing | pendiente | — | |
 | 29 | SEC-5 magic bytes uploads | pendiente | — | |
 | 30 | SEC-6 errores genéricos | pendiente | — | |
