@@ -150,6 +150,18 @@ export async function updateOrder(
   const existing = await tdb.findById(workOrders, id);
   if (!existing) return null;
 
+  // No se puede editar el detalle financiero de una orden ya finalizada:
+  // el ingreso y el stock ya se movieron. Para corregir, reabrí la orden primero.
+  if (existing.finalizedAt) {
+    const cambiaFinanzas =
+      input.parts !== undefined ||
+      input.laborCost !== undefined ||
+      input.services !== undefined;
+    if (cambiaFinanzas) {
+      throw new Error("No se puede editar una orden finalizada. Reabrila primero.");
+    }
+  }
+
   const parts = input.parts ?? existing.parts;
   const laborCost = input.laborCost ?? existing.laborCost;
   const { partsCost, total } = computeTotals(parts, laborCost);

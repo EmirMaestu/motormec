@@ -155,7 +155,15 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
     const parsed = updateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
     const before = await tenantDb.findById(workOrders, id);
-    const order = await O.updateOrder(tenantDb, id, parsed.data);
+    let order;
+    try {
+      order = await O.updateOrder(tenantDb, id, parsed.data);
+    } catch (err) {
+      return reply.code(409).send({
+        error: "order_finalized",
+        message: "No se puede editar una orden finalizada. Reabrila primero.",
+      });
+    }
     if (!order) return reply.code(404).send({ error: "not_found" });
     // Aviso al cliente sólo si el estado cambió (best-effort, no bloquea).
     if (parsed.data.status && before && before.status !== order.status) {

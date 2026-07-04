@@ -122,4 +122,12 @@ describe("work orders", () => {
     const v = order.vehicleId ? await tdb.findById(vehicles, order.vehicleId) : null;
     expect(v?.status).toBe("En Reparación");
   });
+
+  it("refuses to edit parts/labor of a finalized order", async () => {
+    const order = await createOrder(tdb, actor, { plate: "FIN111AL", laborCost: 10000 });
+    await finalizeOrder(tdb, actor, order.id);
+    await expect(
+      updateOrder(tdb, order.id, { laborCost: 99999 }),
+    ).rejects.toThrow(/finalizada/i);
+  });
 });
