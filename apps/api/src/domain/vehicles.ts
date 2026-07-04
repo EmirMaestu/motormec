@@ -333,19 +333,29 @@ export async function deleteVehicle(
 ): Promise<Vehicle | null> {
   const existing = await tdb.findById(vehicles, id);
   if (!existing) return null;
-  // Borrar también las órdenes de este vehículo (si no, quedan en Órdenes).
-  await tdb.delete(workOrders, eq(workOrders.vehicleId, id));
-  const removed = await tdb.deleteById(vehicles, id);
-  if (!removed) return null;
-  await logVehicleMovement(tdb, actor, {
-    vehicleId: null,
-    vehiclePlate: existing.plate,
-    vehicleInfo: vehicleInfo(existing),
-    owner: existing.owner,
-    movementType: "deleted",
+  return tdb.transaction(async (t) => {
+    // Desactivar los ingresos ligados a este vehículo (no borrarlos: preservar auditoría).
+    const ingresos = await t.select(
+      transactions,
+      and(eq(transactions.vehicleId, id), eq(transactions.type, "Ingreso"), eq(transactions.active, true)),
+    );
+    for (const inc of ingresos) {
+      await t.updateById(transactions, inc.id, { active: false, updatedAt: new Date() });
+    }
+    // Borrar también las órdenes de este vehículo (si no, quedan en Órdenes).
+    await t.delete(workOrders, eq(workOrders.vehicleId, id));
+    const removed = await t.deleteById(vehicles, id);
+    if (!removed) return null;
+    await logVehicleMovement(t, actor, {
+      vehicleId: null,
+      vehiclePlate: existing.plate,
+      vehicleInfo: vehicleInfo(existing),
+      owner: existing.owner,
+      movementType: "deleted",
+    });
+    if (existing.customerId) await recalcCustomerMetrics(t, existing.customerId);
+    return removed;
   });
-  if (existing.customerId) await recalcCustomerMetrics(tdb, existing.customerId);
-  return removed;
 }
 
 /* ----------------------------- work timer ------------------------------- */

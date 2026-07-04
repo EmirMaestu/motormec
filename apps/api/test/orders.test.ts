@@ -175,6 +175,15 @@ describe("work orders", () => {
     expect(ingresos[0]?.amount).toBe(10000);
   });
 
+  it("deleting a vehicle deactivates its income transactions", async () => {
+    const order = await createOrder(tdb, actor, { plate: "DEL111", laborCost: 10000 });
+    await finalizeOrder(tdb, actor, order.id);
+    const { deleteVehicle } = await import("../src/domain/vehicles.js");
+    await deleteVehicle(tdb, actor, order.vehicleId!);
+    const activos = await tdb.select(transactions, eq(transactions.active, true));
+    expect(activos.filter((t) => t.type === "Ingreso")).toHaveLength(0);
+  });
+
   it("status update mirrors onto the vehicle snapshot", async () => {
     const order = await createOrder(tdb, actor, { plate: "GG444HH" });
     await updateOrder(tdb, order.id, { status: "En reparación" });
