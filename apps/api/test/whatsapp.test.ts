@@ -15,6 +15,7 @@ import {
   workOrders,
 } from "../src/db/schema.js";
 import { createOrder } from "../src/domain/orders.js";
+import { ejecutarTool } from "../src/whatsapp/agente.js";
 import { procesarMensaje, type BotDeps, type WAMessage } from "../src/whatsapp/stateMachine.js";
 import type { DatosVehiculo } from "../src/whatsapp/parser.js";
 import { verifySignature } from "../src/whatsapp/signature.js";
@@ -273,6 +274,73 @@ describe("WhatsApp bot — state machine", () => {
     expect(reg).toBe("registered");
     const h = await tdb.select(historialTaller, eq(historialTaller.status, "linked"));
     expect(h[0]?.fotoPaths.length).toBe(1);
+  });
+});
+
+describe("WhatsApp bot — confirmación de ingreso del agente (BOT-3)", () => {
+  it("registrar_ingreso NO crea la orden: deja propuesta pendiente para confirmar", async () => {
+    // El agente llama a la tool con un auto que "entró". No debe escribir todavía.
+    const out = await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "ABC123", marca: "vw", modelo: "Gol", cliente: "Juan", tarea: "service" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    const parsed = JSON.parse(out) as { pendiente_confirmacion?: boolean; resumen?: string };
+    expect(parsed.pendiente_confirmacion).toBe(true);
+    expect(parsed.resumen).toContain("ABC123");
+
+    // No se creó ninguna orden ni vehículo: sólo quedó una conversación pendiente.
+    expect(await tdb.count(workOrders)).toBe(0);
+    expect(await tdb.count(vehicles)).toBe(0);
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("confirmar_ingreso_agente");
+  });
+
+  it('un "sí" en confirmar_ingreso_agente SÍ crea la orden real', async () => {
+    // 1) El agente stage-a la propuesta (sin escribir).
+    await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "ABC123", marca: "vw", modelo: "Gol", cliente: "Juan", tarea: "service" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    expect(await tdb.count(workOrders)).toBe(0);
+
+    // 2) El usuario responde "sí" → la máquina de estados ejecuta createOrder.
+    const { deps, sent } = fakeDeps(EMPTY);
+    const r = await procesarMensaje(tdb, textMsg("si1", "sí"), deps);
+    expect(r).toBe("ingreso_confirmado");
+
+    const orders = await tdb.select(workOrders);
+    expect(orders).toHaveLength(1);
+    expect(orders[0]?.vehiclePlate).toBe("ABC123");
+    const vs = await tdb.select(vehicles);
+    expect(vs).toHaveLength(1);
+    expect(vs[0]?.brand).toBe("Volkswagen"); // marca normalizada
+    expect(sent.join(" ")).toMatch(/ABC123/);
+
+    // La etapa pasa a esperando_foto (para adjuntar fotos), no queda pendiente.
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("esperando_foto");
+  });
+
+  it('un "no" en confirmar_ingreso_agente descarta sin crear nada', async () => {
+    await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "ZZ9", marca: "Ford", modelo: "Focus" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    const { deps } = fakeDeps(EMPTY);
+    const r = await procesarMensaje(tdb, textMsg("no1", "no"), deps);
+    expect(r).toBe("ingreso_descartado");
+    expect(await tdb.count(workOrders)).toBe(0);
+    expect(await tdb.count(vehicles)).toBe(0);
+    expect(await tdb.count(conversaciones)).toBe(0);
   });
 });
 

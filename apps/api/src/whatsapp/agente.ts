@@ -5,13 +5,11 @@ import type { TenantDb } from "../db/scope.js";
 import {
   conversaciones,
   customers,
-  historialTaller,
   presupuestos,
   vehicles,
   workOrders,
   type Presupuesto,
 } from "../db/schema.js";
-import { createOrder } from "../domain/orders.js";
 import { createQuote } from "../domain/quotes.js";
 import { sanitizePromptField, sanitizeToolText } from "./sanitize.js";
 
@@ -193,7 +191,17 @@ export function formatPresupuesto(
   return lineas.join("\n");
 }
 
-async function ejecutarTool(
+/** Propuesta de ingreso pendiente de confirmar, guardada en `conversaciones.datos`. */
+export interface PropuestaIngreso {
+  patente: string;
+  marca: string;
+  modelo: string;
+  cliente: string;
+  tarea: string;
+  kilometraje: number | null;
+}
+
+export async function ejecutarTool(
   tdb: TenantDb,
   name: string,
   input: Record<string, unknown>,
@@ -312,48 +320,33 @@ async function ejecutarTool(
         (v) => v.plate.toUpperCase() === patente,
       );
 
-      const order = await createOrder(tdb, BOT_ACTOR, {
-        plate: patente,
-        brand: marca || existente?.brand || "",
-        model: modelo || existente?.model || "",
-        customerName: cliente || existente?.owner || "",
-        phone: from,
-        services: tarea ? [tarea] : [],
-        mileage: km,
-      });
-
-      // Historial (para el panel y para adjuntar fotos) + modo "esperando foto".
-      const h = await tdb.insertOne(historialTaller, {
-        waMessageId: `agent-${order.id}`,
-        waFrom: from,
-        waTimestamp: String(Math.floor(Date.now() / 1000)),
-        rawMessage: null,
-        marcaModelo: `${marca} ${modelo}`.trim() || null,
+      // BOT-3: NO escribir todavía. Dejar la propuesta pendiente en la conversación
+      // (etapa `confirmar_ingreso_agente`) y pedir confirmación. La máquina de estados
+      // ejecuta el createOrder real recién cuando el usuario responde afirmativamente.
+      // Esto evita creaciones masivas/accidentales desde un teléfono comprometido.
+      const propuesta: PropuestaIngreso = {
         patente,
-        kilometraje: km != null ? String(km) : null,
-        tarea: tarea || null,
-        cliente: cliente || null,
-        vehicleId: order.vehicleId,
-        workOrderId: order.id,
-        status: "linked",
-        fotoPaths: [],
-      });
+        marca: marca || existente?.brand || "",
+        modelo: modelo || existente?.model || "",
+        cliente: cliente || existente?.owner || "",
+        tarea,
+        kilometraje: km,
+      };
       await tdb.delete(conversaciones, eq(conversaciones.phone, from));
       await tdb.insert(conversaciones, {
         phone: from,
-        etapa: "esperando_foto",
-        datos: { fotoPaths: [] },
-        historialId: h.id,
+        etapa: "confirmar_ingreso_agente",
+        datos: propuesta as unknown as Record<string, unknown>,
       });
 
+      const vehiculo = `${propuesta.marca} ${propuesta.modelo}`.trim() || "vehículo";
       return JSON.stringify({
-        ok: true,
-        patente: sanitizeToolText(patente, 10),
-        vehiculo: sanitizeToolText(`${marca} ${modelo}`.trim(), 80) || "vehículo",
-        cliente: sanitizeToolText(cliente || existente?.owner || "", 80) || null,
+        pendiente_confirmacion: true,
+        resumen: `Ingreso de ${sanitizeToolText(patente, 10)} ${sanitizeToolText(vehiculo, 80)}${
+          propuesta.cliente ? ` de ${sanitizeToolText(propuesta.cliente, 80)}` : ""
+        }`,
         yaExistia: Boolean(existente),
-        orden: order.number,
-        nota: "Registrado. Se puede pedir al usuario que mande fotos del vehículo (opcional).",
+        nota: "NO se registró todavía. Pedí confirmación al usuario en UNA línea (ej: '¿Confirmo el ingreso de ABC123 de Juan? Respondé Sí para cargarlo'). Al responder Sí, se carga solo.",
       });
     }
 
@@ -430,8 +423,8 @@ export async function agenteConsulta(
   const system = `Sos el asistente de WhatsApp del taller ${nombreTaller || "mecánico"}. Atendés al personal del taller. Hoy es ${hoy}.
 - Respondé SOLO con datos reales obtenidos de las herramientas. Nunca inventes patentes, estados, montos ni nombres.
 - HACER UN PRESUPUESTO: si el usuario pide "hacé/armá un presupuesto", "cotizá", "presupuestá" (ej: "presupuestá a Juan: pastillas 15000, mano de obra 8000" o "presupuesto de 10000 para Juan de cambio de correa, repuestos 30mil"), llamá a "crear_presupuesto" DE UNA con lo que tengas. SOLO hacen falta el cliente y al menos un ítem. NUNCA pidas patente, número de orden, marca ni modelo para un presupuesto — no hacen falta y NO existe "orden" en el presupuesto. Interpretá montos naturales: "10000 de mano de obra" → ítem "Mano de obra" 10000; "repuestos 30mil" → ítem "Repuestos" 30000; "3mil"=3000, "30mil"=30000, "1.5 palo"=1500000. El PDF se envía solo; vos confirmá en UNA línea (ej: "Listo, te paso el presupuesto 👇") SIN repetir ítems ni total.
-- CARGAR UN INGRESO: si el usuario describe un auto que entró o pide agregar uno (ej: "agregá un VW Gol patente ABC123 de Juan, service"), usá la herramienta "registrar_ingreso" y CARGALO DIRECTAMENTE. Sólo la patente es obligatoria; marca, modelo, km, cliente y tarea son opcionales (cargá lo que haya). Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). No pidas que repita el mensaje si ya lo entendiste. Si falta SOLO la patente, pedila. Tras registrar, confirmá con la orden creada y ofrecé mandar fotos del vehículo.
-- Si al registrar el vehículo YA EXISTÍA (yaExistia=true), aclaralo con naturalidad ("ya lo teníamos, le sumé una nueva entrada").
+- CARGAR UN INGRESO: si el usuario describe un auto que entró o pide agregar uno (ej: "agregá un VW Gol patente ABC123 de Juan, service"), usá la herramienta "registrar_ingreso". Sólo la patente es obligatoria; marca, modelo, km, cliente y tarea son opcionales (cargá lo que haya). Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). No pidas que repita el mensaje si ya lo entendiste. Si falta SOLO la patente, pedila.
+- CONFIRMAR EL INGRESO: el ingreso NO se carga solo. La herramienta devuelve "pendiente_confirmacion": en ese caso NO digas que quedó registrado; pedí confirmación en UNA línea con los datos del "resumen" (ej: "¿Confirmo el ingreso de ABC123 Gol de Juan? Respondé *Sí* para cargarlo"). Al responder Sí, la app lo carga sola. Si el vehículo YA EXISTÍA (yaExistia=true), aclaralo con naturalidad ("ya lo teníamos, le sumaría una nueva entrada").
 - CONSULTAS: usá las herramientas para vehículos, clientes, órdenes, entregas o qué hay en el taller. Para "entregados hoy/esta semana" usá "entregados" con "desde" (calculado desde hoy=${hoy}); para "los últimos N" usá "limite".
 - Si es un saludo o algo general, respondé breve y explicá qué podés hacer.
 - Sé breve, cálido y en español rioplatense (voseo). Máximo 4 líneas. 1-2 emojis está bien.`;

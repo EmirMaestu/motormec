@@ -10,6 +10,7 @@ import {
 } from "../db/schema.js";
 import { createVehicle } from "../domain/vehicles.js";
 import { createOrder } from "../domain/orders.js";
+import type { PropuestaIngreso } from "./agente.js";
 import { detectarComando, ejecutarComando } from "./commands.js";
 import { sameNumber } from "./phone.js";
 import type { StorageProvider } from "../storage/provider.js";
@@ -413,6 +414,65 @@ export async function procesarMensaje(
   const negativo = esBotonNegativo(btnId) || esNegativo(texto);
   const listo = esBotonListo(btnId) || esListo(texto);
   const datos = (conv.datos ?? {}) as ConvDatos;
+
+  // BOT-3: confirmación de un ingreso propuesto por el agente. El agente NO escribió;
+  // sólo dejó la propuesta pendiente. Recién acá, con un "sí", se ejecuta el createOrder.
+  if (conv.etapa === "confirmar_ingreso_agente") {
+    const propuesta = (conv.datos ?? {}) as unknown as PropuestaIngreso;
+    if (afirmativo) {
+      const order = await createOrder(tdb, BOT_ACTOR, {
+        plate: propuesta.patente,
+        brand: propuesta.marca || "",
+        model: propuesta.modelo || "",
+        customerName: propuesta.cliente || "",
+        phone: from,
+        services: propuesta.tarea ? [propuesta.tarea] : [],
+        mileage: propuesta.kilometraje ?? null,
+      });
+
+      // Historial (para el panel y para adjuntar fotos) + modo "esperando foto".
+      const h = await tdb.insertOne(historialTaller, {
+        waMessageId: `agent-${order.id}`,
+        waFrom: from,
+        waTimestamp: String(Math.floor(Date.now() / 1000)),
+        rawMessage: null,
+        marcaModelo: `${propuesta.marca} ${propuesta.modelo}`.trim() || null,
+        patente: propuesta.patente,
+        kilometraje: propuesta.kilometraje != null ? String(propuesta.kilometraje) : null,
+        tarea: propuesta.tarea || null,
+        cliente: propuesta.cliente || null,
+        vehicleId: order.vehicleId,
+        workOrderId: order.id,
+        status: "linked",
+        fotoPaths: [],
+      });
+      await tdb.updateById(conversaciones, conv.id, {
+        etapa: "esperando_foto",
+        datos: { fotoPaths: [] },
+        historialId: h.id,
+        updatedAt: new Date(),
+      });
+      const vehiculo = `${propuesta.marca} ${propuesta.modelo}`.trim();
+      await deps.send(
+        from,
+        await natural(
+          deps,
+          `✅ Listo, cargué el ingreso de ${propuesta.patente}${vehiculo ? ` (${vehiculo})` : ""} — orden #${order.number}. Podés mandar fotos del vehículo si querés. 📸`,
+        ),
+      );
+      return "ingreso_confirmado";
+    }
+    if (negativo) {
+      await tdb.deleteById(conversaciones, conv.id);
+      await deps.send(from, "Listo, no lo cargué. Contame si necesitás otra cosa. 🙂");
+      return "ingreso_descartado";
+    }
+    await deps.send(
+      from,
+      `¿Confirmo el ingreso de ${propuesta.patente}? Respondé *Sí* para cargarlo o *No* para descartarlo.`,
+    );
+    return "confirmar_ingreso_agente";
+  }
 
   if (conv.etapa === "verificando_cliente") {
     if (afirmativo) {
