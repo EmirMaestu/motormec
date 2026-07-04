@@ -6,6 +6,7 @@ import { authed, requireAuth, requireRole } from "../auth/middleware.js";
 import * as O from "../domain/orders.js";
 import { notifyOrderStatusChange } from "../domain/notifications.js";
 import { localDisk } from "../storage/provider.js";
+import { detectImageType } from "../lib/imageType.js";
 
 /** Fotos (fotoPaths) de todo el historial ligado a una orden. */
 async function orderPhotos(
@@ -21,6 +22,9 @@ const IMG_EXT: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
 };
+
+// Tipos de imagen aceptados (validados por magic bytes, no por el data-URL).
+const ALLOWED = Object.keys(IMG_EXT);
 
 const partSchema = z.object({
   productId: z.string().uuid().nullable().optional(),
@@ -105,6 +109,12 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
       if (!match) return reply.code(400).send({ error: "invalid_image" });
       const ext = IMG_EXT[match[1]!] ?? "jpg";
       const bytes = Buffer.from(match[2]!, "base64");
+      const realType = detectImageType(bytes);
+      if (!realType || !ALLOWED.includes(realType)) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_image", message: "El archivo no es una imagen válida." });
+      }
       if (bytes.length > 12 * 1024 * 1024) return reply.code(413).send({ error: "too_large" });
 
       // Reusar el historial ligado a esta orden, o crear uno para las fotos web.

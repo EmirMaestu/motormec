@@ -6,6 +6,7 @@ import { db } from "../db/client.js";
 import { presupuestos, tenants, type TenantSettings } from "../db/schema.js";
 import { localDisk } from "../storage/provider.js";
 import * as Q from "../domain/quotes.js";
+import { detectImageType } from "../lib/imageType.js";
 
 const itemSchema = z.object({
   description: z.string().min(1),
@@ -31,6 +32,10 @@ const IMG_EXT: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
 };
+
+// Tipos de logo aceptados (validados por magic bytes, no por el data-URL).
+// Sin gif ni svg: el logo va embebido en el PDF y sólo admitimos rasterizados.
+const ALLOWED = Object.keys(IMG_EXT);
 
 export async function quoteRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/quotes", { preHandler: requireAuth }, async (request, reply) => {
@@ -88,6 +93,12 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       if (!match) return reply.code(400).send({ error: "invalid_image" });
       const ext = IMG_EXT[match[1]!] ?? "png";
       const bytes = Buffer.from(match[2]!, "base64");
+      const realType = detectImageType(bytes);
+      if (!realType || !ALLOWED.includes(realType)) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_image", message: "El archivo no es una imagen válida." });
+      }
       if (bytes.length > 5 * 1024 * 1024) return reply.code(413).send({ error: "too_large" });
 
       const path = await localDisk.save(auth.tenantId, "branding", bytes, ext);
