@@ -2,8 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 import { transactions } from "../db/schema.js";
-import { authed, requireAuth, requireRole } from "../auth/middleware.js";
-import { categorizeService } from "../domain/categorize.js";
+import { authed, requireRole } from "../auth/middleware.js";
 
 const INCOME_CATEGORIES = [
   "Servicio General",
@@ -195,47 +194,6 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
         supplier: d.supplier ?? null,
         paymentMethod: d.paymentMethod ?? null,
         notes: d.notes ?? null,
-      });
-      return reply.code(201).send({ transaction: created });
-    },
-  );
-
-  // Auto-invoice on vehicle delivery (any authenticated user can deliver).
-  app.post(
-    "/api/transactions/vehicle",
-    { preHandler: requireAuth },
-    async (request, reply) => {
-      const { tenantDb } = authed(request);
-      const schema = z.object({
-        vehicleId: z.string().uuid(),
-        vehiclePlate: z.string(),
-        vehicleBrand: z.string(),
-        vehicleModel: z.string(),
-        customerName: z.string(),
-        services: z.array(z.string()),
-        amount: z.number(),
-        deliveryDate: z.string(),
-      });
-      const parsed = schema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
-      const d = parsed.data;
-      const category = categorizeService(d.services);
-      const description = `${d.vehiclePlate} - ${d.vehicleBrand} ${d.vehicleModel} (${d.customerName}) - ${d.services.join(", ")} - Cliente: ${d.customerName} - Pago: Efectivo - Servicios: ${d.services.join(", ")}`;
-      const created = await tenantDb.insertOne(transactions, {
-        date: d.deliveryDate,
-        description,
-        type: "Ingreso",
-        category,
-        amount: d.amount,
-        active: true,
-        vehicleId: d.vehicleId,
-        vehicleDetails: {
-          plate: d.vehiclePlate,
-          brand: d.vehicleBrand,
-          model: d.vehicleModel,
-          customer: d.customerName,
-        },
-        paymentMethod: "Efectivo",
       });
       return reply.code(201).send({ transaction: created });
     },
