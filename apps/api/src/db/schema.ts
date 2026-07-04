@@ -478,6 +478,9 @@ export const transactions = pgTable(
     vehicleId: uuid("vehicle_id").references(() => vehicles.id, {
       onDelete: "set null",
     }),
+    workOrderId: uuid("work_order_id").references(() => workOrders.id, {
+      onDelete: "set null",
+    }),
     vehicleDetails: jsonb("vehicle_details").$type<VehicleDetailsSnapshot | null>(),
     supplier: text("supplier"),
     paymentMethod: text("payment_method"),

@@ -158,6 +158,23 @@ describe("work orders", () => {
     expect(reopened?.finalizedAt).toBeNull();
   });
 
+  it("reopen reverses the income of THAT order, not another order's income", async () => {
+    // Dos órdenes para el mismo vehículo, ambas finalizadas.
+    const o1 = await createOrder(tdb, actor, { plate: "TWO111", laborCost: 10000 });
+    await finalizeOrder(tdb, actor, o1.id);
+    const o2 = await createOrder(tdb, actor, { plate: "TWO111", laborCost: 20000 });
+    await finalizeOrder(tdb, actor, o2.id);
+
+    const { reopenOrder } = await import("../src/domain/orders.js");
+    await reopenOrder(tdb, actor, o2.id); // reabrir la SEGUNDA
+
+    const activos = await tdb.select(transactions, eq(transactions.active, true));
+    const ingresos = activos.filter((t) => t.type === "Ingreso");
+    // Debe quedar activo el ingreso de o1 (10000), inactivo el de o2 (20000).
+    expect(ingresos).toHaveLength(1);
+    expect(ingresos[0]?.amount).toBe(10000);
+  });
+
   it("status update mirrors onto the vehicle snapshot", async () => {
     const order = await createOrder(tdb, actor, { plate: "GG444HH" });
     await updateOrder(tdb, order.id, { status: "En reparación" });

@@ -277,6 +277,7 @@ export async function finalizeOrder(
         amount: order.total,
         active: true,
         vehicleId: order.vehicleId,
+        workOrderId: order.id,
         vehicleDetails: {
           plate: order.vehiclePlate,
           brand: order.vehicleInfo,
@@ -381,20 +382,18 @@ export async function reopenOrder(
       }
     }
 
-    // 2. Revertir el ingreso de la entrega.
-    //    (Cuando esté hecho el plan 05 BL-1, filtrar por workOrderId en vez de vehicleId.)
-    if (order.vehicleId) {
-      const income = await t.selectOne(
-        transactions,
-        and(
-          eq(transactions.vehicleId, order.vehicleId),
-          eq(transactions.type, "Ingreso"),
-          eq(transactions.active, true),
-        ),
-      );
-      if (income) {
-        await t.updateById(transactions, income.id, { active: false, updatedAt: new Date() });
-      }
+    // 2. Revertir el ingreso de la entrega (ligado a ESTA orden, no al vehículo:
+    //    dos órdenes del mismo vehículo tienen ingresos distintos).
+    const income = await t.selectOne(
+      transactions,
+      and(
+        eq(transactions.workOrderId, order.id),
+        eq(transactions.type, "Ingreso"),
+        eq(transactions.active, true),
+      ),
+    );
+    if (income) {
+      await t.updateById(transactions, income.id, { active: false, updatedAt: new Date() });
     }
 
     // 3. Reabrir la orden.
