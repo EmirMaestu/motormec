@@ -388,9 +388,13 @@ export async function startWork(
   };
   if (isNew) responsibles.push(resp);
   const startedAt = nowIso();
+  // Cerrar cualquier sesión abierta previa de este responsable (evita solapadas).
+  resp.workSessions = (resp.workSessions ?? []).map((s) =>
+    s.endTime ? s : { ...s, endTime: startedAt, duration: Date.parse(startedAt) - Date.parse(s.startTime) },
+  );
   resp.isWorking = true;
   resp.workStartedAt = startedAt;
-  resp.workSessions = [...(resp.workSessions ?? []), { startTime: startedAt }];
+  resp.workSessions = [...resp.workSessions, { startTime: startedAt }];
 
   const status = vehicle.status !== IN_REPAIR ? IN_REPAIR : vehicle.status;
   const updated = await tdb.updateById(vehicles, vehicleId, {

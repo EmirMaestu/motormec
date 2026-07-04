@@ -3,6 +3,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { pool } from "../src/db/client.js";
 import { createTenant, createUser } from "../src/db/admin.js";
+import { forTenant } from "../src/db/scope.js";
+import { vehicles } from "../src/db/schema.js";
 import { resetDb } from "./helpers.js";
 
 let app: FastifyInstance;
@@ -114,6 +116,18 @@ describe("Phase 2 domain flows", () => {
     expect(paused.json().workDuration).toBeGreaterThanOrEqual(0);
     expect(paused.json().vehicle.responsibles[0].isWorking).toBe(false);
     expect(paused.json().vehicle.responsibles[0].totalWorkTime).toBeGreaterThanOrEqual(0);
+  });
+
+  it("startWork twice does not open a second overlapping session", async () => {
+    const tdb = forTenant(tenantId);
+    const { startWork } = await import("../src/domain/vehicles.js");
+    const v0 = await tdb.insertOne(vehicles, { plate: "TIM111", entryDate: "2026-07-01", status: "Ingresado" });
+    const timer = { userId: "u1", userName: "Pepe" };
+    await startWork(tdb, timer, v0.id, false);
+    const v = await startWork(tdb, timer, v0.id, false);
+    const resp = v?.responsibles.find((r) => r.userId === "u1");
+    const abiertas = (resp?.workSessions ?? []).filter((s) => !s.endTime);
+    expect(abiertas.length).toBe(1); // no dos abiertas
   });
 
   it("delivering a vehicle records a delivered movement; vehicle transaction posts income", async () => {
