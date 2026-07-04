@@ -32,7 +32,7 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 | 15 | BL-4 timer sin solapes | ✅ hecho | eade60f | suite 97 passed |
 | 16 | BL-5 no dejar Entregado si falla | ✅ hecho | 6bac068 | suite 98; updateVehicle envuelto en tx |
 | 17 | BL-6 fechas AR en dominio | ✅ hecho | 5521f3f | suite 98 passed |
-| 18 | BL-7 endpoint ajuste stock atómico | pendiente | — | solo backend |
+| 18 | BL-7 endpoint ajuste stock atómico | ✅ hecho | 55839ec | suite 100 passed; solo backend (paso frontend pendiente humano) |
 | 19 | BL-8 renombrar métricas | ⏭️ omitido | — | PENDIENTE HUMANO: renombrar la key `prediccionIngresosMensual` rompería el frontend (Reports.tsx lee esa key); es cambio coordinado back+front, y el front está fuera de alcance. Redefinir retención = decisión de producto. |
 | 20 | BOT-1 sanitizar tool results | pendiente | — | dep QW-3 |
 | 21 | BOT-2 rate limit por número | pendiente | — | |
