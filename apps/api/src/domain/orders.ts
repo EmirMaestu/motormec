@@ -403,6 +403,16 @@ export async function reopenOrder(
       deliveryDate: null,
       updatedAt: new Date(),
     });
+    // Devolver el vehículo al taller (sync de estado con la orden reabierta).
+    if (order.vehicleId) {
+      await t.updateById(vehicles, order.vehicleId, {
+        status: "En Reparación",
+        inTaller: true,
+        exitDate: null,
+        lastUpdated: nowIso(),
+        updatedAt: new Date(),
+      });
+    }
     if (order.customerId) await recalcCustomerMetrics(t, order.customerId);
     return reopened ?? order;
   });

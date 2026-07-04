@@ -175,6 +175,18 @@ describe("work orders", () => {
     expect(ingresos[0]?.amount).toBe(10000);
   });
 
+  it("reopening an order brings its vehicle back into the shop", async () => {
+    const order = await createOrder(tdb, actor, { plate: "SYNC111", laborCost: 5000 });
+    await finalizeOrder(tdb, actor, order.id);
+    let v = await tdb.findById(vehicles, order.vehicleId!);
+    expect(v?.status).toBe("Entregado");
+    const { reopenOrder } = await import("../src/domain/orders.js");
+    await reopenOrder(tdb, actor, order.id);
+    v = await tdb.findById(vehicles, order.vehicleId!);
+    expect(v?.inTaller).toBe(true);
+    expect(v?.status).not.toBe("Entregado");
+  });
+
   it("deleting a vehicle deactivates its income transactions", async () => {
     const order = await createOrder(tdb, actor, { plate: "DEL111", laborCost: 10000 });
     await finalizeOrder(tdb, actor, order.id);
