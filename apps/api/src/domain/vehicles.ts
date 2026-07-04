@@ -58,16 +58,10 @@ async function syncOrderAndFinance(
 
   if (vehicle.status === DELIVERED) {
     if (latest && !latest.finalizedAt) {
-      try {
-        await finalizeOrder(tdb, actor, latest.id);
-      } catch {
-        // Falta de stock u otro problema: al menos dejamos la orden entregada.
-        await tdb.updateById(workOrders, latest.id, {
-          status: "Entregado",
-          deliveryDate: todayDate(),
-          updatedAt: new Date(),
-        });
-      }
+      // Si falta stock, finalizeOrder lanza y la operación se revierte entera.
+      // Propagamos el error: el caller (updateVehicle) revierte el cambio de estado
+      // del vehículo para no dejarlo "Entregado" a medias, y la ruta lo muestra.
+      await finalizeOrder(tdb, actor, latest.id);
       return;
     }
     if (!latest && (vehicle.cost ?? 0) > 0) {
@@ -275,55 +269,61 @@ export async function updateVehicle(
   }
 
   patch.updatedAt = new Date();
-  const updated = await tdb.updateById(vehicles, id, patch);
-  if (!updated) return null;
 
-  // Customer metrics on customer reassignment.
-  if (input.customerId !== undefined && input.customerId !== existing.customerId) {
-    if (existing.customerId) await recalcCustomerMetrics(tdb, existing.customerId);
-    if (input.customerId) await recalcCustomerMetrics(tdb, input.customerId);
-  } else if (existing.customerId && input.cost !== undefined) {
-    await recalcCustomerMetrics(tdb, existing.customerId);
-  }
+  // Todo en una transacción: si la finalización de la orden falla (p.ej. falta
+  // stock), se revierte también el cambio de estado del vehículo — así NO queda
+  // "Entregado" a medias. El error se propaga para que la ruta lo muestre.
+  return tdb.transaction(async (t) => {
+    const updated = await t.updateById(vehicles, id, patch);
+    if (!updated) return null;
 
-  // Movement log.
-  if (input.status && input.status !== existing.status) {
-    const movementType =
-      input.status === DELIVERED
-        ? "delivered"
-        : input.status === SUSPENDED
-          ? "suspended"
-          : "status_changed";
-    await logVehicleMovement(tdb, actor, {
-      vehicleId: id,
-      vehiclePlate: updated.plate,
-      vehicleInfo: vehicleInfo(updated),
-      owner: updated.owner,
-      movementType,
-      previousStatus: existing.status,
-      newStatus: input.status,
-    });
-  } else {
-    await logVehicleMovement(tdb, actor, {
-      vehicleId: id,
-      vehiclePlate: updated.plate,
-      vehicleInfo: vehicleInfo(updated),
-      owner: updated.owner,
-      movementType: "updated",
-      previousCost: existing.cost,
-      newCost: updated.cost,
-      costChange: updated.cost - existing.cost,
-      previousServices: existing.services,
-      newServices: updated.services,
-    });
-  }
+    // Customer metrics on customer reassignment.
+    if (input.customerId !== undefined && input.customerId !== existing.customerId) {
+      if (existing.customerId) await recalcCustomerMetrics(t, existing.customerId);
+      if (input.customerId) await recalcCustomerMetrics(t, input.customerId);
+    } else if (existing.customerId && input.cost !== undefined) {
+      await recalcCustomerMetrics(t, existing.customerId);
+    }
 
-  // Sincronizar la orden y finanzas cuando cambió el estado del vehículo.
-  if (input.status && input.status !== existing.status) {
-    await syncOrderAndFinance(tdb, actor, updated);
-  }
+    // Movement log.
+    if (input.status && input.status !== existing.status) {
+      const movementType =
+        input.status === DELIVERED
+          ? "delivered"
+          : input.status === SUSPENDED
+            ? "suspended"
+            : "status_changed";
+      await logVehicleMovement(t, actor, {
+        vehicleId: id,
+        vehiclePlate: updated.plate,
+        vehicleInfo: vehicleInfo(updated),
+        owner: updated.owner,
+        movementType,
+        previousStatus: existing.status,
+        newStatus: input.status,
+      });
+    } else {
+      await logVehicleMovement(t, actor, {
+        vehicleId: id,
+        vehiclePlate: updated.plate,
+        vehicleInfo: vehicleInfo(updated),
+        owner: updated.owner,
+        movementType: "updated",
+        previousCost: existing.cost,
+        newCost: updated.cost,
+        costChange: updated.cost - existing.cost,
+        previousServices: existing.services,
+        newServices: updated.services,
+      });
+    }
 
-  return updated;
+    // Sincronizar la orden y finanzas cuando cambió el estado del vehículo.
+    if (input.status && input.status !== existing.status) {
+      await syncOrderAndFinance(t, actor, updated);
+    }
+
+    return updated;
+  });
 }
 
 export async function deleteVehicle(

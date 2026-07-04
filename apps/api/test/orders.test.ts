@@ -196,6 +196,30 @@ describe("work orders", () => {
     expect(activos.filter((t) => t.type === "Ingreso")).toHaveLength(0);
   });
 
+  it("delivering a vehicle whose order lacks stock throws and does NOT leave it 'Entregado'", async () => {
+    const prod = await tdb.insertOne(products, { name: "Pastillas", quantity: 1, reorderPoint: 0, price: 8000 });
+    const order = await createOrder(tdb, actor, {
+      plate: "NOSTK1",
+      parts: [{ productId: prod.id, name: "Pastillas", quantity: 5, unitPrice: 8000, fromInventory: true }],
+    });
+    const vehicleId = order.vehicleId!;
+    const { updateVehicle } = await import("../src/domain/vehicles.js");
+
+    // Entregar debe FALLAR (falta stock) y propagar el error.
+    await expect(updateVehicle(tdb, actor, vehicleId, { status: "Entregado" })).rejects.toThrow(
+      /insuficiente/i,
+    );
+
+    // El vehículo NO quedó "Entregado" a medias.
+    const v = await tdb.findById(vehicles, vehicleId);
+    expect(v?.status).not.toBe("Entregado");
+    // La orden tampoco quedó finalizada, ni se generó ingreso.
+    expect((await tdb.findById(workOrders, order.id))?.finalizedAt).toBeFalsy();
+    expect(await tdb.count(transactions)).toBe(0);
+    // El stock intacto.
+    expect((await tdb.findById(products, prod.id))?.quantity).toBe(1);
+  });
+
   it("status update mirrors onto the vehicle snapshot", async () => {
     const order = await createOrder(tdb, actor, { plate: "GG444HH" });
     await updateOrder(tdb, order.id, { status: "En reparación" });
