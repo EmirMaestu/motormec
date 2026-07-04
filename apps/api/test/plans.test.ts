@@ -13,8 +13,15 @@ import {
   workOrders,
 } from "../src/db/schema.js";
 import { createOrder } from "../src/domain/orders.js";
-import { limitsFor, withinLimit } from "../src/domain/plans.js";
-import { currentPeriod, getIaTokens, getIaUsage, incIaTokens, incIaUsage } from "../src/domain/usage.js";
+import { limitsFor, limitsForJson, withinLimit } from "../src/domain/plans.js";
+import {
+  currentPeriod,
+  getIaTokens,
+  getIaUsage,
+  incIaTokens,
+  incIaUsage,
+  withinTokenBudget,
+} from "../src/domain/usage.js";
 import { notifyOrderStatusChange, toWaNumber } from "../src/domain/notifications.js";
 import { numberKey, sameNumber } from "../src/whatsapp/phone.js";
 import { procesarMensaje, type BotDeps, type WAMessage } from "../src/whatsapp/stateMachine.js";
@@ -55,6 +62,18 @@ describe("plan limits — pure helpers", () => {
     expect(limitsFor("pro").dataMigration).toBe(true);
   });
 
+  it("cada plan define un tope mensual de tokens de IA (legado = ilimitado)", () => {
+    expect(limitsFor("starter").maxIaTokensMonthly).toBe(300_000);
+    expect(limitsFor("pro").maxIaTokensMonthly).toBe(2_000_000);
+    expect(limitsFor("max").maxIaTokensMonthly).toBe(8_000_000);
+    expect(limitsFor("standard").maxIaTokensMonthly).toBe(Infinity);
+  });
+
+  it("limitsForJson expone el tope de tokens (∞ → null)", () => {
+    expect(limitsForJson("starter").maxIaTokensMonthly).toBe(300_000);
+    expect(limitsForJson("standard").maxIaTokensMonthly).toBeNull();
+  });
+
   it("toWaNumber normalizes AR numbers to 549<area><local>", () => {
     expect(toWaNumber("5491122334455")).toBe("5491122334455");
     expect(toWaNumber("541122334455")).toBe("5491122334455");
@@ -84,6 +103,38 @@ describe("usage counter (monthly IA)", () => {
     const t = await getIaTokens(tenantId);
     expect(t.input).toBe(150);
     expect(t.output).toBe(30);
+  });
+});
+
+describe("token budget (per-plan monthly cap)", () => {
+  let tenantId: string;
+  beforeEach(async () => {
+    await resetDb();
+    const t = await createTenant({ name: "Tokens", slug: "tokens" });
+    tenantId = t.id;
+  });
+
+  it("permite mientras input+output no superan el tope del plan", async () => {
+    const starter = limitsFor("starter");
+    expect(await withinTokenBudget(tenantId, starter)).toBe(true);
+    await incIaTokens(tenantId, 100_000, 100_000); // 200k < 300k
+    expect(await withinTokenBudget(tenantId, starter)).toBe(true);
+  });
+
+  it("rechaza a un tenant que superó el tope de tokens aunque le queden mensajes", async () => {
+    const starter = limitsFor("starter");
+    // Consumió menos de 300 mensajes → cuota de mensajes intacta…
+    await incIaUsage(tenantId);
+    expect(withinLimit(await getIaUsage(tenantId), starter.maxIaMonthly)).toBe(true);
+    // …pero quemó más de 300k tokens (input+output) en el mes.
+    await incIaTokens(tenantId, 250_000, 100_000); // 350k > 300k
+    expect(await withinTokenBudget(tenantId, starter)).toBe(false);
+  });
+
+  it("los planes legado (∞) nunca topan por tokens", async () => {
+    const standard = limitsFor("standard");
+    await incIaTokens(tenantId, 50_000_000, 50_000_000);
+    expect(await withinTokenBudget(tenantId, standard)).toBe(true);
   });
 });
 

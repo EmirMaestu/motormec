@@ -5,7 +5,7 @@ import { forTenant } from "../db/scope.js";
 import { env } from "../config/env.js";
 import { storage } from "../storage/provider.js";
 import { limitsFor, withinLimit } from "../domain/plans.js";
-import { getIaUsage, incIaTokens, incIaUsage } from "../domain/usage.js";
+import { getIaUsage, incIaTokens, incIaUsage, withinTokenBudget } from "../domain/usage.js";
 import { buildQuotePdf } from "../domain/quotes.js";
 import {
   descargarMedia,
@@ -36,7 +36,8 @@ function makeDeps(
   plan: string,
   tallerNombre: string,
 ): BotDeps {
-  const maxIa = limitsFor(plan).maxIaMonthly;
+  const planLimits = limitsFor(plan);
+  const maxIa = planLimits.maxIaMonthly;
   return {
     send: (to, texto) => enviarMensaje(ctx, to, texto),
     sendButtons: (to, texto, botones) => enviarMensajeConBotones(ctx, to, texto, botones),
@@ -82,7 +83,13 @@ function makeDeps(
       return r.texto;
     },
     iaQuota: {
-      check: async () => withinLimit(await getIaUsage(tenantId), maxIa),
+      // Hay cupo si NO se agotó la cuota de mensajes NI el tope de tokens del
+      // plan. El tope de tokens acota el costo real (un mensaje puede disparar
+      // varias llamadas API); si se superó, se corta con el mismo aviso que la
+      // cuota de mensajes, sin procesar.
+      check: async () =>
+        withinLimit(await getIaUsage(tenantId), maxIa) &&
+        (await withinTokenBudget(tenantId, planLimits)),
       tick: async () => {
         await incIaUsage(tenantId);
       },

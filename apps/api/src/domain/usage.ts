@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { usageCounters } from "../db/schema.js";
 import { argMonth } from "../lib/time.js";
+import { withinLimit, type PlanLimits } from "./plans.js";
 
 /** Período actual con formato "YYYY-MM" (mes calendario, hora AR UTC-3). */
 export function currentPeriod(): string {
@@ -75,4 +76,19 @@ export async function getIaTokens(
     .where(and(eq(usageCounters.tenantId, tenantId), eq(usageCounters.period, period)))
     .limit(1);
   return { input: rows[0]?.i ?? 0, output: rows[0]?.o ?? 0 };
+}
+
+/**
+ * ¿El tenant tiene cupo de TOKENS este período? Suma input+output del mes y lo
+ * compara contra `maxIaTokensMonthly` del plan. `Infinity` (planes legado)
+ * siempre permite. Esto acota el costo real mejor que la cuota de mensajes,
+ * porque un mensaje puede disparar varias llamadas a la IA.
+ */
+export async function withinTokenBudget(
+  tenantId: string,
+  plan: Pick<PlanLimits, "maxIaTokensMonthly">,
+  period = currentPeriod(),
+): Promise<boolean> {
+  const { input, output } = await getIaTokens(tenantId, period);
+  return withinLimit(input + output, plan.maxIaTokensMonthly);
 }
