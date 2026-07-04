@@ -138,6 +138,26 @@ describe("work orders", () => {
     expect(txs).toHaveLength(1);
   });
 
+  it("reopen restores stock and reverses income atomically", async () => {
+    const prod = await tdb.insertOne(products, { name: "Correa", quantity: 10, reorderPoint: 0, price: 5000 });
+    const order = await createOrder(tdb, actor, {
+      plate: "REO111",
+      laborCost: 8000,
+      parts: [{ productId: prod.id, name: "Correa", quantity: 2, unitPrice: 6000, fromInventory: true }],
+    });
+    await finalizeOrder(tdb, actor, order.id);
+    expect((await tdb.findById(products, prod.id))?.quantity).toBe(8); // 10 - 2
+
+    const { reopenOrder } = await import("../src/domain/orders.js");
+    await reopenOrder(tdb, actor, order.id);
+    // Stock repuesto y el ingreso quedó inactivo.
+    expect((await tdb.findById(products, prod.id))?.quantity).toBe(10);
+    const activos = await tdb.select(transactions, eq(transactions.active, true));
+    expect(activos.filter((x) => x.type === "Ingreso")).toHaveLength(0);
+    const reopened = await tdb.findById(workOrders, order.id);
+    expect(reopened?.finalizedAt).toBeNull();
+  });
+
   it("status update mirrors onto the vehicle snapshot", async () => {
     const order = await createOrder(tdb, actor, { plate: "GG444HH" });
     await updateOrder(tdb, order.id, { status: "En reparación" });

@@ -355,55 +355,58 @@ export async function reopenOrder(
   const order = await tdb.findById(workOrders, id);
   if (!order) return null;
 
-  // 1. Restore stock deducted at delivery.
-  if (order.finalizedAt) {
-    for (const part of order.parts) {
-      if (!part.fromInventory || !part.productId) continue;
-      const product = await tdb.findById(products, part.productId);
-      if (!product) continue;
-      const newQty = product.quantity + part.quantity;
-      await tdb.updateById(products, product.id, {
-        quantity: newQty,
-        lowStock: newQty <= product.reorderPoint,
-        updatedAt: new Date(),
-      });
-      await logInventoryMovement(tdb, actor, {
-        productId: product.id,
-        productName: product.name,
-        productType: product.type,
-        movementType: "stock_increase",
-        previousQuantity: product.quantity,
-        newQuantity: newQty,
-        quantityChange: part.quantity,
-        reason: `Reapertura orden #${order.number}`,
-      });
+  return tdb.transaction(async (t) => {
+    // 1. Reponer stock descontado en la entrega.
+    if (order.finalizedAt) {
+      for (const part of order.parts) {
+        if (!part.fromInventory || !part.productId) continue;
+        const product = await t.findById(products, part.productId);
+        if (!product) continue;
+        const newQty = product.quantity + part.quantity;
+        await t.updateById(products, product.id, {
+          quantity: newQty,
+          lowStock: newQty <= product.reorderPoint,
+          updatedAt: new Date(),
+        });
+        await logInventoryMovement(t, actor, {
+          productId: product.id,
+          productName: product.name,
+          productType: product.type,
+          movementType: "stock_increase",
+          previousQuantity: product.quantity,
+          newQuantity: newQty,
+          quantityChange: part.quantity,
+          reason: `Reapertura orden #${order.number}`,
+        });
+      }
     }
-  }
 
-  // 2. Reverse the delivery income (deactivate the active income for this vehicle).
-  if (order.vehicleId) {
-    const income = await tdb.selectOne(
-      transactions,
-      and(
-        eq(transactions.vehicleId, order.vehicleId),
-        eq(transactions.type, "Ingreso"),
-        eq(transactions.active, true),
-      ),
-    );
-    if (income) {
-      await tdb.updateById(transactions, income.id, { active: false, updatedAt: new Date() });
+    // 2. Revertir el ingreso de la entrega.
+    //    (Cuando esté hecho el plan 05 BL-1, filtrar por workOrderId en vez de vehicleId.)
+    if (order.vehicleId) {
+      const income = await t.selectOne(
+        transactions,
+        and(
+          eq(transactions.vehicleId, order.vehicleId),
+          eq(transactions.type, "Ingreso"),
+          eq(transactions.active, true),
+        ),
+      );
+      if (income) {
+        await t.updateById(transactions, income.id, { active: false, updatedAt: new Date() });
+      }
     }
-  }
 
-  // 3. Reopen the order.
-  const reopened = await tdb.updateById(workOrders, id, {
-    status: targetStatus,
-    finalizedAt: null,
-    deliveryDate: null,
-    updatedAt: new Date(),
+    // 3. Reabrir la orden.
+    const reopened = await t.updateById(workOrders, id, {
+      status: targetStatus,
+      finalizedAt: null,
+      deliveryDate: null,
+      updatedAt: new Date(),
+    });
+    if (order.customerId) await recalcCustomerMetrics(t, order.customerId);
+    return reopened ?? order;
   });
-  if (order.customerId) await recalcCustomerMetrics(tdb, order.customerId);
-  return reopened ?? order;
 }
 
 /** All orders for a vehicle, newest first (full history). */
