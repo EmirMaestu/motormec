@@ -37,7 +37,7 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 | 20 | BOT-1 sanitizar tool results | ✅ hecho | 9be1ee5 | suite 101 passed |
 | 21 | BOT-2 rate limit por número | ✅ hecho | 2c4f3ea | suite 102 passed |
 | 22 | BOT-3 confirmación antes de escribir | ✅ hecho | 1c33f80 | suite 105; +3 tests; sin debilitar existentes |
-| 23 | BOT-4 validar patente | pendiente | — | |
+| 23 | BOT-4 validar patente | ✅ hecho | 931a3f8 | suite 109; adaptó 1 test BOT-3 (patente válida) con justificación |
 | 24 | BOT-5 cuota por tokens | pendiente | — | |
 | 25 | BOT-6 anti-replay + fallback modelo | pendiente | — | |
 | 26 | SEC-1 rate limit por ruta | pendiente | — | |
