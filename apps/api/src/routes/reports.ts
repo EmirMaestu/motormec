@@ -9,6 +9,7 @@ import {
   vehicles,
 } from "../db/schema.js";
 import { authed, requireAuth, requireRole } from "../auth/middleware.js";
+import { argMonth } from "../lib/time.js";
 
 function daysBetween(a: Date, b: Date): number {
   return Math.ceil((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
@@ -344,12 +345,9 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/reports/intake-calendar", { preHandler: requireAuth }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const q = request.query as { month?: string };
-    // month = "YYYY-MM"; por defecto el mes actual (UTC).
-    const now = new Date();
+    // month = "YYYY-MM"; por defecto el mes actual en hora AR (UTC-3).
     const month =
-      q.month && /^\d{4}-\d{2}$/.test(q.month)
-        ? q.month
-        : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+      q.month && /^\d{4}-\d{2}$/.test(q.month) ? q.month : argMonth();
     const start = `${month}-01`;
     const [y, m] = month.split("-").map(Number);
     const lastDay = new Date(Date.UTC(y!, m!, 0)).getUTCDate();

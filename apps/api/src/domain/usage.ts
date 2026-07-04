@@ -1,12 +1,11 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { usageCounters } from "../db/schema.js";
+import { argMonth } from "../lib/time.js";
 
-/** Período actual con formato "YYYY-MM" (mes calendario). */
-export function currentPeriod(date = new Date()): string {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+/** Período actual con formato "YYYY-MM" (mes calendario, hora AR UTC-3). */
+export function currentPeriod(): string {
+  return argMonth();
 }
 
 /** Mensajes IA consumidos por el tenant en el período (default: mes actual). */
