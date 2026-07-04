@@ -13,7 +13,7 @@ import {
 } from "../db/schema.js";
 import { createOrder } from "../domain/orders.js";
 import { createQuote } from "../domain/quotes.js";
-import { sanitizePromptField } from "./sanitize.js";
+import { sanitizePromptField, sanitizeToolText } from "./sanitize.js";
 
 const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
 
@@ -214,11 +214,11 @@ async function ejecutarTool(
       const last = ords[0];
       return JSON.stringify({
         encontrado: true,
-        patente: v.plate,
-        marca: v.brand,
-        modelo: v.model,
+        patente: sanitizeToolText(v.plate, 10),
+        marca: sanitizeToolText(v.brand, 40),
+        modelo: sanitizeToolText(v.model, 40),
         estado: v.status,
-        dueño: v.owner,
+        dueño: sanitizeToolText(v.owner, 80),
         costo: v.cost,
         ultimaOrden: last
           ? { numero: last.number, estado: last.status, total: last.total }
@@ -232,11 +232,11 @@ async function ejecutarTool(
       return JSON.stringify({
         cantidad: dentro.length,
         vehiculos: dentro.map((v) => ({
-          patente: v.plate,
-          marca: v.brand,
-          modelo: v.model,
+          patente: sanitizeToolText(v.plate, 10),
+          marca: sanitizeToolText(v.brand, 40),
+          modelo: sanitizeToolText(v.model, 40),
           estado: v.status,
-          dueño: v.owner,
+          dueño: sanitizeToolText(v.owner, 80),
         })),
       });
     }
@@ -249,9 +249,14 @@ async function ejecutarTool(
       const vs = await tdb.select(vehicles, eq(vehicles.customerId, c.id));
       return JSON.stringify({
         encontrado: true,
-        nombre: c.name,
+        nombre: sanitizeToolText(c.name, 80),
         telefono: c.phone,
-        vehiculos: vs.map((v) => ({ patente: v.plate, marca: v.brand, modelo: v.model, estado: v.status })),
+        vehiculos: vs.map((v) => ({
+          patente: sanitizeToolText(v.plate, 10),
+          marca: sanitizeToolText(v.brand, 40),
+          modelo: sanitizeToolText(v.model, 40),
+          estado: v.status,
+        })),
       });
     }
 
@@ -262,10 +267,12 @@ async function ejecutarTool(
       return JSON.stringify({
         encontrado: true,
         numero: o.number,
-        patente: o.vehiclePlate,
+        patente: sanitizeToolText(o.vehiclePlate, 10),
         estado: o.status,
         total: o.total,
-        servicios: o.services,
+        servicios: Array.isArray(o.services)
+          ? o.services.map((s) => sanitizeToolText(String(s), 120))
+          : o.services,
       });
     }
 
@@ -281,10 +288,10 @@ async function ejecutarTool(
       return JSON.stringify({
         cantidad: entregados.length,
         vehiculos: entregados.map((v) => ({
-          patente: v.plate,
-          marca: v.brand,
-          modelo: v.model,
-          dueño: v.owner,
+          patente: sanitizeToolText(v.plate, 10),
+          marca: sanitizeToolText(v.brand, 40),
+          modelo: sanitizeToolText(v.model, 40),
+          dueño: sanitizeToolText(v.owner, 80),
           entregado: fecha(v),
           costo: v.cost,
         })),
@@ -341,9 +348,9 @@ async function ejecutarTool(
 
       return JSON.stringify({
         ok: true,
-        patente,
-        vehiculo: `${marca} ${modelo}`.trim() || "vehículo",
-        cliente: cliente || existente?.owner || null,
+        patente: sanitizeToolText(patente, 10),
+        vehiculo: sanitizeToolText(`${marca} ${modelo}`.trim(), 80) || "vehículo",
+        cliente: sanitizeToolText(cliente || existente?.owner || "", 80) || null,
         yaExistia: Boolean(existente),
         orden: order.number,
         nota: "Registrado. Se puede pedir al usuario que mande fotos del vehículo (opcional).",
