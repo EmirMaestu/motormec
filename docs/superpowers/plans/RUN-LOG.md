@@ -40,11 +40,52 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 | 23 | BOT-4 validar patente | ✅ hecho | 931a3f8 | suite 109; adaptó 1 test BOT-3 (patente válida) con justificación |
 | 24 | BOT-5 cuota por tokens | ✅ hecho | 117f835 | suite 114 passed |
 | 25 | BOT-6 anti-replay + fallback modelo | ✅ hecho | 5f5d15f | suite 118; Plan 04 completo |
-| 26 | SEC-1 rate limit por ruta | pendiente | — | |
+| 26 | SEC-1 rate limit por ruta | ✅ hecho | 2d33beb | suite 129; reportes(8)+uploads(2) |
 | 27 | SEC-2 password policy + lockout | ✅ hecho | 1b587d5 | suite 123; migración 0010 |
 | 28 | SEC-4 tests aislamiento billing | ✅ hecho | 47b3398 | suite 126; sin fugas (red de seguridad) |
 | 29 | SEC-5 magic bytes uploads | ✅ hecho | 3250b9e | suite 129 passed |
 | 30 | SEC-6 errores genéricos | ✅ hecho | 04545bc | suite 129; solo billing 502 genericado |
 
 ## Resumen final
-_(se completa al terminar)_
+
+**Fin:** 2026-07-02 ~05:50. Rama `overnight/plan-execution` (sin merge, sin push).
+**Estado de la suite al cerrar:** 18 archivos, **129 tests pasan** (0 fallos). Typecheck **0 errores**.
+Línea base al empezar: 76 tests → +53 tests nuevos. Verificado por el controlador de forma independiente.
+
+### Completadas (26 tareas de código, 1 commit por tarea)
+| Plan | Tareas | Hashes |
+|---|---|---|
+| 01 Quick Wins | QW-1, QW-3, QW-4, QW-5, QW-6, QW-7 | 7499e87, bd10dc2, 7005f61, ccd1f1f, 9c5c2c7, 0ff10c7 |
+| 01 (parcial) | QW-8 (helper backend `csv.ts` hecho+testeado) | b5ec30e |
+| 02 Dinero/Tx | MT-1, MT-2, MT-3 (transacciones atómicas) | 290b7fc, 6822968, e554c92 |
+| 05 Lógica | BL-1 (+MT-2b), BL-2, BL-3, BL-4, BL-5, BL-6, BL-7(endpoint) | ba4c41c, 9573a1f, 0180f27, eade60f, 6bac068, 5521f3f, 55839ec |
+| 04 Bot/IA | BOT-1, BOT-2, BOT-3, BOT-4, BOT-5, BOT-6 | 9be1ee5, 2c4f3ea, 1c33f80, 931a3f8, 117f835, 5f5d15f |
+| 03 Seguridad | SEC-2, SEC-4, SEC-5, SEC-6, SEC-1 | 1b587d5, 47b3398, 3250b9e, 04545bc, 2d33beb |
+
+Migraciones DB nuevas: 0008 (stock>=0), 0009 (transactions.work_order_id), 0010 (users lockout).
+
+### PENDIENTE PARA HUMANO (no ejecutado esta noche, a propósito)
+- **MT-4 / MT-5 (migración de dinero a centavos):** la de mayor impacto pero riesgosa; requiere
+  backup + staging + ventana con supervisión. NO se corrió. Sigue el plan 02, tareas MT-4/MT-5.
+- **QW-8 (CSV injection) — fix real:** el helper backend está hecho, pero el CSV se genera en el
+  FRONTEND (`apps/web/src/lib/export.ts`, `escapeCsv` no neutraliza `= + - @`). Falta ese cambio
+  frontend. (fuera de alcance backend).
+- **BL-8 (renombrar "predicción"/retención):** cambio coordinado backend+frontend (renombrar la key
+  rompería `Reports.tsx`); + decisión de producto sobre retención.
+- **BL-7 paso frontend, QW-2 (confirmación al entregar):** cambios de UI (plan 07).
+- **SEC-3 (backups off-site), SEC-7 (rotación token WA), SEC-8 (HMAC Mobbex sandbox), SEC-9
+  (headers Caddy):** ops/runbooks/credenciales externas — requieren acción manual/infra.
+- **Planes 06 (cobro/factura), 07 (UX), 08 (arquitectura), 09 (features):** fuera de alcance;
+  varios necesitan sesión de diseño (brainstorming) antes de codear.
+
+### Notas de calidad
+- Ningún commit en rojo; ningún test existente debilitado. Los ajustes puntuales a tests
+  existentes (patente válida en BOT-4, fixture 12 bytes en SEC-5, rename `login`→`loginRes` en
+  SEC-2) fueron correcciones documentadas para reflejar el comportamiento nuevo correcto, no
+  debilitamientos.
+- Mejoras estructurales destacadas: finalizar/reabrir órdenes ahora son atómicas y a prueba de
+  concurrencia (claim con `isNull`), `updateVehicle` envuelto en transacción (BL-5), ingreso
+  ligado a `workOrderId`, confirmación antes de que el bot cree registros, y lockout de login.
+
+**Para revisar a la mañana:** `git -C . log --oneline overnight/plan-execution` y este RUN-LOG.
+No hacer merge hasta revisar. La migración de dinero (MT-4) es lo primero a coordinar con vos.
