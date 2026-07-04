@@ -16,6 +16,7 @@ import { categorizeService } from "./categorize.js";
 import { recalcCustomerMetrics } from "./customerMetrics.js";
 import { logVehicleMovement, type Actor } from "./movements.js";
 import { createOrderForVehicle, finalizeOrder, reopenOrder } from "./orders.js";
+import { argYmd } from "../lib/time.js";
 
 const DELIVERED = "Entregado";
 const SUSPENDED = "Suspendido";
@@ -110,7 +111,7 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 function todayDate(): string {
-  return new Date().toISOString().split("T")[0] as string;
+  return argYmd();
 }
 function computeInTaller(status: string): boolean {
   return status !== DELIVERED && status !== SUSPENDED;

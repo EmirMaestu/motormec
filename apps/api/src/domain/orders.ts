@@ -13,12 +13,13 @@ import {
 import { categorizeService } from "./categorize.js";
 import { recalcCustomerMetrics } from "./customerMetrics.js";
 import { logInventoryMovement, type Actor } from "./movements.js";
+import { argYmd } from "../lib/time.js";
 
 function nowIso(): string {
   return new Date().toISOString();
 }
 function todayDate(): string {
-  return new Date().toISOString().split("T")[0] as string;
+  return argYmd();
 }
 
 function computeTotals(parts: OrderPart[], laborCost: number) {
