@@ -23,7 +23,7 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 | 6 | QW-7 rate limit global | ✅ hecho | 0ff10c7 | suite 84 passed |
 | 7 | QW-8 CSV injection | ⚠️ parcial | b5ec30e | helper backend csv.ts hecho+testeado (88 passed). PERO el CSV real se genera en el FRONTEND (apps/web/src/lib/export.ts, escapeCsv no neutraliza `= + - @`) → fix real PENDIENTE HUMANO (frontend, fuera de alcance) |
 | 8 | MT-1 TenantDb.transaction | ✅ hecho | 290b7fc | fundacional; suite 91 passed; rollback verificado |
-| 9 | MT-2 finalizeOrder atómico | pendiente | — | dep MT-1 |
+| 9 | MT-2 finalizeOrder atómico | ✅ hecho | 6822968 | suite 92; workOrderId omitido (se agrega en BL-1/MT-2b) |
 | 10 | MT-3 reopenOrder atómico | pendiente | — | dep MT-1 |
 | 11 | BL-1 workOrderId + reversa | pendiente | — | fundacional; luego completa MT-2 |
 | 12 | MT-2b agregar workOrderId a finalize | pendiente | — | dep BL-1 |
