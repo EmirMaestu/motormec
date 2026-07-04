@@ -19,7 +19,7 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 | 2 | QW-3 sanitizar prompt | ✅ hecho | bd10dc2 | suite 80 passed |
 | 3 | QW-4 cap input + borrar endpoint | ✅ hecho | 7005f61 | suite 80 passed |
 | 4 | QW-5 guard orden finalizada | ✅ hecho | ccd1f1f | suite 81 passed |
-| 5 | QW-6 timezone UTC-3 | pendiente | — | |
+| 5 | QW-6 timezone UTC-3 | ✅ hecho | 9c5c2c7 | suite 83 passed |
 | 6 | QW-7 rate limit global | pendiente | — | |
 | 7 | QW-8 CSV injection | pendiente | — | |
 | 8 | MT-1 TenantDb.transaction | pendiente | — | fundacional |
