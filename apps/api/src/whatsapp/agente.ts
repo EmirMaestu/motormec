@@ -61,6 +61,9 @@ function parseKm(v: unknown): number | null {
  * Ante fallo o sin API key, devuelve un texto de ayuda de respaldo.
  */
 
+/** Modelo barato y disponible para reintentar si el modelo del plan cae (BOT-6). */
+const MODELO_FALLBACK = "claude-haiku-4-5";
+
 let client: Anthropic | null = null;
 function getClient(): Anthropic | null {
   if (!env.ANTHROPIC_API_KEY) return null;
@@ -440,17 +443,24 @@ export async function agenteConsulta(
 - Si es un saludo o algo general, respondé breve y explicá qué podés hacer.
 - Sé breve, cálido y en español rioplatense (voseo). Máximo 4 líneas. 1-2 emojis está bien.`;
 
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: texto }];
+  // Tokens consumidos por TODOS los intentos (para no perder el conteo si el
+  // primer modelo falla y reintentamos con otro).
   let inputTokens = 0;
   let outputTokens = 0;
-  let presupuestoDoc = "";
-  let presupuestoId = "";
 
-  try {
+  /**
+   * Corre el loop del agente con un modelo dado, partiendo de un estado limpio
+   * (el mensaje del usuario). Puede lanzar si la API del modelo falla/limita.
+   */
+  const runLoop = async (model: string): Promise<AgenteResultado> => {
+    const messages: Anthropic.MessageParam[] = [{ role: "user", content: texto }];
+    let presupuestoDoc = "";
+    let presupuestoId = "";
+
     for (let i = 0; i < 4; i++) {
       const res = await c.messages.create(
         {
-          model: hooks?.model || env.CLAUDE_MODEL_AGENT,
+          model,
           max_tokens: 1024,
           system,
           tools: TOOLS,
@@ -507,7 +517,23 @@ export async function agenteConsulta(
       messages.push({ role: "user", content: toolResults });
     }
     return { texto: "No pude completar la consulta, probá de nuevo.", inputTokens, outputTokens };
+  };
+
+  const primaryModel = hooks?.model || env.CLAUDE_MODEL_AGENT;
+  try {
+    return await runLoop(primaryModel);
   } catch {
+    // BOT-6: fallback de modelo. Si el modelo primario cayó/limitó, reintentar
+    // UNA vez con Haiku (barato y disponible) antes de rendirnos — solo si el
+    // modelo usado era otro. Había cliente (c != null); un fallo real de API,
+    // no falta de config.
+    if (primaryModel !== MODELO_FALLBACK) {
+      try {
+        return await runLoop(MODELO_FALLBACK);
+      } catch {
+        /* el reintento también falló: caemos al texto de respaldo */
+      }
+    }
     return { texto: fallback, inputTokens, outputTokens };
   }
 }
