@@ -15,8 +15,8 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 
 | # | Tarea | Resultado | Commit | Notas |
 |---|---|---|---|---|
-| 1 | QW-1 stock >= 0 | pendiente | — | |
-| 2 | QW-3 sanitizar prompt | pendiente | — | |
+| 1 | QW-1 stock >= 0 | ✅ hecho | 7499e87 | suite 77 passed |
+| 2 | QW-3 sanitizar prompt | ✅ hecho | bd10dc2 | suite 80 passed |
 | 3 | QW-4 cap input + borrar endpoint | pendiente | — | |
 | 4 | QW-5 guard orden finalizada | pendiente | — | |
 | 5 | QW-6 timezone UTC-3 | pendiente | — | |
