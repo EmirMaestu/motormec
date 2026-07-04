@@ -44,7 +44,7 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 | 27 | SEC-2 password policy + lockout | ✅ hecho | 1b587d5 | suite 123; migración 0010 |
 | 28 | SEC-4 tests aislamiento billing | ✅ hecho | 47b3398 | suite 126; sin fugas (red de seguridad) |
 | 29 | SEC-5 magic bytes uploads | ✅ hecho | 3250b9e | suite 129 passed |
-| 30 | SEC-6 errores genéricos | pendiente | — | |
+| 30 | SEC-6 errores genéricos | ✅ hecho | 04545bc | suite 129; solo billing 502 genericado |
 
 ## Resumen final
 _(se completa al terminar)_
