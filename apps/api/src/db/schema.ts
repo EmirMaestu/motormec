@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   doublePrecision,
   index,
   integer,
@@ -404,7 +405,10 @@ export const products = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("products_tenant_idx").on(t.tenantId)],
+  (t) => [
+    index("products_tenant_idx").on(t.tenantId),
+    check("products_quantity_non_negative", sql`${t.quantity} >= 0`),
+  ],
 );
 
 export const inventoryMovementType = [

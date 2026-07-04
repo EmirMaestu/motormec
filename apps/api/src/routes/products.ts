@@ -88,6 +88,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const d = parsed.data;
 
     const newQuantity = d.quantity ?? existing.quantity;
+    if (newQuantity < 0) {
+      return reply.code(400).send({ error: "invalid_quantity", message: "El stock no puede ser negativo." });
+    }
+
     const newReorder = d.reorderPoint ?? existing.reorderPoint;
     const lowStock = newQuantity <= newReorder;
     const { reason, ...fields } = d;
