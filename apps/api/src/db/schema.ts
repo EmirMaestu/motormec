@@ -129,6 +129,10 @@ export const users = pgTable(
       .notNull()
       .default("mecanico"),
     active: boolean("active").notNull().default(true),
+    // Per-user brute-force protection: count consecutive failed logins and
+    // temporarily lock the account after too many (rate limit is per-IP only).
+    failedLoginCount: integer("failed_login_count").notNull().default(0),
+    lockoutUntil: timestamp("lockout_until", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
