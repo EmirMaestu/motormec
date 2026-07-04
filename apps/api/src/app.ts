@@ -38,9 +38,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cookie, { secret: env.SESSION_SECRET });
 
   await app.register(rateLimit, {
-    global: false, // opt-in per route; login is the sensitive one
-    max: 100,
+    // Red global: aplica a todas las rutas salvo que una la sobrescriba.
+    // En test se desactiva para no romper suites que hacen muchas requests.
+    global: env.NODE_ENV !== "test",
+    max: env.NODE_ENV === "production" ? 300 : 100000,
     timeWindow: "1 minute",
+    // No limitar el webhook de WhatsApp por IP (viene todo desde Meta).
+    // Se excluye devolviendo un allowList por request:
+    allowList: (req) => req.url.startsWith("/webhooks/"),
   });
 
   // Resolve session -> request.auth + request.tenantDb for every request.
