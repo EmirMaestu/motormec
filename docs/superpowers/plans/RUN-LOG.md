@@ -27,7 +27,7 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 | 10 | MT-3 reopenOrder atómico | ✅ hecho | e554c92 | suite 93 passed |
 | 11 | BL-1 workOrderId + reversa | ✅ hecho | ba4c41c | fundacional; suite 94 passed; migración 0009 |
 | 12 | MT-2b agregar workOrderId a finalize | ✅ hecho | ba4c41c | incluido en BL-1 |
-| 13 | BL-2 revertir ingreso al borrar vehículo | pendiente | — | |
+| 13 | BL-2 revertir ingreso al borrar vehículo | ✅ hecho | 9573a1f | suite 95 passed |
 | 14 | BL-3 sync vehículo al reabrir | pendiente | — | |
 | 15 | BL-4 timer sin solapes | pendiente | — | |
 | 16 | BL-5 no dejar Entregado si falla | pendiente | — | |
