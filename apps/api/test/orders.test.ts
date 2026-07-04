@@ -116,6 +116,28 @@ describe("work orders", () => {
     expect(await tdb.count(transactions)).toBe(1);
   });
 
+  it("finalize is atomic under concurrent calls (no double income / no negative stock)", async () => {
+    const prod = await tdb.insertOne(products, { name: "Filtro", quantity: 5, reorderPoint: 0, price: 1000 });
+    const order = await createOrder(tdb, actor, {
+      plate: "RACE111",
+      laborCost: 10000,
+      parts: [{ productId: prod.id, name: "Filtro", quantity: 3, unitPrice: 1500, fromInventory: true }],
+    });
+    // Dos finalizaciones en paralelo sobre la MISMA orden.
+    const [a, b] = await Promise.allSettled([
+      finalizeOrder(tdb, actor, order.id),
+      finalizeOrder(tdb, actor, order.id),
+    ]);
+    // Ambas resuelven (una finaliza, la otra ve "ya finalizada"); ninguna corrompe.
+    expect(a.status).toBe("fulfilled");
+    expect(b.status).toBe("fulfilled");
+    // Stock descontado UNA sola vez: 5 - 3 = 2.
+    expect((await tdb.findById(products, prod.id))?.quantity).toBe(2);
+    // UN solo ingreso.
+    const txs = await tdb.select(transactions, eq(transactions.type, "Ingreso"));
+    expect(txs).toHaveLength(1);
+  });
+
   it("status update mirrors onto the vehicle snapshot", async () => {
     const order = await createOrder(tdb, actor, { plate: "GG444HH" });
     await updateOrder(tdb, order.id, { status: "En reparación" });

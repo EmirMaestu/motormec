@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { TenantDb } from "../db/scope.js";
 import {
   customers,
@@ -213,84 +213,95 @@ export async function finalizeOrder(
 ): Promise<FinalizeResult | null> {
   const order = await tdb.findById(workOrders, id);
   if (!order) return null;
-  const warnings: string[] = [];
-
   if (order.finalizedAt) {
     return { order, warnings: ["La orden ya estaba finalizada"] };
   }
 
-  // 1. Deduct stock for inventory-sourced parts.
-  for (const part of order.parts) {
-    if (!part.fromInventory || !part.productId) continue;
-    const product = await tdb.findById(products, part.productId);
-    if (!product) {
-      warnings.push(`Producto no encontrado: ${part.name}`);
-      continue;
-    }
-    if (product.quantity < part.quantity) {
-      throw new Error(
-        `Stock insuficiente de "${product.name}" (hay ${product.quantity}, se necesitan ${part.quantity})`,
-      );
-    }
-    const newQty = product.quantity - part.quantity;
-    await tdb.updateById(products, product.id, {
-      quantity: newQty,
-      lowStock: newQty <= product.reorderPoint,
-      updatedAt: new Date(),
-    });
-    await logInventoryMovement(tdb, actor, {
-      productId: product.id,
-      productName: product.name,
-      productType: product.type,
-      movementType: "stock_decrease",
-      previousQuantity: product.quantity,
-      newQuantity: newQty,
-      quantityChange: -part.quantity,
-      reason: `Orden #${order.number}`,
-    });
-  }
-
-  // 2. Automatic income (mano de obra + servicios + venta de repuestos).
-  if (order.total > 0) {
-    await tdb.insert(transactions, {
-      date: todayDate(),
-      description: `Orden #${order.number} - ${order.vehiclePlate} (${order.customerName})`,
-      type: "Ingreso",
-      category: categorizeService(order.services),
-      amount: order.total,
-      active: true,
-      vehicleId: order.vehicleId,
-      vehicleDetails: {
-        plate: order.vehiclePlate,
-        brand: order.vehicleInfo,
-        model: "",
-        customer: order.customerName,
+  return tdb.transaction(async (t) => {
+    // Claim atómico: sólo un llamado gana el "finalized_at IS NULL".
+    const claimed = await t.update(
+      workOrders,
+      {
+        status: "Entregado",
+        deliveryDate: todayDate(),
+        finalizedAt: new Date(),
+        updatedAt: new Date(),
       },
-      paymentMethod: "Efectivo",
-    });
-  }
+      and(eq(workOrders.id, id), isNull(workOrders.finalizedAt)),
+    );
+    if (claimed.length === 0) {
+      const current = await t.findById(workOrders, id);
+      return { order: current ?? order, warnings: ["La orden ya estaba finalizada"] };
+    }
+    const finalized = claimed[0] as WorkOrder;
+    const warnings: string[] = [];
 
-  // 3. Mark finalized + update vehicle + customer metrics.
-  const finalized = await tdb.updateById(workOrders, id, {
-    status: "Entregado",
-    deliveryDate: todayDate(),
-    finalizedAt: new Date(),
-    updatedAt: new Date(),
+    // 1. Descontar stock de repuestos de inventario (rollback si falta stock).
+    for (const part of order.parts) {
+      if (!part.fromInventory || !part.productId) continue;
+      const product = await t.findById(products, part.productId);
+      if (!product) {
+        warnings.push(`Producto no encontrado: ${part.name}`);
+        continue;
+      }
+      if (product.quantity < part.quantity) {
+        throw new Error(
+          `Stock insuficiente de "${product.name}" (hay ${product.quantity}, se necesitan ${part.quantity})`,
+        );
+      }
+      const newQty = product.quantity - part.quantity;
+      await t.updateById(products, product.id, {
+        quantity: newQty,
+        lowStock: newQty <= product.reorderPoint,
+        updatedAt: new Date(),
+      });
+      await logInventoryMovement(t, actor, {
+        productId: product.id,
+        productName: product.name,
+        productType: product.type,
+        movementType: "stock_decrease",
+        previousQuantity: product.quantity,
+        newQuantity: newQty,
+        quantityChange: -part.quantity,
+        reason: `Orden #${order.number}`,
+      });
+    }
+
+    // 2. Ingreso automático (mano de obra + servicios + venta de repuestos).
+    if (order.total > 0) {
+      await t.insert(transactions, {
+        date: todayDate(),
+        description: `Orden #${order.number} - ${order.vehiclePlate} (${order.customerName})`,
+        type: "Ingreso",
+        category: categorizeService(order.services),
+        amount: order.total,
+        active: true,
+        vehicleId: order.vehicleId,
+        vehicleDetails: {
+          plate: order.vehiclePlate,
+          brand: order.vehicleInfo,
+          model: "",
+          customer: order.customerName,
+        },
+        paymentMethod: "Efectivo",
+      });
+    }
+
+    // 3. Actualizar vehículo + métricas del cliente.
+    if (order.vehicleId) {
+      await t.updateById(vehicles, order.vehicleId, {
+        status: "Entregado",
+        inTaller: false,
+        exitDate: todayDate(),
+        cost: order.total,
+        lastUpdated: nowIso(),
+        updatedAt: new Date(),
+      });
+      if (order.customerId) await recalcCustomerMetrics(t, order.customerId);
+    }
+
+    return { order: finalized, warnings };
   });
-
-  if (order.vehicleId) {
-    await tdb.updateById(vehicles, order.vehicleId, {
-      status: "Entregado",
-      inTaller: false,
-      exitDate: todayDate(),
-      cost: order.total,
-      lastUpdated: nowIso(),
-      updatedAt: new Date(),
-    });
-    if (order.customerId) await recalcCustomerMetrics(tdb, order.customerId);
-  }
-
-  return { order: finalized ?? order, warnings };
 }
 
 /**
