@@ -20,9 +20,14 @@ import { redactarNatural } from "./responder.js";
 import { agenteConsulta } from "./agente.js";
 import { sameNumber } from "./phone.js";
 import { procesarMensaje, type BotDeps, type WAMessage } from "./stateMachine.js";
+import { PhoneRateLimiter } from "./rateLimiter.js";
 import type { TenantDb } from "../db/scope.js";
 
 const SUPPORTED = new Set(["text", "image", "interactive"]);
+
+// Rate limit por número: 10 mensajes por minuto. Frena floods del mismo
+// remitente antes de tocar IA (cuota/tokens) o crear registros masivos.
+const phoneLimiter = new PhoneRateLimiter(10, 60_000);
 
 function makeDeps(
   ctx: SendCtx,
@@ -146,6 +151,10 @@ export async function processWhatsAppPayload(payload: MetaPayload): Promise<void
         const rows = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
         const tenant = rows[0];
         if (!tenant || !tenant.active) continue;
+
+        // Rate limit por remitente ANTES de procesar/llamar al agente y ANTES de
+        // consumir cuota de IA: si superó el límite, descartamos en silencio.
+        if (!phoneLimiter.allow(from)) continue;
 
         const tdb = forTenant(tenant.id);
         const deps = makeDeps(ctx, tdb, tenant.id, tenant.plan, tenant.name);
