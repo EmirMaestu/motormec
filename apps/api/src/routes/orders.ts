@@ -7,6 +7,7 @@ import * as O from "../domain/orders.js";
 import { notifyOrderStatusChange } from "../domain/notifications.js";
 import { localDisk } from "../storage/provider.js";
 import { detectImageType } from "../lib/imageType.js";
+import { env } from "../config/env.js";
 
 /** Fotos (fotoPaths) de todo el historial ligado a una orden. */
 async function orderPhotos(
@@ -95,7 +96,11 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
   // base64 (data URL); el cliente la comprime antes de enviar.
   app.post(
     "/api/orders/:id/photos",
-    { preHandler: requireAuth, bodyLimit: 15 * 1024 * 1024 },
+    {
+      preHandler: requireAuth,
+      bodyLimit: 15 * 1024 * 1024,
+      config: { rateLimit: { max: env.NODE_ENV === "production" ? 30 : 100000, timeWindow: "1 minute" } },
+    },
     async (request, reply) => {
       const { tenantDb, auth } = authed(request);
       const { id } = request.params as { id: string };

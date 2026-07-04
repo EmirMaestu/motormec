@@ -7,6 +7,7 @@ import { presupuestos, tenants, type TenantSettings } from "../db/schema.js";
 import { localDisk } from "../storage/provider.js";
 import * as Q from "../domain/quotes.js";
 import { detectImageType } from "../lib/imageType.js";
+import { env } from "../config/env.js";
 
 const itemSchema = z.object({
   description: z.string().min(1),
@@ -84,7 +85,11 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
   // Logo propio del taller para los presupuestos (base64; sólo admin).
   app.post(
     "/api/settings/logo",
-    { preHandler: requireRole("admin"), bodyLimit: 6 * 1024 * 1024 },
+    {
+      preHandler: requireRole("admin"),
+      bodyLimit: 6 * 1024 * 1024,
+      config: { rateLimit: { max: env.NODE_ENV === "production" ? 30 : 100000, timeWindow: "1 minute" } },
+    },
     async (request, reply) => {
       const { auth } = authed(request);
       const parsed = z.object({ image: z.string().min(16) }).safeParse(request.body);
