@@ -11,6 +11,7 @@ import {
   type Presupuesto,
 } from "../db/schema.js";
 import { createQuote } from "../domain/quotes.js";
+import { esPatenteValida, normalizarPatente } from "./patente.js";
 import { sanitizePromptField, sanitizeToolText } from "./sanitize.js";
 
 const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
@@ -307,8 +308,18 @@ export async function ejecutarTool(
     }
 
     if (name === "registrar_ingreso") {
-      const patente = String(input.patente ?? "").toUpperCase().trim();
+      const patente = normalizarPatente(String(input.patente ?? ""));
       if (!patente) return JSON.stringify({ ok: false, motivo: "falta la patente" });
+
+      // BOT-4: validar el formato de patente (viejo AAA000 / Mercosur AA000AA).
+      // Si no es válida, NO dejar la propuesta pendiente: pedir que la repitan.
+      if (!esPatenteValida(patente)) {
+        return JSON.stringify({
+          ok: false,
+          patente_invalida: true,
+          nota: "La patente no tiene un formato válido (esperado AAA000 o AA000AA). NO registres nada; pedile al usuario que te repita la patente (ej: 'Esa patente no parece válida, ¿me la repetís?').",
+        });
+      }
 
       const crudo = [input.marca, input.modelo].filter(Boolean).join(" ").trim();
       const { marca, modelo } = normalizarMarcaModelo(crudo);
@@ -423,7 +434,7 @@ export async function agenteConsulta(
   const system = `Sos el asistente de WhatsApp del taller ${nombreTaller || "mecánico"}. Atendés al personal del taller. Hoy es ${hoy}.
 - Respondé SOLO con datos reales obtenidos de las herramientas. Nunca inventes patentes, estados, montos ni nombres.
 - HACER UN PRESUPUESTO: si el usuario pide "hacé/armá un presupuesto", "cotizá", "presupuestá" (ej: "presupuestá a Juan: pastillas 15000, mano de obra 8000" o "presupuesto de 10000 para Juan de cambio de correa, repuestos 30mil"), llamá a "crear_presupuesto" DE UNA con lo que tengas. SOLO hacen falta el cliente y al menos un ítem. NUNCA pidas patente, número de orden, marca ni modelo para un presupuesto — no hacen falta y NO existe "orden" en el presupuesto. Interpretá montos naturales: "10000 de mano de obra" → ítem "Mano de obra" 10000; "repuestos 30mil" → ítem "Repuestos" 30000; "3mil"=3000, "30mil"=30000, "1.5 palo"=1500000. El PDF se envía solo; vos confirmá en UNA línea (ej: "Listo, te paso el presupuesto 👇") SIN repetir ítems ni total.
-- CARGAR UN INGRESO: si el usuario describe un auto que entró o pide agregar uno (ej: "agregá un VW Gol patente ABC123 de Juan, service"), usá la herramienta "registrar_ingreso". Sólo la patente es obligatoria; marca, modelo, km, cliente y tarea son opcionales (cargá lo que haya). Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). No pidas que repita el mensaje si ya lo entendiste. Si falta SOLO la patente, pedila.
+- CARGAR UN INGRESO: si el usuario describe un auto que entró o pide agregar uno (ej: "agregá un VW Gol patente ABC123 de Juan, service"), usá la herramienta "registrar_ingreso". Sólo la patente es obligatoria; marca, modelo, km, cliente y tarea son opcionales (cargá lo que haya). Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). No pidas que repita el mensaje si ya lo entendiste. Si falta SOLO la patente, pedila. Si la herramienta devuelve "patente_invalida", NO digas que quedó registrado: pedile al usuario que te repita la patente en UNA línea (ej: "Esa patente no parece válida, ¿me la repetís?").
 - CONFIRMAR EL INGRESO: el ingreso NO se carga solo. La herramienta devuelve "pendiente_confirmacion": en ese caso NO digas que quedó registrado; pedí confirmación en UNA línea con los datos del "resumen" (ej: "¿Confirmo el ingreso de ABC123 Gol de Juan? Respondé *Sí* para cargarlo"). Al responder Sí, la app lo carga sola. Si el vehículo YA EXISTÍA (yaExistia=true), aclaralo con naturalidad ("ya lo teníamos, le sumaría una nueva entrada").
 - CONSULTAS: usá las herramientas para vehículos, clientes, órdenes, entregas o qué hay en el taller. Para "entregados hoy/esta semana" usá "entregados" con "desde" (calculado desde hoy=${hoy}); para "los últimos N" usá "limite".
 - Si es un saludo o algo general, respondé breve y explicá qué podés hacer.

@@ -328,10 +328,12 @@ describe("WhatsApp bot — confirmación de ingreso del agente (BOT-3)", () => {
   });
 
   it('un "no" en confirmar_ingreso_agente descarta sin crear nada', async () => {
+    // BOT-4: la patente debe ser válida para que se arme la propuesta pendiente;
+    // "ZZ9" (formato inválido) ahora hace repreguntar y no deja propuesta.
     await ejecutarTool(
       tdb,
       "registrar_ingreso",
-      { patente: "ZZ9", marca: "Ford", modelo: "Focus" },
+      { patente: "ZZ999AA", marca: "Ford", modelo: "Focus" },
       AUTH_PHONE,
       "Taller A",
     );
@@ -341,6 +343,23 @@ describe("WhatsApp bot — confirmación de ingreso del agente (BOT-3)", () => {
     expect(await tdb.count(workOrders)).toBe(0);
     expect(await tdb.count(vehicles)).toBe(0);
     expect(await tdb.count(conversaciones)).toBe(0);
+  });
+
+  it("BOT-4: registrar_ingreso con patente inválida NO deja propuesta (repregunta)", async () => {
+    const out = await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "XXX", marca: "Ford", modelo: "Focus", cliente: "Juan" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    const parsed = JSON.parse(out) as { ok?: boolean; patente_invalida?: boolean };
+    expect(parsed.patente_invalida).toBe(true);
+    expect(parsed.ok).toBe(false);
+    // No quedó ninguna propuesta pendiente ni se creó nada.
+    expect(await tdb.count(conversaciones)).toBe(0);
+    expect(await tdb.count(workOrders)).toBe(0);
+    expect(await tdb.count(vehicles)).toBe(0);
   });
 });
 

@@ -12,6 +12,7 @@ import { createVehicle } from "../domain/vehicles.js";
 import { createOrder } from "../domain/orders.js";
 import type { PropuestaIngreso } from "./agente.js";
 import { detectarComando, ejecutarComando } from "./commands.js";
+import { esPatenteValida, normalizarPatente } from "./patente.js";
 import { sameNumber } from "./phone.js";
 import type { StorageProvider } from "../storage/provider.js";
 import type { DatosVehiculo } from "./parser.js";
@@ -419,9 +420,21 @@ export async function procesarMensaje(
   // sólo dejó la propuesta pendiente. Recién acá, con un "sí", se ejecuta el createOrder.
   if (conv.etapa === "confirmar_ingreso_agente") {
     const propuesta = (conv.datos ?? {}) as unknown as PropuestaIngreso;
+    // BOT-4: defensa en profundidad. La patente ya se validó al armar la propuesta,
+    // pero antes de escribir volvemos a chequear el formato. Si es inválida, no
+    // creamos nada: descartamos y pedimos que la repitan.
+    const patente = normalizarPatente(propuesta.patente ?? "");
+    if (afirmativo && !esPatenteValida(patente)) {
+      await tdb.deleteById(conversaciones, conv.id);
+      await deps.send(
+        from,
+        "Esa patente no parece válida, ¿me la repetís? (formato ABC123 o AB123CD)",
+      );
+      return "patente_invalida";
+    }
     if (afirmativo) {
       const order = await createOrder(tdb, BOT_ACTOR, {
-        plate: propuesta.patente,
+        plate: patente,
         brand: propuesta.marca || "",
         model: propuesta.modelo || "",
         customerName: propuesta.cliente || "",
@@ -437,7 +450,7 @@ export async function procesarMensaje(
         waTimestamp: String(Math.floor(Date.now() / 1000)),
         rawMessage: null,
         marcaModelo: `${propuesta.marca} ${propuesta.modelo}`.trim() || null,
-        patente: propuesta.patente,
+        patente,
         kilometraje: propuesta.kilometraje != null ? String(propuesta.kilometraje) : null,
         tarea: propuesta.tarea || null,
         cliente: propuesta.cliente || null,
@@ -457,7 +470,7 @@ export async function procesarMensaje(
         from,
         await natural(
           deps,
-          `✅ Listo, cargué el ingreso de ${propuesta.patente}${vehiculo ? ` (${vehiculo})` : ""} — orden #${order.number}. Podés mandar fotos del vehículo si querés. 📸`,
+          `✅ Listo, cargué el ingreso de ${patente}${vehiculo ? ` (${vehiculo})` : ""} — orden #${order.number}. Podés mandar fotos del vehículo si querés. 📸`,
         ),
       );
       return "ingreso_confirmado";
@@ -469,7 +482,7 @@ export async function procesarMensaje(
     }
     await deps.send(
       from,
-      `¿Confirmo el ingreso de ${propuesta.patente}? Respondé *Sí* para cargarlo o *No* para descartarlo.`,
+      `¿Confirmo el ingreso de ${patente}? Respondé *Sí* para cargarlo o *No* para descartarlo.`,
     );
     return "confirmar_ingreso_agente";
   }
