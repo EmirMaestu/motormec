@@ -29,7 +29,7 @@ BL-7 endpoint), 04 (BOT-1..6), 03 (SEC-1/2/4/5/6). NO: MT-4/MT-5, frontend, plan
 | 12 | MT-2b agregar workOrderId a finalize | ✅ hecho | ba4c41c | incluido en BL-1 |
 | 13 | BL-2 revertir ingreso al borrar vehículo | ✅ hecho | 9573a1f | suite 95 passed |
 | 14 | BL-3 sync vehículo al reabrir | ✅ hecho | 0180f27 | suite 96 passed |
-| 15 | BL-4 timer sin solapes | pendiente | — | |
+| 15 | BL-4 timer sin solapes | ✅ hecho | eade60f | suite 97 passed |
 | 16 | BL-5 no dejar Entregado si falla | pendiente | — | |
 | 17 | BL-6 fechas AR en dominio | pendiente | — | dep QW-6 |
 | 18 | BL-7 endpoint ajuste stock atómico | pendiente | — | solo backend |
