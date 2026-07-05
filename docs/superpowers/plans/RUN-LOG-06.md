@@ -43,7 +43,23 @@ tests verdes, frontend build verde, montos en pantalla correctos (centavos→pes
   (backward-compat con los tests existentes); el **frontend** propone 21% por defecto en docs nuevos.
   Cálculo: `base = subtotal - descuento`; `iva = round(base * taxRate/10000)`; `total = base + iva`.
 
-Sub-tareas PAY-2:
+### Revisión PAY-2 (pedido del dueño: clientes en Chile + informalidad)
+- **Multi-moneda POR TALLER** (config en Configuración): ARS / CLP / USD. Todos los documentos y
+  finanzas del taller usan esa moneda. Almacenamiento uniforme en unidades menores (×100) para
+  todas; CLP se muestra sin decimales (Intl). Backend `formatArs`/PDF y frontend `formatCurrency`
+  pasan a ser currency-aware (la moneda sale de `tenant.settings.currency`, default ARS).
+- **IVA default "Sin IVA"** + selector opcional con presets 21% (AR), 19% (CL), 10.5%, y "otra %"
+  a mano. `taxRate` en basis points (0 = sin IVA). El caso informal/en-negro = taxRate 0 (sin
+  líneas fiscales en el PDF, ya soportado). El backend ya acepta cualquier tasa; es UI + default.
+
+Sub-tareas nuevas:
+| # | Sub-tarea | Estado | Commit |
+|---|---|---|---|
+| C1 | Backend: `currency` en TenantSettings + settings route + `formatArs`/PDF currency-aware + test | pendiente | — |
+| C2 | Frontend: `formatCurrency` currency-aware (desde auth) + selector de moneda en Configuración | pendiente | — |
+| 2d | Frontend: selector IVA flexible (Sin IVA default + 21/19/10.5/otra) + descuento + desglose | pendiente (rehacer) | — |
+
+Sub-tareas PAY-2 (originales):
 | # | Sub-tarea | Estado | Commit |
 |---|---|---|---|
 | 2a | Schema: `discount_amount`/`tax_rate`/`tax_amount` (+`subtotal` en work_orders) + migración | ✅ hecho | 03a4535 |
