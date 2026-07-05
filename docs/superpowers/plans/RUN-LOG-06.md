@@ -55,7 +55,7 @@ tests verdes, frontend build verde, montos en pantalla correctos (centavos→pes
 Sub-tareas nuevas:
 | # | Sub-tarea | Estado | Commit |
 |---|---|---|---|
-| C1 | Backend: `currency` en TenantSettings + settings route + `formatArs`/PDF currency-aware + test | pendiente | — |
+| C1 | Backend: `currency` en TenantSettings + settings route + `formatArs`/PDF currency-aware + test | ✅ hecho | 7571798 |
 | C2 | Frontend: `formatCurrency` currency-aware (desde auth) + selector de moneda en Configuración | pendiente | — |
 | 2d | Frontend: selector IVA flexible (Sin IVA default + 21/19/10.5/otra) + descuento + desglose | pendiente (rehacer) | — |
 
