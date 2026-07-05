@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { customers, historialTaller, orderStatus, vehicles, workOrders } from "../db/schema.js";
+import { customers, historialTaller, orderStatus, payments, vehicles, workOrders } from "../db/schema.js";
 import { authed, requireAuth, requireRole } from "../auth/middleware.js";
 import * as O from "../domain/orders.js";
+import { registrarPago } from "../domain/payments.js";
 import { notifyOrderStatusChange } from "../domain/notifications.js";
 import { localDisk } from "../storage/provider.js";
 import { detectImageType } from "../lib/imageType.js";
@@ -60,6 +61,12 @@ const updateSchema = z.object({
   notes: z.string().max(4000).optional(),
   estimatedDate: z.string().max(40).nullable().optional(),
   mileage: z.number().int().nullable().optional(),
+});
+
+const paymentSchema = z.object({
+  amount: z.number().int().positive(),
+  method: z.string().max(40).optional(),
+  note: z.string().max(500).optional(),
 });
 
 export async function orderRoutes(app: FastifyInstance): Promise<void> {
@@ -211,5 +218,46 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       return reply.code(409).send({ error: "stock_error", message: (err as Error).message });
     }
+  });
+
+  // Registrar un pago (incluidos parciales; el fiado está permitido) contra una orden.
+  app.post("/api/orders/:id/payments", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb, auth } = authed(request);
+    const { id } = request.params as { id: string };
+    const parsed = paymentSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+    let result;
+    try {
+      result = await registrarPago(
+        tenantDb,
+        { userId: auth.userId, userName: auth.userName },
+        id,
+        parsed.data,
+      );
+    } catch {
+      return reply.code(400).send({ error: "invalid_amount" });
+    }
+    if (!result) return reply.code(404).send({ error: "not_found" });
+    const { payment, order, saldo, estado } = result;
+    return reply.code(201).send({
+      payment,
+      order: {
+        id: order.id,
+        number: order.number,
+        total: order.total,
+        paidAmount: order.paidAmount,
+        saldo,
+        estado,
+      },
+    });
+  });
+
+  // Pagos de una orden, del más antiguo al más reciente.
+  app.get("/api/orders/:id/payments", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb } = authed(request);
+    const { id } = request.params as { id: string };
+    const rows = await tenantDb.select(payments, eq(payments.workOrderId, id));
+    rows.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+    return reply.send({ payments: rows });
   });
 }

@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { and, desc, eq, ne, or, ilike } from "drizzle-orm";
 import { z } from "zod";
-import { customers, historialTaller, vehicles } from "../db/schema.js";
+import { customers, historialTaller, vehicles, workOrders } from "../db/schema.js";
 import { authed, requireAuth, requireRole } from "../auth/middleware.js";
 import { recalcCustomerMetrics } from "../domain/customerMetrics.js";
+import { paymentStatus } from "../domain/payments.js";
 
 const createSchema = z.object({
   name: z.string().min(1).max(200),
@@ -208,6 +209,30 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
         lastVisit,
         visitCount: totalVehicles,
       });
+    },
+  );
+
+  // Cuenta corriente del cliente: deuda total y órdenes con saldo pendiente.
+  app.get(
+    "/api/customers/:id/balance",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { tenantDb } = authed(request);
+      const { id } = request.params as { id: string };
+      const orders = await tenantDb.select(workOrders, eq(workOrders.customerId, id));
+      const ordenes = orders
+        .map((o) => ({
+          id: o.id,
+          number: o.number,
+          total: o.total,
+          paidAmount: o.paidAmount,
+          saldo: o.total - o.paidAmount,
+          estado: paymentStatus(o.total, o.paidAmount),
+        }))
+        .filter((o) => o.saldo > 0)
+        .sort((a, b) => b.number - a.number);
+      const deudaTotal = ordenes.reduce((sum, o) => sum + o.saldo, 0);
+      return reply.send({ deudaTotal, ordenes });
     },
   );
 
