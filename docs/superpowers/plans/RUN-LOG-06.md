@@ -56,7 +56,7 @@ Sub-tareas nuevas:
 | # | Sub-tarea | Estado | Commit |
 |---|---|---|---|
 | C1 | Backend: `currency` en TenantSettings + settings route + `formatArs`/PDF currency-aware + test | ✅ hecho | 7571798 |
-| C2 | Frontend: `formatCurrency` currency-aware (desde auth) + selector de moneda en Configuración | pendiente | — |
+| C2 | Frontend: `formatCurrency` currency-aware (desde auth) + selector de moneda en Configuración | ✅ hecho | 20db3fb |
 | 2d | Frontend: selector IVA flexible (Sin IVA default + 21/19/10.5/otra) + descuento + desglose | pendiente (rehacer) | — |
 
 Sub-tareas PAY-2 (originales):
