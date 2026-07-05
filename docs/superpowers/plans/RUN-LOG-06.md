@@ -27,7 +27,7 @@
 |---|---|---|---|
 | 1a | Schema: tabla `payments` + `work_orders.paid_amount` + migración | ✅ hecho | 47ce3a4 |
 | 1b | Dominio: `registrarPago` (ingreso por pago) + quitar ingreso de finalize/reopen/sync + tests | ✅ hecho | 2b40029 |
-| 1c | Rutas: POST/GET `/api/orders/:id/payments` + GET `/api/customers/:id/balance` | pendiente | — |
+| 1c | Rutas: POST/GET `/api/orders/:id/payments` + GET `/api/customers/:id/balance` | ✅ hecho | 6633395 |
 | 1d | Frontend: registrar pago + mostrar saldo/deuda (verificar en navegador) | pendiente | — |
 
 ## Próximas decisiones (cuando lleguemos)
