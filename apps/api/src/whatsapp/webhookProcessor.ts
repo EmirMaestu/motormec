@@ -54,7 +54,7 @@ function makeDeps(
       await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
       return r.texto;
     },
-    agente: async (from, texto) => {
+    agente: async (from, texto, historialPrevio) => {
       const textoAcotado = texto.slice(0, 1000);
       const r = await agenteConsulta(tdb, textoAcotado, tallerNombre, from, {
         // Modelo del bot según el plan: Starter→Haiku, Pro→Sonnet 5, Max→Opus.
@@ -78,9 +78,11 @@ function makeDeps(
             return false;
           }
         },
-      });
+      }, historialPrevio);
       await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
-      return r.texto;
+      // Memoria multi-turno: devolvemos también el historial actualizado para
+      // que la máquina de estados lo persista y continúe la conversación.
+      return { texto: r.texto, historial: r.historial };
     },
     iaQuota: {
       // Hay cupo si NO se agotó la cuota de mensajes NI el tope de tokens del

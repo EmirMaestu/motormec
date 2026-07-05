@@ -10,7 +10,7 @@ import {
 } from "../db/schema.js";
 import { createVehicle } from "../domain/vehicles.js";
 import { createOrder } from "../domain/orders.js";
-import type { PropuestaIngreso } from "./agente.js";
+import type { PropuestaIngreso, TurnoHistorial } from "./agente.js";
 import { detectarComando, ejecutarComando } from "./commands.js";
 import { esPatenteValida, normalizarPatente } from "./patente.js";
 import { sameNumber } from "./phone.js";
@@ -72,8 +72,16 @@ export interface BotDeps {
    * Agente conversacional con herramientas (opcional). Responde consultas libres
    * ("cómo va la patente X", "qué autos hay", etc.) con datos reales. Si no se
    * provee, se cae a las plantillas de saludo/consulta.
+   *
+   * Memoria multi-turno: recibe el `historialPrevio` (texto plano de turnos
+   * anteriores) y devuelve el `historial` actualizado para persistir y continuar
+   * la conversación en el próximo mensaje.
    */
-  agente?: (from: string, texto: string) => Promise<string>;
+  agente?: (
+    from: string,
+    texto: string,
+    historialPrevio?: TurnoHistorial[],
+  ) => Promise<{ texto: string; historial: TurnoHistorial[] }>;
 }
 
 /** Reescribe `base` en tono natural si hay redactor; si no, devuelve `base`. */
@@ -337,7 +345,23 @@ export async function procesarMensaje(
     if (deps.agente) {
       if (deps.iaQuota) await deps.iaQuota.tick();
       await tdb.updateById(historialTaller, historialId, { status: "processed" });
-      await deps.send(from, await deps.agente(from, texto));
+      const r = await deps.agente(from, texto);
+      await deps.send(from, r.texto);
+      // Memoria multi-turno: si el agente YA creó/reemplazó una conversación
+      // (p. ej. registrar_ingreso dejó etapa confirmar_ingreso_agente), NO la
+      // tocamos. Si no hay ninguna, guardamos una etapa "agente_libre" con el
+      // historial para continuar la conversación en el próximo mensaje.
+      const convDespues = await tdb.selectOne(
+        conversaciones,
+        eq(conversaciones.phone, from),
+      );
+      if (!convDespues) {
+        await tdb.insert(conversaciones, {
+          phone: from,
+          etapa: "agente_libre",
+          datos: { historial: r.historial },
+        });
+      }
       return "agente";
     }
 
@@ -415,6 +439,46 @@ export async function procesarMensaje(
   const negativo = esBotonNegativo(btnId) || esNegativo(texto);
   const listo = esBotonListo(btnId) || esListo(texto);
   const datos = (conv.datos ?? {}) as ConvDatos;
+
+  // Memoria multi-turno: conversación libre con el agente en curso. Cada mensaje
+  // se le pasa con el historial acumulado, para que entienda el contexto (p. ej.
+  // completar un ingreso paso a paso o consultas de seguimiento). El TTL de 30
+  // min limpia esta etapa sola si el usuario deja de responder.
+  if (conv.etapa === "agente_libre") {
+    if (!deps.agente) {
+      await deps.send(from, await natural(deps, saludoAyuda(deps.tallerNombre)));
+      return "saludo";
+    }
+    // Cuota IA (mismo patrón que el ingreso nuevo): sin cupo, avisamos y cortamos.
+    if (deps.iaQuota && !(await deps.iaQuota.check())) {
+      await tdb.updateById(historialTaller, historialId, {
+        status: "error",
+        errorMessage: "ia_quota_exceeded",
+      });
+      await deps.send(
+        from,
+        "⚠️ El taller alcanzó el límite de mensajes con IA de este mes. Pedile al administrador que actualice el plan para seguir cargando ingresos automáticamente.",
+      );
+      return "ia_quota";
+    }
+    const historialPrevio = ((conv.datos as { historial?: TurnoHistorial[] })?.historial ??
+      []) as TurnoHistorial[];
+    if (deps.iaQuota) await deps.iaQuota.tick();
+    await tdb.updateById(historialTaller, historialId, { status: "processed" });
+    const r = await deps.agente(from, texto, historialPrevio);
+    await deps.send(from, r.texto);
+    // Si el agente reemplazó la conversación (p. ej. registrar_ingreso dejó
+    // confirmar_ingreso_agente), la respetamos; si no, refrescamos el historial
+    // y el TTL para el próximo turno.
+    const convDespues = await tdb.selectOne(conversaciones, eq(conversaciones.phone, from));
+    if (convDespues && convDespues.etapa === "agente_libre") {
+      await tdb.updateById(conversaciones, convDespues.id, {
+        datos: { historial: r.historial },
+        updatedAt: new Date(),
+      });
+    }
+    return "agente";
+  }
 
   // BOT-3: confirmación de un ingreso propuesto por el agente. El agente NO escribió;
   // sólo dejó la propuesta pendiente. Recién acá, con un "sí", se ejecuta el createOrder.

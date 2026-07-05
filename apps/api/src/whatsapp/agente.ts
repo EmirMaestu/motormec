@@ -406,10 +406,25 @@ export async function ejecutarTool(
   return JSON.stringify({ error: "herramienta desconocida" });
 }
 
+/** Un turno de la memoria liviana de conversación (solo texto plano). */
+export interface TurnoHistorial {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** Cantidad máxima de turnos que se conservan (acota costo/tokens). */
+const MAX_HISTORIAL = 12;
+
 export interface AgenteResultado {
   texto: string;
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Historial actualizado (memoria multi-turno): el historial previo + el
+   * mensaje del usuario + la respuesta final del asistente, capado a los
+   * últimos MAX_HISTORIAL turnos. Solo texto plano (sin tool_use/tool_result).
+   */
+  historial: TurnoHistorial[];
 }
 
 export interface AgenteHooks {
@@ -426,11 +441,28 @@ export async function agenteConsulta(
   tallerNombre: string,
   from: string,
   hooks?: AgenteHooks,
+  historialPrevio: TurnoHistorial[] = [],
 ): Promise<AgenteResultado> {
   const c = getClient();
   const fallback =
     "Puedo ayudarte a cargar un ingreso, consultar un vehículo o cliente, o ver el estado de una orden. Contame qué necesitás. 🙂";
-  if (!c) return { texto: fallback, inputTokens: 0, outputTokens: 0 };
+
+  // Construye el historial actualizado a partir de la respuesta final del
+  // asistente, capado a los últimos MAX_HISTORIAL turnos. Solo texto plano.
+  const construirHistorial = (respuesta: string): TurnoHistorial[] =>
+    [
+      ...historialPrevio,
+      { role: "user", content: texto },
+      { role: "assistant", content: respuesta },
+    ].slice(-MAX_HISTORIAL) as TurnoHistorial[];
+
+  if (!c)
+    return {
+      texto: fallback,
+      inputTokens: 0,
+      outputTokens: 0,
+      historial: construirHistorial(fallback),
+    };
 
   const hoy = new Date().toISOString().split("T")[0];
   const nombreTaller = sanitizePromptField(tallerNombre, 60);
@@ -453,7 +485,14 @@ export async function agenteConsulta(
    * (el mensaje del usuario). Puede lanzar si la API del modelo falla/limita.
    */
   const runLoop = async (model: string): Promise<AgenteResultado> => {
-    const messages: Anthropic.MessageParam[] = [{ role: "user", content: texto }];
+    // Memoria multi-turno: prependemos el historial previo (texto plano) para
+    // dar contexto de la conversación antes del mensaje actual del usuario.
+    const messages: Anthropic.MessageParam[] = [
+      ...historialPrevio.map(
+        (t): Anthropic.MessageParam => ({ role: t.role, content: t.content }),
+      ),
+      { role: "user", content: texto },
+    ];
     let presupuestoDoc = "";
     let presupuestoId = "";
 
@@ -488,7 +527,14 @@ export async function agenteConsulta(
           }
           if (!enviadoPdf && presupuestoDoc) finalText = `${finalText}\n\n${presupuestoDoc}`;
         }
-        return { texto: finalText, inputTokens, outputTokens };
+        // El historial guarda solo el texto final del asistente (no el doc del
+        // presupuesto ni bloques de tool), para mantener la memoria simple/barata.
+        return {
+          texto: finalText,
+          inputTokens,
+          outputTokens,
+          historial: construirHistorial(txt || finalText),
+        };
       }
 
       messages.push({ role: "assistant", content: res.content });
@@ -516,7 +562,13 @@ export async function agenteConsulta(
       }
       messages.push({ role: "user", content: toolResults });
     }
-    return { texto: "No pude completar la consulta, probá de nuevo.", inputTokens, outputTokens };
+    const incompleto = "No pude completar la consulta, probá de nuevo.";
+    return {
+      texto: incompleto,
+      inputTokens,
+      outputTokens,
+      historial: construirHistorial(incompleto),
+    };
   };
 
   const primaryModel = hooks?.model || env.CLAUDE_MODEL_AGENT;
@@ -534,6 +586,11 @@ export async function agenteConsulta(
         /* el reintento también falló: caemos al texto de respaldo */
       }
     }
-    return { texto: fallback, inputTokens, outputTokens };
+    return {
+      texto: fallback,
+      inputTokens,
+      outputTokens,
+      historial: construirHistorial(fallback),
+    };
   }
 }

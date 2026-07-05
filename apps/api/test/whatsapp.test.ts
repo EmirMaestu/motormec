@@ -116,7 +116,14 @@ describe("WhatsApp bot — state machine", () => {
 
   it("routes fresh messages to the agent when present (prod path)", async () => {
     const { deps, sent } = fakeDeps(EMPTY);
-    deps.agente = async () => "respuesta del agente";
+    // Firma nueva (memoria multi-turno): el agente devuelve { texto, historial }.
+    deps.agente = async (_from, texto) => ({
+      texto: "respuesta del agente",
+      historial: [
+        { role: "user", content: texto },
+        { role: "assistant", content: "respuesta del agente" },
+      ],
+    });
     const r = await procesarMensaje(tdb, textMsg("ag1", "cómo va todo"), deps);
     expect(r).toBe("agente");
     expect(sent.join(" ")).toContain("respuesta del agente");
@@ -360,6 +367,99 @@ describe("WhatsApp bot — confirmación de ingreso del agente (BOT-3)", () => {
     expect(await tdb.count(conversaciones)).toBe(0);
     expect(await tdb.count(workOrders)).toBe(0);
     expect(await tdb.count(vehicles)).toBe(0);
+  });
+});
+
+describe("WhatsApp bot — memoria de conversación multi-turno del agente", () => {
+  type Turno = { role: "user" | "assistant"; content: string };
+
+  it("tras un mensaje libre queda una conversación agente_libre con historial guardado", async () => {
+    const { deps, sent } = fakeDeps(EMPTY);
+    // El agente responde sin disparar registro: NO crea conversación por su cuenta.
+    deps.agente = async (_from, texto) => ({
+      texto: "Contame la patente 🙂",
+      historial: [
+        { role: "user", content: texto },
+        { role: "assistant", content: "Contame la patente 🙂" },
+      ],
+    });
+    const r = await procesarMensaje(tdb, textMsg("mt1", "entró un auto"), deps);
+    expect(r).toBe("agente");
+    expect(sent.join(" ")).toContain("Contame la patente");
+
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("agente_libre");
+    const historial = (conv?.datos as { historial?: Turno[] }).historial ?? [];
+    expect(historial.length).toBeGreaterThan(0);
+    expect(historial.some((h) => h.content.includes("entró un auto"))).toBe(true);
+  });
+
+  it("un segundo mensaje en agente_libre pasa el historialPrevio y lo actualiza", async () => {
+    // Turno 1: deja la conversación agente_libre con historial.
+    const { deps, sent } = fakeDeps(EMPTY);
+    let historialRecibido: Turno[] | undefined;
+    deps.agente = async (_from, texto, historialPrevio) => {
+      historialRecibido = historialPrevio;
+      const historial: Turno[] = [
+        ...(historialPrevio ?? []),
+        { role: "user", content: texto },
+        { role: "assistant", content: `eco: ${texto}` },
+      ];
+      return { texto: `eco: ${texto}`, historial };
+    };
+
+    await procesarMensaje(tdb, textMsg("mt2a", "entró un auto"), deps);
+    // Primer turno: el agente recibe historial vacío/undefined.
+    expect(historialRecibido ?? []).toHaveLength(0);
+
+    // Turno 2: mismo remitente, ya en etapa agente_libre.
+    const r2 = await procesarMensaje(tdb, textMsg("mt2b", "la patente es ABC123"), deps);
+    expect(r2).toBe("agente");
+    // El agente recibió el historial acumulado del turno anterior.
+    expect(historialRecibido).toBeDefined();
+    expect(historialRecibido!.some((h) => h.content.includes("entró un auto"))).toBe(true);
+    expect(sent.join(" ")).toContain("eco: la patente es ABC123");
+
+    // El historial guardado se actualizó con el segundo turno.
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("agente_libre");
+    const historial = (conv?.datos as { historial?: Turno[] }).historial ?? [];
+    expect(historial.some((h) => h.content.includes("la patente es ABC123"))).toBe(true);
+  });
+
+  it("si el agente disparó registrar_ingreso, el branch NO pisa la conversación con agente_libre", async () => {
+    const { deps } = fakeDeps(EMPTY);
+    // El agente fake simula que su tool registrar_ingreso creó una conversación
+    // confirmar_ingreso_agente (como lo hace el agente real).
+    deps.agente = async (from, texto) => {
+      await tdb.delete(conversaciones, eq(conversaciones.phone, from));
+      await tdb.insert(conversaciones, {
+        phone: from,
+        etapa: "confirmar_ingreso_agente",
+        datos: {
+          patente: "ABC123",
+          marca: "Volkswagen",
+          modelo: "Gol",
+          cliente: "Juan",
+          tarea: "service",
+          kilometraje: null,
+        },
+      });
+      return {
+        texto: "¿Confirmo el ingreso de ABC123?",
+        historial: [
+          { role: "user", content: texto },
+          { role: "assistant", content: "¿Confirmo el ingreso de ABC123?" },
+        ],
+      };
+    };
+    const r = await procesarMensaje(tdb, textMsg("mt3", "agregá un VW Gol ABC123 de Juan"), deps);
+    expect(r).toBe("agente");
+
+    // El branch NO debe haber reemplazado la conversación del agente.
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("confirmar_ingreso_agente");
+    expect(await tdb.count(conversaciones)).toBe(1);
   });
 });
 
