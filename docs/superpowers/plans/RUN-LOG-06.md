@@ -28,7 +28,11 @@
 | 1a | Schema: tabla `payments` + `work_orders.paid_amount` + migración | ✅ hecho | 47ce3a4 |
 | 1b | Dominio: `registrarPago` (ingreso por pago) + quitar ingreso de finalize/reopen/sync + tests | ✅ hecho | 2b40029 |
 | 1c | Rutas: POST/GET `/api/orders/:id/payments` + GET `/api/customers/:id/balance` | ✅ hecho | 6633395 |
-| 1d | Frontend: registrar pago + mostrar saldo/deuda (verificar en navegador) | pendiente | — |
+| 1d | Frontend: registrar pago + mostrar saldo/deuda (verificar en navegador) | ✅ hecho | e869f7e |
+
+**PAY-1 COMPLETO** — verificado end-to-end en el navegador: pago $20.000 sobre orden #6 → saldo
+$42.000, estado "parcial", ingreso de $20.000 creado, deuda del cliente $42.000. Backend 138
+tests verdes, frontend build verde, montos en pantalla correctos (centavos→pesos).
 
 ## Próximas decisiones (cuando lleguemos)
 - PAY-2 IVA/descuentos, PAY-5 presupuesto→orden, PAY-6 payouts socios.
