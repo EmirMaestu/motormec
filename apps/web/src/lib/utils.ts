@@ -49,6 +49,39 @@ export function centsToPesos(cents: number | null | undefined): number {
   return (cents || 0) / 100;
 }
 
+/* ------------------------------- IVA / cobro ------------------------------ */
+
+/** Presets de IVA. `taxRate` en basis points (2100 = 21%). value = clave del selector. */
+export const TAX_PRESETS: { value: string; label: string; taxRate: number }[] = [
+  { value: "0", label: "Sin IVA", taxRate: 0 },
+  { value: "2100", label: "21% (Argentina)", taxRate: 2100 },
+  { value: "1900", label: "19% (Chile)", taxRate: 1900 },
+  { value: "1050", label: "10.5%", taxRate: 1050 },
+];
+
+/** Clave especial del selector para "Otra…" (IVA con % libre). */
+export const TAX_OTHER = "otra";
+
+/** ¿El taxRate (bps) coincide con alguno de los presets? */
+export function isTaxPreset(taxRate: number): boolean {
+  return TAX_PRESETS.some((p) => p.taxRate === taxRate);
+}
+
+/**
+ * Desglose de cobro en PESOS. `subtotal` y `discount` en pesos; `taxRate` en bps.
+ * base = max(0, subtotal - descuento); iva = base * (taxRate/10000); total = base + iva.
+ */
+export function computeBreakdown(
+  subtotal: number,
+  discount: number,
+  taxRate: number,
+): { subtotal: number; discount: number; base: number; iva: number; total: number } {
+  const disc = Math.max(0, discount || 0);
+  const base = Math.max(0, subtotal - disc);
+  const iva = base * ((taxRate || 0) / 10000);
+  return { subtotal, discount: disc, base, iva, total: base + iva };
+}
+
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value.length === 10 ? `${value}T00:00:00` : value);

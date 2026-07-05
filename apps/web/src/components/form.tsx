@@ -1,6 +1,14 @@
 import { useMemo, useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { Check, ChevronDown, Plus, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  cn,
+  computeBreakdown,
+  formatCurrency,
+  isTaxPreset,
+  pesosToCents,
+  TAX_OTHER,
+  TAX_PRESETS,
+} from "@/lib/utils";
 import { digitsOnly, normalizePlate, sanitizeMoney } from "@/lib/validation";
 import { modelsForBrand, VEHICLE_BRANDS } from "@/lib/vehicleCatalog";
 import { Input, Label } from "./ui";
@@ -339,6 +347,109 @@ export function CreatableMultiSelect({
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/* ----------------------- IVA + descuento + desglose --------------------- */
+/**
+ * Selector de IVA flexible (presets + "Otra…"), descuento global y desglose en vivo.
+ * El padre es dueño del estado: `taxRate` en basis points (2100 = 21%) y
+ * `discount` en PESOS (string, vía MoneyInput). `subtotal` en PESOS.
+ */
+export function TaxDiscountSection({
+  subtotal,
+  discount,
+  onDiscount,
+  taxRate,
+  onTaxRate,
+  totalLabel = "Total",
+}: {
+  subtotal: number;
+  discount: string;
+  onDiscount: (v: string) => void;
+  taxRate: number;
+  onTaxRate: (bps: number) => void;
+  totalLabel?: string;
+}) {
+  // "Otra…" si el taxRate actual no matchea un preset (incluye 0 sólo si venía como preset).
+  const [other, setOther] = useState(() => taxRate > 0 && !isTaxPreset(taxRate));
+  const selectorValue = other ? TAX_OTHER : String(taxRate);
+  const otherPct = taxRate > 0 ? String(taxRate / 100) : "";
+
+  const b = computeBreakdown(subtotal, Number(discount) || 0, taxRate);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="IVA">
+          <Select
+            value={selectorValue}
+            onChange={(v) => {
+              if (v === TAX_OTHER) {
+                setOther(true);
+                onTaxRate(0);
+              } else {
+                setOther(false);
+                onTaxRate(Number(v) || 0);
+              }
+            }}
+          >
+            {TAX_PRESETS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+            <option value={TAX_OTHER}>Otra…</option>
+          </Select>
+        </FormField>
+        <FormField label="Descuento" hint="Global, en pesos">
+          <MoneyInput value={discount} onChange={onDiscount} />
+        </FormField>
+      </div>
+
+      {other ? (
+        <FormField label="IVA %" hint="Porcentaje libre (ej. 8)">
+          <div className="relative">
+            <Input
+              value={otherPct}
+              onChange={(e) => {
+                const pct = Number(sanitizeMoney(e.target.value)) || 0;
+                onTaxRate(Math.round(pct * 100));
+              }}
+              inputMode="decimal"
+              placeholder="0"
+              className="pr-7"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-charcoal">%</span>
+          </div>
+        </FormField>
+      ) : null}
+
+      <div className="rounded-[4px] bg-deep-forest text-paper-white px-4 py-3 space-y-1.5">
+        <div className="flex items-center justify-between text-[13px] text-pale-sage">
+          <span>Subtotal</span>
+          <span>{formatCurrency(pesosToCents(b.subtotal))}</span>
+        </div>
+        {b.discount > 0 ? (
+          <div className="flex items-center justify-between text-[13px] text-pale-sage">
+            <span>Descuento</span>
+            <span>-{formatCurrency(pesosToCents(b.discount))}</span>
+          </div>
+        ) : null}
+        {taxRate > 0 ? (
+          <div className="flex items-center justify-between text-[13px] text-pale-sage">
+            <span>IVA ({taxRate / 100}%)</span>
+            <span>{formatCurrency(pesosToCents(b.iva))}</span>
+          </div>
+        ) : null}
+        <div className="flex items-center justify-between border-t border-white/15 pt-1.5">
+          <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-chartreuse-lime">
+            {totalLabel}
+          </span>
+          <span className="font-display text-[22px]">{formatCurrency(pesosToCents(b.total))}</span>
+        </div>
+      </div>
     </div>
   );
 }

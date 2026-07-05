@@ -6,7 +6,7 @@ import { useToast } from "@/components/toast";
 import { Modal } from "@/components/Modal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CardRow, DataList } from "@/components/DataList";
-import { FormField, MoneyInput, NumberInput } from "@/components/form";
+import { FormField, MoneyInput, NumberInput, TaxDiscountSection } from "@/components/form";
 import { Button, Input, PageHeader, Textarea } from "@/components/ui";
 import { formatCurrency, formatDate, pesosToCents } from "@/lib/utils";
 import type { Customer } from "@/lib/types";
@@ -26,6 +26,9 @@ interface Quote {
   items: QuoteItem[];
   notes?: string | null;
   subtotal: number;
+  discountAmount?: number;
+  taxRate?: number;
+  taxAmount?: number;
   total: number;
   validUntil?: string | null;
   createdByName?: string | null;
@@ -172,13 +175,16 @@ function CreateQuoteModal({
   const [items, setItems] = useState<QuoteItem[]>([emptyItem()]);
   const [notes, setNotes] = useState("");
   const [validUntil, setValidUntil] = useState("");
+  const [discount, setDiscount] = useState("");
+  const [taxRate, setTaxRate] = useState(0); // bps; "Sin IVA" por defecto
 
   const { data: customersData } = useQuery({
     queryKey: ["customers"],
     queryFn: () => api.get<{ customers: Customer[] }>("/api/customers"),
   });
 
-  const total = useMemo(
+  // Subtotal en pesos (ítems); el desglose (descuento/IVA/total) lo hace TaxDiscountSection.
+  const subtotal = useMemo(
     () => items.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0),
     [items],
   );
@@ -194,6 +200,8 @@ function CreateQuoteModal({
         items: items
           .filter((i) => i.description.trim())
           .map((i) => ({ description: i.description.trim(), quantity: Number(i.quantity) || 1, unitPrice: pesosToCents(Number(i.unitPrice) || 0) })),
+        discountAmount: pesosToCents(Number(discount) || 0),
+        taxRate,
         notes: notes.trim() || undefined,
         validUntil: validUntil || undefined,
       }),
@@ -306,10 +314,15 @@ function CreateQuoteModal({
             </div>
           ))}
         </div>
-        <div className="mt-2 text-right font-display text-[20px] text-deep-forest">
-          Total: {formatCurrency(pesosToCents(total))}
-        </div>
       </div>
+
+      <TaxDiscountSection
+        subtotal={subtotal}
+        discount={discount}
+        onDiscount={setDiscount}
+        taxRate={taxRate}
+        onTaxRate={setTaxRate}
+      />
 
       <FormField label="Observaciones">
         <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Condiciones, garantía, etc." />

@@ -17,6 +17,7 @@ import {
   NumberInput,
   PlateInput,
   Select,
+  TaxDiscountSection,
 } from "@/components/form";
 import { Badge, Button, IconButton, Input, PageHeader } from "@/components/ui";
 import { centsToPesos, formatCurrency, formatDate, pesosToCents } from "@/lib/utils";
@@ -282,6 +283,8 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   const [labor, setLabor] = useState("");
   const [notes, setNotes] = useState("");
   const [estimated, setEstimated] = useState("");
+  const [discount, setDiscount] = useState("");
+  const [taxRate, setTaxRate] = useState(0); // bps; "Sin IVA" por defecto
   const [submitted, setSubmitted] = useState(false);
 
   const { data: servicesData } = useQuery({
@@ -328,6 +331,8 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
         // El estado `parts` vive en PESOS; el backend espera centavos.
         parts: parts.map((p) => ({ ...p, unitPrice: pesosToCents(p.unitPrice) })),
         laborCost: pesosToCents(Number(labor) || 0),
+        discountAmount: pesosToCents(Number(discount) || 0),
+        taxRate,
         notes: notes.trim() || undefined,
         estimatedDate: estimated || null,
       }),
@@ -407,12 +412,14 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
         <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
       </FormField>
 
-      <div className="rounded-[4px] bg-deep-forest text-paper-white px-4 py-3 flex items-center justify-between">
-        <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-chartreuse-lime">Total estimado</span>
-        <span className="font-display text-[22px]">
-          {formatCurrency(pesosToCents((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0)))}
-        </span>
-      </div>
+      <TaxDiscountSection
+        subtotal={(Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0)}
+        discount={discount}
+        onDiscount={setDiscount}
+        taxRate={taxRate}
+        onTaxRate={setTaxRate}
+        totalLabel="Total estimado"
+      />
     </Modal>
   );
 }
@@ -447,6 +454,8 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
   const [labor, setLabor] = useState("");
   const [notes, setNotes] = useState("");
   const [estimated, setEstimated] = useState("");
+  const [discount, setDiscount] = useState("");
+  const [taxRate, setTaxRate] = useState(0); // bps
   const [confirmKind, setConfirmKind] = useState<null | "cancel" | "delete">(null);
   const [showPayment, setShowPayment] = useState(false);
 
@@ -466,6 +475,8 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
     setLabor(order.laborCost ? String(centsToPesos(order.laborCost)) : "");
     setNotes(order.notes ?? "");
     setEstimated(order.estimatedDate ?? "");
+    setDiscount(order.discountAmount ? String(centsToPesos(order.discountAmount)) : "");
+    setTaxRate(order.taxRate ?? 0);
     setEditing(true);
   }
 
@@ -484,6 +495,8 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
         // El estado `parts` vive en PESOS; el backend espera centavos.
         parts: parts.map((p) => ({ ...p, unitPrice: pesosToCents(p.unitPrice) })),
         laborCost: pesosToCents(Number(labor) || 0),
+        discountAmount: pesosToCents(Number(discount) || 0),
+        taxRate,
         notes: notes.trim() || undefined,
         estimatedDate: estimated || null,
       }),
@@ -601,12 +614,13 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
           <FormField label="Observaciones">
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
-          <div className="rounded-[4px] bg-deep-forest text-paper-white px-4 py-3 flex items-center justify-between">
-            <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-chartreuse-lime">Total</span>
-            <span className="font-display text-[22px]">
-              {formatCurrency(pesosToCents((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0)))}
-            </span>
-          </div>
+          <TaxDiscountSection
+            subtotal={(Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0)}
+            discount={discount}
+            onDiscount={setDiscount}
+            taxRate={taxRate}
+            onTaxRate={setTaxRate}
+          />
         </div>
       ) : (
         <div className="space-y-4">
@@ -667,6 +681,12 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
           <div className="space-y-1 border-t border-black/10 pt-3">
             <CardRow label="Mano de obra">{formatCurrency(order.laborCost)}</CardRow>
             <CardRow label="Repuestos">{formatCurrency(order.partsCost)}</CardRow>
+            {order.discountAmount ? (
+              <CardRow label="Descuento">-{formatCurrency(order.discountAmount)}</CardRow>
+            ) : null}
+            {order.taxRate ? (
+              <CardRow label={`IVA (${order.taxRate / 100}%)`}>{formatCurrency(order.taxAmount)}</CardRow>
+            ) : null}
             <div className="flex items-center justify-between pt-1">
               <span className="font-medium text-deep-forest">Total</span>
               <span className="font-display text-[22px] text-deep-forest">{formatCurrency(order.total)}</span>
