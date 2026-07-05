@@ -119,6 +119,26 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  // Moneda del taller: todos los documentos usan esta moneda (sólo admin).
+  app.patch("/api/settings", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const { auth } = authed(request);
+    const parsed = z
+      .object({ currency: z.enum(["ARS", "CLP", "USD"]) })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+    const [row] = await db
+      .select({ settings: tenants.settings })
+      .from(tenants)
+      .where(eq(tenants.id, auth.tenantId));
+    // Merge: no pisar logoPath/quoteHeader/otros campos de settings.
+    const settings: TenantSettings = {
+      ...((row?.settings as TenantSettings | null) ?? {}),
+      currency: parsed.data.currency,
+    };
+    await db.update(tenants).set({ settings }).where(eq(tenants.id, auth.tenantId));
+    return reply.send({ ok: true, settings });
+  });
+
   // Datos de contacto que salen en el presupuesto (sólo admin).
   app.patch("/api/settings/quote-header", { preHandler: requireRole("admin") }, async (request, reply) => {
     const { auth } = authed(request);

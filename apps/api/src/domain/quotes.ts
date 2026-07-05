@@ -117,6 +117,7 @@ export async function buildQuotePdf(tenantId: string, quote: Presupuesto): Promi
     tallerNombre: row?.name ?? "Taller",
     header: settings.quoteHeader ?? null,
     logo,
+    currency: settings.currency ?? "ARS",
     quote,
   });
 }

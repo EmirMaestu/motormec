@@ -75,6 +75,8 @@ export interface TenantSettings {
   logoPath?: string;
   /** Datos de contacto que aparecen en el presupuesto. */
   quoteHeader?: { phone?: string; address?: string; email?: string };
+  /** Moneda del taller: todos los documentos usan esta moneda (default ARS). */
+  currency?: "ARS" | "CLP" | "USD";
   [key: string]: unknown;
 }
 

@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { QuoteItem } from "../db/schema.js";
-import { formatArs } from "../lib/money.js";
+import { formatArs, type Currency } from "../lib/money.js";
 
 /* Paleta Momec */
 const FOREST = rgb(4 / 255, 63 / 255, 46 / 255);
@@ -15,6 +15,8 @@ export interface QuotePdfInput {
   tallerNombre: string;
   header?: { phone?: string; address?: string; email?: string } | null;
   logo?: { bytes: Buffer; mime: string } | null;
+  /** Moneda del taller para todos los montos del PDF (default "ARS"). */
+  currency?: Currency;
   quote: {
     number: number;
     customerName: string;
@@ -31,11 +33,6 @@ export interface QuotePdfInput {
     notes?: string | null;
     createdAt: string | Date;
   };
-}
-
-/** Formatea centavos como moneda (ej. 123456 → "$ 1.235"). */
-function money(cents: number): string {
-  return formatArs(cents);
 }
 
 function drawRight(
@@ -76,6 +73,9 @@ function wrap(text: string, font: PDFFont, size: number, maxWidth: number): stri
 /** Genera un presupuesto en PDF con la marca del taller y los colores de Momec. */
 export async function renderQuotePdf(input: QuotePdfInput): Promise<Buffer> {
   const { quote } = input;
+  const currency: Currency = input.currency ?? "ARS";
+  /** Formatea centavos con la moneda del taller (ej. 123456 → "$ 1.235"). */
+  const money = (cents: number): string => formatArs(cents, currency);
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]); // A4
   const { width, height } = page.getSize();
