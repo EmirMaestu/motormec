@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   doublePrecision,
@@ -36,15 +37,15 @@ export interface VehicleResponsible {
 }
 
 export interface VehicleCosts {
-  laborCost: number;
-  partsCost: number;
-  totalCost: number;
+  laborCost: number; // centavos
+  partsCost: number; // centavos
+  totalCost: number; // centavos
 }
 
 export interface VehiclePart {
   id: string;
   name: string;
-  price: number;
+  price: number; // centavos
   quantity: number;
   source: "client" | "purchased";
   supplier?: string;
@@ -81,7 +82,7 @@ export interface TenantSettings {
 export interface QuoteItem {
   description: string;
   quantity: number;
-  unitPrice: number;
+  unitPrice: number; // centavos
 }
 
 /* -------------------------------------------------------------------------- */
@@ -251,7 +252,7 @@ export const customers = pgTable(
     active: boolean("active").notNull().default(true),
     // Denormalized metrics (kept for fast reads; recomputed on writes).
     totalVehicles: integer("total_vehicles").default(0),
-    totalSpent: doublePrecision("total_spent").default(0),
+    totalSpent: bigint("total_spent", { mode: "number" }).default(0),
     lastVisit: text("last_visit"),
     visitCount: integer("visit_count").default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -296,7 +297,7 @@ export const vehicles = pgTable(
     entryDate: text("entry_date").notNull(),
     exitDate: text("exit_date"),
     services: text("services").array().notNull().default(sql`'{}'::text[]`),
-    cost: doublePrecision("cost").notNull().default(0),
+    cost: bigint("cost", { mode: "number" }).notNull().default(0),
     description: text("description"),
     inTaller: boolean("in_taller").default(true),
     mileage: integer("mileage"),
@@ -357,9 +358,9 @@ export const vehicleMovements = pgTable(
     }).notNull(),
     previousStatus: text("previous_status"),
     newStatus: text("new_status"),
-    previousCost: doublePrecision("previous_cost"),
-    newCost: doublePrecision("new_cost"),
-    costChange: doublePrecision("cost_change"),
+    previousCost: bigint("previous_cost", { mode: "number" }),
+    newCost: bigint("new_cost", { mode: "number" }),
+    costChange: bigint("cost_change", { mode: "number" }),
     assignedUser: text("assigned_user"),
     assignedUserName: text("assigned_user_name"),
     unassignedUser: text("unassigned_user"),
@@ -399,7 +400,7 @@ export const products = pgTable(
     quantity: doublePrecision("quantity").notNull().default(0),
     unit: text("unit").notNull().default("unidad"),
     type: text("type").notNull().default(""),
-    price: doublePrecision("price").notNull().default(0),
+    price: bigint("price", { mode: "number" }).notNull().default(0),
     reorderPoint: doublePrecision("reorder_point").notNull().default(0),
     lowStock: boolean("low_stock").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -441,8 +442,8 @@ export const inventoryMovements = pgTable(
     previousQuantity: doublePrecision("previous_quantity"),
     newQuantity: doublePrecision("new_quantity"),
     quantityChange: doublePrecision("quantity_change"),
-    previousPrice: doublePrecision("previous_price"),
-    newPrice: doublePrecision("new_price"),
+    previousPrice: bigint("previous_price", { mode: "number" }),
+    newPrice: bigint("new_price", { mode: "number" }),
     reason: text("reason"),
     timestamp: text("timestamp").notNull(),
     userId: text("user_id"),
@@ -476,7 +477,7 @@ export const transactions = pgTable(
     description: text("description").notNull().default(""),
     type: text("type", { enum: ["Ingreso", "Egreso"] }).notNull(),
     category: text("category").notNull().default(""),
-    amount: doublePrecision("amount").notNull().default(0),
+    amount: bigint("amount", { mode: "number" }).notNull().default(0),
     active: boolean("active").notNull().default(true),
     suspendedAt: text("suspended_at"),
     vehicleId: uuid("vehicle_id").references(() => vehicles.id, {
@@ -520,10 +521,12 @@ export const partners = pgTable(
     investmentPercentage: doublePrecision("investment_percentage")
       .notNull()
       .default(0),
-    monthlyContribution: doublePrecision("monthly_contribution")
+    monthlyContribution: bigint("monthly_contribution", { mode: "number" })
       .notNull()
       .default(0),
-    totalContributed: doublePrecision("total_contributed").notNull().default(0),
+    totalContributed: bigint("total_contributed", { mode: "number" })
+      .notNull()
+      .default(0),
     joinDate: text("join_date").notNull(),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -596,7 +599,7 @@ export interface OrderPart {
   productId?: string | null;
   name: string;
   quantity: number;
-  unitPrice: number;
+  unitPrice: number; // centavos
   fromInventory: boolean;
 }
 
@@ -620,9 +623,9 @@ export const workOrders = pgTable(
     status: text("status", { enum: orderStatus }).notNull().default("Pendiente"),
     services: text("services").array().notNull().default(sql`'{}'::text[]`),
     parts: jsonb("parts").$type<OrderPart[]>().notNull().default([]),
-    laborCost: doublePrecision("labor_cost").notNull().default(0),
-    partsCost: doublePrecision("parts_cost").notNull().default(0),
-    total: doublePrecision("total").notNull().default(0),
+    laborCost: bigint("labor_cost", { mode: "number" }).notNull().default(0),
+    partsCost: bigint("parts_cost", { mode: "number" }).notNull().default(0),
+    total: bigint("total", { mode: "number" }).notNull().default(0),
     mileage: integer("mileage"),
     notes: text("notes"),
     entryDate: text("entry_date").notNull(),
@@ -776,8 +779,8 @@ export const presupuestos = pgTable(
     vehicleInfo: text("vehicle_info"),
     items: jsonb("items").$type<QuoteItem[]>().notNull().default([]),
     notes: text("notes"),
-    subtotal: doublePrecision("subtotal").notNull().default(0),
-    total: doublePrecision("total").notNull().default(0),
+    subtotal: bigint("subtotal", { mode: "number" }).notNull().default(0),
+    total: bigint("total", { mode: "number" }).notNull().default(0),
     validUntil: text("valid_until"),
     status: text("status").notNull().default("borrador"),
     createdByName: text("created_by_name"),
@@ -841,7 +844,7 @@ export const billingCustomers = pgTable(
     referredByTenantId: uuid("referred_by_tenant_id").references(() => tenants.id, {
       onDelete: "set null",
     }),
-    walletBalance: doublePrecision("wallet_balance").notNull().default(0),
+    walletBalance: bigint("wallet_balance", { mode: "number" }).notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -883,7 +886,7 @@ export const subscriptions = pgTable(
     plan: text("plan").notNull(),
     status: text("status", { enum: subscriptionStatus }).notNull().default("pending"),
     cycle: text("cycle", { enum: billingCycle }).notNull().default("monthly"),
-    amount: doublePrecision("amount").notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
     currency: text("currency", { enum: billingCurrency }).notNull(),
     paymentMethodId: uuid("payment_method_id").references(() => paymentMethods.id, {
       onDelete: "set null",
@@ -913,9 +916,9 @@ export const charges = pgTable(
     externalId: text("external_id"),
     period: text("period"), // ej. "2026-07"
     status: text("status", { enum: chargeStatus }).notNull().default("pending"),
-    grossAmount: doublePrecision("gross_amount").notNull(),
-    discountAmount: doublePrecision("discount_amount").notNull().default(0),
-    netAmount: doublePrecision("net_amount").notNull(),
+    grossAmount: bigint("gross_amount", { mode: "number" }).notNull(),
+    discountAmount: bigint("discount_amount", { mode: "number" }).notNull().default(0),
+    netAmount: bigint("net_amount", { mode: "number" }).notNull(),
     currency: text("currency", { enum: billingCurrency }).notNull(),
     settlementCurrency: text("settlement_currency", { enum: billingCurrency }),
     attempt: integer("attempt").notNull().default(1),
@@ -975,12 +978,12 @@ export const walletLedger = pgTable(
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
-    amount: doublePrecision("amount").notNull(), // + crédito / − consumo
+    amount: bigint("amount", { mode: "number" }).notNull(), // + crédito / − consumo
     currency: text("currency", { enum: billingCurrency }).notNull(),
     reason: text("reason").notNull(),
     referralId: uuid("referral_id").references(() => referrals.id, { onDelete: "set null" }),
     chargeId: uuid("charge_id").references(() => charges.id, { onDelete: "set null" }),
-    balanceAfter: doublePrecision("balance_after").notNull(),
+    balanceAfter: bigint("balance_after", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("wallet_ledger_tenant_idx").on(t.tenantId)],

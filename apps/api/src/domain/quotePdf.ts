@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { QuoteItem } from "../db/schema.js";
+import { formatArs } from "../lib/money.js";
 
 /* Paleta Momec */
 const FOREST = rgb(4 / 255, 63 / 255, 46 / 255);
@@ -28,8 +29,9 @@ export interface QuotePdfInput {
   };
 }
 
-function money(n: number): string {
-  return `$ ${Math.round(n).toLocaleString("es-AR")}`;
+/** Formatea centavos como moneda (ej. 123456 → "$ 1.235"). */
+function money(cents: number): string {
+  return formatArs(cents);
 }
 
 function drawRight(

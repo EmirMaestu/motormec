@@ -432,8 +432,13 @@ export class BillingService {
 
 /* ------------------------------ utils --------------------------------- */
 
+/**
+ * Redondea a centavos enteros. El dinero se opera SIEMPRE en centavos (enteros),
+ * así que cualquier monto derivado (descuento/neto/premio) que un producto por un
+ * porcentaje pueda dejar fraccionario se redondea al centavo más cercano.
+ */
 function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+  return Math.round(n);
 }
 function genReferralCode(): string {
   return randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
