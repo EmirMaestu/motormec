@@ -26,7 +26,10 @@ import {
   BTN,
 } from "./keywords.js";
 
-const EXPIRY_MS = 30 * 60 * 1000;
+// Ventana de contexto de la conversación: dentro de estos minutos el bot mantiene
+// el hilo (memoria del agente + flujos); pasado ese tiempo de inactividad, arranca
+// una charla nueva desde cero.
+const EXPIRY_MS = 15 * 60 * 1000;
 const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
 
 export interface WAMessage {
