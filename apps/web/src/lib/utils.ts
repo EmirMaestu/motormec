@@ -5,15 +5,37 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
+export type Currency = "ARS" | "CLP" | "USD";
+
+/** Locale por moneda para que el símbolo/separadores sean los correctos. */
+const CURRENCY_LOCALE: Record<Currency, string> = {
+  ARS: "es-AR",
+  CLP: "es-CL",
+  USD: "en-US",
+};
+
+/**
+ * Moneda activa del taller (módulo-level). Se setea desde el auth cuando se
+ * carga/actualiza el tenant, así todos los `formatCurrency` del árbol usan la
+ * moneda configurada sin tener que tocar cada call-site.
+ */
+let activeCurrency: Currency = "ARS";
+
+export function setActiveCurrency(currency: Currency): void {
+  activeCurrency = currency;
+}
+
 /**
  * El backend habla SIEMPRE en centavos (bigint). El usuario ve/tipea PESOS.
- * `formatCurrency` recibe CENTAVOS y los muestra como pesos (divide por 100).
+ * `formatCurrency` recibe CENTAVOS y los muestra como la moneda activa (divide por 100).
+ * Sin decimales, consistente con el backend.
  */
 export function formatCurrency(cents: number | null | undefined): string {
-  return new Intl.NumberFormat("es-AR", {
+  return new Intl.NumberFormat(CURRENCY_LOCALE[activeCurrency], {
     style: "currency",
-    currency: "ARS",
+    currency: activeCurrency,
     minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format((cents ?? 0) / 100);
 }
 
