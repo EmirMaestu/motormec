@@ -57,7 +57,12 @@ Sub-tareas nuevas:
 |---|---|---|---|
 | C1 | Backend: `currency` en TenantSettings + settings route + `formatArs`/PDF currency-aware + test | ✅ hecho | 7571798 |
 | C2 | Frontend: `formatCurrency` currency-aware (desde auth) + selector de moneda en Configuración | ✅ hecho | 20db3fb |
-| 2d | Frontend: selector IVA flexible (Sin IVA default + 21/19/10.5/otra) + descuento + desglose | pendiente (rehacer) | — |
+| 2d | Frontend: selector IVA flexible (Sin IVA default + 21/19/10.5/otra) + descuento + desglose | ✅ hecho | de3d2d6 |
+
+**PAY-2 + multi-moneda COMPLETO** — verificado end-to-end: presupuesto con IVA 21% (subtotal
+$10.000 + IVA $2.100 = $12.100) y sin IVA ($10.000 limpio); moneda CLP persiste y formatea sin
+decimales ("$147.000"), revertida a ARS; dashboard renderiza correcto. Backend 155 tests verdes,
+frontend build verde. Bot con contexto a 15 min: subido (539e91c).
 
 Sub-tareas PAY-2 (originales):
 | # | Sub-tarea | Estado | Commit |
