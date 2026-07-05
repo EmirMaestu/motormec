@@ -625,6 +625,10 @@ export const workOrders = pgTable(
     parts: jsonb("parts").$type<OrderPart[]>().notNull().default([]),
     laborCost: bigint("labor_cost", { mode: "number" }).notNull().default(0),
     partsCost: bigint("parts_cost", { mode: "number" }).notNull().default(0),
+    subtotal: bigint("subtotal", { mode: "number" }).notNull().default(0), // centavos (parts+labor antes de desc/IVA)
+    discountAmount: bigint("discount_amount", { mode: "number" }).notNull().default(0), // centavos
+    taxRate: integer("tax_rate").notNull().default(0), // basis points (2100 = 21%)
+    taxAmount: bigint("tax_amount", { mode: "number" }).notNull().default(0), // centavos
     total: bigint("total", { mode: "number" }).notNull().default(0),
     mileage: integer("mileage"),
     notes: text("notes"),
@@ -821,6 +825,9 @@ export const presupuestos = pgTable(
     items: jsonb("items").$type<QuoteItem[]>().notNull().default([]),
     notes: text("notes"),
     subtotal: bigint("subtotal", { mode: "number" }).notNull().default(0),
+    discountAmount: bigint("discount_amount", { mode: "number" }).notNull().default(0), // centavos
+    taxRate: integer("tax_rate").notNull().default(0), // basis points (2100 = 21%)
+    taxAmount: bigint("tax_amount", { mode: "number" }).notNull().default(0), // centavos
     total: bigint("total", { mode: "number" }).notNull().default(0),
     validUntil: text("valid_until"),
     status: text("status").notNull().default("borrador"),
