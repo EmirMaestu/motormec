@@ -18,7 +18,7 @@ import { env } from "../config/env.js";
 import { db, pool } from "../db/client.js";
 import { createTenant } from "../db/admin.js";
 import { forTenant } from "../db/scope.js";
-import { customers, tenants } from "../db/schema.js";
+import { customers, numerosAutorizados, tenants } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { storage } from "../storage/provider.js";
 import { agenteConsulta, type TurnoHistorial } from "../whatsapp/agente.js";
@@ -54,6 +54,8 @@ async function main() {
   await tdb.insert(customers, { name: "Juan Morales", phone: "" });
 
   const from = "5491100000000";
+  // Autorizar el número en la whitelist del taller (si no, procesarMensaje rebota).
+  await tdb.insert(numerosAutorizados, { phone: from, name: "Sim", active: true });
   const model = env.CLAUDE_MODEL_AGENT;
   let historial: TurnoHistorial[] = [];
 
