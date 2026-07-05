@@ -22,6 +22,8 @@ const createSchema = z.object({
   vehiclePlate: z.string().max(20).optional(),
   vehicleInfo: z.string().max(120).optional(),
   items: z.array(itemSchema).min(1),
+  discountAmount: z.number().int().min(0).optional(),
+  taxRate: z.number().int().min(0).max(10000).optional(),
   notes: z.string().max(4000).optional(),
   validUntil: z.string().max(40).optional(),
 });

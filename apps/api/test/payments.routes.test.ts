@@ -229,4 +229,61 @@ describe("payment routes (cobro)", () => {
     });
     expect(res.statusCode).toBe(401);
   });
+
+  it("POST /api/orders con taxRate 2100 aplica IVA 21% sobre el subtotal", async () => {
+    const order = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      headers: { cookie },
+      payload: { plate: "IVA100", customerName: "Cliente IVA", laborCost: 10000, taxRate: 2100 },
+    });
+    expect(order.statusCode).toBe(201);
+    const o = order.json().order;
+    expect(o.subtotal).toBe(10000);
+    expect(o.taxRate).toBe(2100);
+    expect(o.taxAmount).toBe(2100); // 10000 * 21%
+    expect(o.total).toBe(12100); // subtotal * 1.21
+  });
+
+  it("POST /api/orders con descuento + IVA: IVA se calcula sobre (subtotal - descuento)", async () => {
+    const order = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      headers: { cookie },
+      payload: {
+        plate: "IVA200",
+        customerName: "Cliente Desc",
+        laborCost: 10000,
+        discountAmount: 2000,
+        taxRate: 2100,
+      },
+    });
+    expect(order.statusCode).toBe(201);
+    const o = order.json().order;
+    expect(o.subtotal).toBe(10000);
+    expect(o.discountAmount).toBe(2000);
+    expect(o.taxAmount).toBe(1680); // (10000 - 2000) * 21%
+    expect(o.total).toBe(9680); // 8000 + 1680
+  });
+
+  it("POST /api/quotes con descuento + IVA persiste el desglose", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/quotes",
+      headers: { cookie },
+      payload: {
+        customerName: "Presupuesto IVA",
+        items: [{ description: "Service", quantity: 1, unitPrice: 10000 }],
+        discountAmount: 2000,
+        taxRate: 2100,
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const q = res.json().quote;
+    expect(q.subtotal).toBe(10000);
+    expect(q.discountAmount).toBe(2000);
+    expect(q.taxRate).toBe(2100);
+    expect(q.taxAmount).toBe(1680); // (10000 - 2000) * 21%
+    expect(q.total).toBe(9680);
+  });
 });
