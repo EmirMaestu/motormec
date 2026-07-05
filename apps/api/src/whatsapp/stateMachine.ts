@@ -28,8 +28,10 @@ import {
 
 // Ventana de contexto de la conversación: dentro de estos minutos el bot mantiene
 // el hilo (memoria del agente + flujos); pasado ese tiempo de inactividad, arranca
-// una charla nueva desde cero.
-const EXPIRY_MS = 15 * 60 * 1000;
+// una charla nueva desde cero (y avisa al usuario que se reinició).
+const EXPIRY_MS = 5 * 60 * 1000;
+const AVISO_REINICIO =
+  "🔄 Pasaron unos minutos sin actividad, así que arranco una charla nueva.\n\n";
 const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
 
 export interface WAMessage {
@@ -289,11 +291,14 @@ export async function procesarMensaje(
   const historialId = await guardarHistorial(tdb, msg, texto);
   if (!historialId) return "duplicate";
 
-  // 3. Conversation state (with 30-min expiry).
+  // 3. Conversation state (ventana de contexto de 5 min). Si venía una charla y
+  // pasó la ventana, la reiniciamos y marcamos para avisar al usuario.
   let conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, from));
+  let reinicioPorExpiracion = false;
   if (conv && Date.now() - conv.updatedAt.getTime() > EXPIRY_MS) {
     await tdb.deleteById(conversaciones, conv.id);
     conv = null;
+    reinicioPorExpiracion = true;
   }
 
   // 3b. Modo "esperando foto" (tras un registro hecho por el agente).
@@ -349,7 +354,7 @@ export async function procesarMensaje(
       if (deps.iaQuota) await deps.iaQuota.tick();
       await tdb.updateById(historialTaller, historialId, { status: "processed" });
       const r = await deps.agente(from, texto);
-      await deps.send(from, r.texto);
+      await deps.send(from, (reinicioPorExpiracion ? AVISO_REINICIO : "") + r.texto);
       // Memoria multi-turno: si el agente YA creó/reemplazó una conversación
       // (p. ej. registrar_ingreso dejó etapa confirmar_ingreso_agente), NO la
       // tocamos. Si no hay ninguna, guardamos una etapa "agente_libre" con el
