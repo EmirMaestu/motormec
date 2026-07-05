@@ -130,7 +130,7 @@ describe("Phase 2 domain flows", () => {
     expect(abiertas.length).toBe(1); // no dos abiertas
   });
 
-  it("delivering a vehicle records a delivered movement; vehicle transaction posts income", async () => {
+  it("delivering a vehicle records a delivered movement (no income until paid)", async () => {
     const v = (
       await app.inject({
         method: "POST",
@@ -140,7 +140,8 @@ describe("Phase 2 domain flows", () => {
       })
     ).json().vehicle;
 
-    // Entregar el vehículo genera el ingreso en finanzas automáticamente.
+    // Entregar el vehículo lo marca como entregado, pero NO genera ingreso:
+    // el ingreso viene de cada pago (registrarPago). Fiado permitido.
     const delivered = await app.inject({
       method: "PATCH",
       url: `/api/vehicles/${v.id}`,
@@ -150,6 +151,7 @@ describe("Phase 2 domain flows", () => {
     expect(delivered.json().vehicle.inTaller).toBe(false);
     expect(delivered.json().vehicle.exitDate).toBeTruthy();
 
+    // Sin pagos, no hay ingreso al entregar.
     const summary = (
       await app.inject({
         method: "GET",
@@ -157,17 +159,15 @@ describe("Phase 2 domain flows", () => {
         headers: { cookie: adminCookie },
       })
     ).json();
-    expect(summary.totalIngresos).toBe(30000);
+    expect(summary.totalIngresos).toBe(0);
 
-    // El ingreso quedó categorizado por el servicio y no se duplica al re-entregar.
     const txs = (
       await app.inject({ method: "GET", url: "/api/transactions", headers: { cookie: adminCookie } })
     ).json();
     const ingresos = txs.transactions.filter(
-      (t: { type: string; amount: number }) => t.type === "Ingreso" && t.amount === 30000,
+      (t: { type: string }) => t.type === "Ingreso",
     );
-    expect(ingresos).toHaveLength(1);
-    expect(ingresos[0].category).toBe("Frenos");
+    expect(ingresos).toHaveLength(0);
   });
 
   it("creating a vehicle from the web also creates a Work Order (shows in Órdenes)", async () => {
@@ -189,7 +189,7 @@ describe("Phase 2 domain flows", () => {
     expect(orders[0].services).toEqual(["Service"]);
   });
 
-  it("reverting a delivered vehicle to En Reparación reopens the order and reverses income", async () => {
+  it("reverting a delivered vehicle to En Reparación reopens the order", async () => {
     const v = (
       await app.inject({
         method: "POST",
@@ -199,19 +199,15 @@ describe("Phase 2 domain flows", () => {
       })
     ).json().vehicle;
 
-    // Entregar → ingreso 40000.
+    // Entregar (finaliza la orden; el ingreso vendría de los pagos, aquí no hay).
     await app.inject({
       method: "PATCH",
       url: `/api/vehicles/${v.id}`,
       headers: { cookie: adminCookie, ...J },
       payload: { status: "Entregado" },
     });
-    let summary = (
-      await app.inject({ method: "GET", url: "/api/transactions/summary", headers: { cookie: adminCookie } })
-    ).json();
-    expect(summary.totalIngresos).toBe(40000);
 
-    // Devolver a En Reparación → orden reabierta e ingreso revertido.
+    // Devolver a En Reparación → orden reabierta (los pagos, si los hubiera, quedan).
     await app.inject({
       method: "PATCH",
       url: `/api/vehicles/${v.id}`,
@@ -225,10 +221,12 @@ describe("Phase 2 domain flows", () => {
     expect(orders[0].status).toBe("En reparación");
     expect(orders[0].finalizedAt).toBeFalsy();
 
-    summary = (
-      await app.inject({ method: "GET", url: "/api/transactions/summary", headers: { cookie: adminCookie } })
-    ).json();
-    expect(summary.totalIngresos).toBe(0);
+    // El vehículo volvió al taller.
+    const vehicleAfter = (
+      await app.inject({ method: "GET", url: `/api/vehicles/${v.id}`, headers: { cookie: adminCookie } })
+    ).json().vehicle;
+    expect(vehicleAfter.status).toBe("En Reparación");
+    expect(vehicleAfter.inTaller).toBe(true);
   });
 
   it("uploads a photo to an order (linked to that order's moment)", async () => {

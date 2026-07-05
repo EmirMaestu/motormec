@@ -3,14 +3,12 @@ import type { TenantDb } from "../db/scope.js";
 import {
   customers,
   products,
-  transactions,
   vehicles,
   workOrders,
   type OrderPart,
   type Vehicle,
   type WorkOrder,
 } from "../db/schema.js";
-import { categorizeService } from "./categorize.js";
 import { recalcCustomerMetrics } from "./customerMetrics.js";
 import { logInventoryMovement, type Actor } from "./movements.js";
 import { argYmd } from "../lib/time.js";
@@ -203,9 +201,10 @@ export interface FinalizeResult {
 }
 
 /**
- * Finalize an order (deliver): deduct inventory for parts taken from stock,
- * log inventory movements, and create the automatic finance income. Idempotent
- * via finalizedAt. Throws if a stock part has insufficient quantity.
+ * Finalize an order (deliver): deduct inventory for parts taken from stock and
+ * log inventory movements. NO genera ingreso: el ingreso viene de cada pago
+ * (registrarPago) y el fiado está permitido. Idempotente vía finalizedAt.
+ * Throws if a stock part has insufficient quantity.
  */
 export async function finalizeOrder(
   tdb: TenantDb,
@@ -268,28 +267,10 @@ export async function finalizeOrder(
       });
     }
 
-    // 2. Ingreso automático (mano de obra + servicios + venta de repuestos).
-    if (order.total > 0) {
-      await t.insert(transactions, {
-        date: todayDate(),
-        description: `Orden #${order.number} - ${order.vehiclePlate} (${order.customerName})`,
-        type: "Ingreso",
-        category: categorizeService(order.services),
-        amount: order.total,
-        active: true,
-        vehicleId: order.vehicleId,
-        workOrderId: order.id,
-        vehicleDetails: {
-          plate: order.vehiclePlate,
-          brand: order.vehicleInfo,
-          model: "",
-          customer: order.customerName,
-        },
-        paymentMethod: "Efectivo",
-      });
-    }
+    // Ingreso: NO se genera al finalizar. El ingreso viene de cada pago
+    // (registrarPago); finalizar sólo entrega y descuenta stock. Fiado permitido.
 
-    // 3. Actualizar vehículo + métricas del cliente.
+    // 2. Actualizar vehículo + métricas del cliente.
     if (order.vehicleId) {
       await t.updateById(vehicles, order.vehicleId, {
         status: "Entregado",
@@ -345,8 +326,9 @@ export async function createOrderForVehicle(
 
 /**
  * Reopen a delivered order (correction — e.g. the vehicle was marked delivered by
- * mistake and returned to the shop). Restores any stock deducted at delivery,
- * reverses the delivery income, and clears the finalized markers.
+ * mistake and returned to the shop). Restores any stock deducted at delivery and
+ * clears the finalized markers. NO revierte ingresos: los pagos ya cobrados
+ * (ingreso por pago) son plata real y quedan.
  */
 export async function reopenOrder(
   tdb: TenantDb,
@@ -383,21 +365,10 @@ export async function reopenOrder(
       }
     }
 
-    // 2. Revertir el ingreso de la entrega (ligado a ESTA orden, no al vehículo:
-    //    dos órdenes del mismo vehículo tienen ingresos distintos).
-    const income = await t.selectOne(
-      transactions,
-      and(
-        eq(transactions.workOrderId, order.id),
-        eq(transactions.type, "Ingreso"),
-        eq(transactions.active, true),
-      ),
-    );
-    if (income) {
-      await t.updateById(transactions, income.id, { active: false, updatedAt: new Date() });
-    }
+    // Ingreso: NO se revierte al reabrir. Los pagos son plata real ya cobrada
+    // (ingreso por pago); quedan activos aunque la orden se reabra.
 
-    // 3. Reabrir la orden.
+    // 2. Reabrir la orden.
     const reopened = await t.updateById(workOrders, id, {
       status: targetStatus,
       finalizedAt: null,

@@ -12,7 +12,6 @@ import {
   type Vehicle,
   type WorkOrder,
 } from "../db/schema.js";
-import { categorizeService } from "./categorize.js";
 import { recalcCustomerMetrics } from "./customerMetrics.js";
 import { logVehicleMovement, type Actor } from "./movements.js";
 import { createOrderForVehicle, finalizeOrder, reopenOrder } from "./orders.js";
@@ -32,9 +31,9 @@ const VEH_TO_ORDER: Record<string, WorkOrder["status"]> = {
 };
 
 /**
- * Al cambiar el estado del vehículo, sincroniza su última orden y, si se entrega,
- * genera el ingreso en finanzas (finaliza la orden, o crea el movimiento con el
- * costo del vehículo si no hay orden). Evita ingresos duplicados.
+ * Al cambiar el estado del vehículo, sincroniza su última orden: si se entrega,
+ * finaliza la orden (descuenta stock); si vuelve a un estado de trabajo, la
+ * reabre. NO genera ingresos: el ingreso viene de cada pago (registrarPago).
  */
 async function syncOrderAndFinance(
   tdb: TenantDb,
@@ -62,39 +61,11 @@ async function syncOrderAndFinance(
       // Si falta stock, finalizeOrder lanza y la operación se revierte entera.
       // Propagamos el error: el caller (updateVehicle) revierte el cambio de estado
       // del vehículo para no dejarlo "Entregado" a medias, y la ruta lo muestra.
+      // finalizeOrder ya NO genera ingreso: el ingreso viene de cada pago.
       await finalizeOrder(tdb, actor, latest.id);
       return;
     }
-    if (!latest && (vehicle.cost ?? 0) > 0) {
-      // Vehículo entregado sin orden → generar ingreso con el costo del vehículo,
-      // salvo que ya exista un ingreso activo para este vehículo.
-      const yaHay = await tdb.selectOne(
-        transactions,
-        and(
-          eq(transactions.vehicleId, vehicle.id),
-          eq(transactions.type, "Ingreso"),
-          eq(transactions.active, true),
-        ),
-      );
-      if (!yaHay) {
-        await tdb.insert(transactions, {
-          date: todayDate(),
-          description: `${vehicle.plate} - ${`${vehicle.brand} ${vehicle.model}`.trim()} (${vehicle.owner})`,
-          type: "Ingreso",
-          category: categorizeService(vehicle.services ?? []),
-          amount: vehicle.cost,
-          active: true,
-          vehicleId: vehicle.id,
-          vehicleDetails: {
-            plate: vehicle.plate,
-            brand: vehicle.brand,
-            model: vehicle.model,
-            customer: vehicle.owner,
-          },
-          paymentMethod: "Efectivo",
-        });
-      }
-    }
+    // Sin orden no se genera ingreso: el ingreso viene de los pagos (registrarPago).
     return;
   }
 

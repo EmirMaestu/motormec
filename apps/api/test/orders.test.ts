@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { pool } from "../src/db/client.js";
 import { createTenant } from "../src/db/admin.js";
 import { forTenant, type TenantDb } from "../src/db/scope.js";
 import { products, transactions, vehicles, workOrders } from "../src/db/schema.js";
 import { createOrder, finalizeOrder, updateOrder } from "../src/domain/orders.js";
+import { registrarPago } from "../src/domain/payments.js";
 import { resetDb } from "./helpers.js";
 
 let tdb: TenantDb;
@@ -52,7 +53,7 @@ describe("work orders", () => {
     expect(order.total).toBe(30000);
   });
 
-  it("finalize deducts inventory stock, logs movement and posts income", async () => {
+  it("finalize deducts inventory stock, logs movement, marks delivered (no income until paid)", async () => {
     const aceite = await tdb.insertOne(products, {
       name: "Aceite 5W30",
       quantity: 10,
@@ -79,10 +80,8 @@ describe("work orders", () => {
     const prod = await tdb.findById(products, aceite.id);
     expect(prod?.quantity).toBe(6);
 
-    // Income created for the order total.
-    const txs = await tdb.select(transactions, eq(transactions.type, "Ingreso"));
-    expect(txs).toHaveLength(1);
-    expect(txs[0]?.amount).toBe(order.total);
+    // Finalizar NO crea ingreso (el ingreso viene de los pagos).
+    expect((await tdb.select(transactions, eq(transactions.type, "Ingreso"))).length).toBe(0);
 
     // Vehicle marked delivered.
     const v = order.vehicleId ? await tdb.findById(vehicles, order.vehicleId) : null;
@@ -113,7 +112,8 @@ describe("work orders", () => {
     const second = await finalizeOrder(tdb, actor, order.id);
     expect(second?.warnings.join(" ")).toMatch(/ya estaba finalizada/i);
     expect((await tdb.findById(products, prod.id))?.quantity).toBe(4); // only deducted once
-    expect(await tdb.count(transactions)).toBe(1);
+    // finalize no crea ingreso: sin pagos no hay transacciones.
+    expect(await tdb.count(transactions)).toBe(0);
   });
 
   it("finalize is atomic under concurrent calls (no double income / no negative stock)", async () => {
@@ -133,12 +133,11 @@ describe("work orders", () => {
     expect(b.status).toBe("fulfilled");
     // Stock descontado UNA sola vez: 5 - 3 = 2.
     expect((await tdb.findById(products, prod.id))?.quantity).toBe(2);
-    // UN solo ingreso.
-    const txs = await tdb.select(transactions, eq(transactions.type, "Ingreso"));
-    expect(txs).toHaveLength(1);
+    // finalize no crea ingreso (el ingreso viene de los pagos).
+    expect((await tdb.select(transactions, eq(transactions.type, "Ingreso"))).length).toBe(0);
   });
 
-  it("reopen restores stock and reverses income atomically", async () => {
+  it("reopen restores stock and leaves payments untouched", async () => {
     const prod = await tdb.insertOne(products, { name: "Correa", quantity: 10, reorderPoint: 0, price: 5000 });
     const order = await createOrder(tdb, actor, {
       plate: "REO111",
@@ -148,31 +147,40 @@ describe("work orders", () => {
     await finalizeOrder(tdb, actor, order.id);
     expect((await tdb.findById(products, prod.id))?.quantity).toBe(8); // 10 - 2
 
+    // Cobrar la orden crea 1 ingreso (ingreso por pago).
+    await registrarPago(tdb, actor, order.id, { amount: order.total });
+
     const { reopenOrder } = await import("../src/domain/orders.js");
     await reopenOrder(tdb, actor, order.id);
-    // Stock repuesto y el ingreso quedó inactivo.
+    // Stock repuesto...
     expect((await tdb.findById(products, prod.id))?.quantity).toBe(10);
-    const activos = await tdb.select(transactions, eq(transactions.active, true));
-    expect(activos.filter((x) => x.type === "Ingreso")).toHaveLength(0);
+    // ...pero el ingreso del pago SIGUE activo (los pagos son plata real; no se revierten).
+    const ingresosActivos = await tdb.select(
+      transactions,
+      and(eq(transactions.type, "Ingreso"), eq(transactions.active, true)),
+    );
+    expect(ingresosActivos.length).toBe(1);
     const reopened = await tdb.findById(workOrders, order.id);
     expect(reopened?.finalizedAt).toBeNull();
   });
 
-  it("reopen reverses the income of THAT order, not another order's income", async () => {
-    // Dos órdenes para el mismo vehículo, ambas finalizadas.
+  it("each order's payment creates income linked to its own workOrderId", async () => {
+    // Dos órdenes para el mismo vehículo, ambas finalizadas y cobradas.
     const o1 = await createOrder(tdb, actor, { plate: "TWO111", laborCost: 10000 });
     await finalizeOrder(tdb, actor, o1.id);
     const o2 = await createOrder(tdb, actor, { plate: "TWO111", laborCost: 20000 });
     await finalizeOrder(tdb, actor, o2.id);
 
-    const { reopenOrder } = await import("../src/domain/orders.js");
-    await reopenOrder(tdb, actor, o2.id); // reabrir la SEGUNDA
+    await registrarPago(tdb, actor, o1.id, { amount: 10000 });
+    await registrarPago(tdb, actor, o2.id, { amount: 20000 });
 
-    const activos = await tdb.select(transactions, eq(transactions.active, true));
-    const ingresos = activos.filter((t) => t.type === "Ingreso");
-    // Debe quedar activo el ingreso de o1 (10000), inactivo el de o2 (20000).
-    expect(ingresos).toHaveLength(1);
-    expect(ingresos[0]?.amount).toBe(10000);
+    const ingresos = await tdb.select(transactions, eq(transactions.type, "Ingreso"));
+    // Un ingreso por orden, ligado a SU propia orden.
+    expect(ingresos).toHaveLength(2);
+    const ing1 = ingresos.find((t) => t.workOrderId === o1.id);
+    const ing2 = ingresos.find((t) => t.workOrderId === o2.id);
+    expect(ing1?.amount).toBe(10000);
+    expect(ing2?.amount).toBe(20000);
   });
 
   it("reopening an order brings its vehicle back into the shop", async () => {
@@ -190,6 +198,8 @@ describe("work orders", () => {
   it("deleting a vehicle deactivates its income transactions", async () => {
     const order = await createOrder(tdb, actor, { plate: "DEL111", laborCost: 10000 });
     await finalizeOrder(tdb, actor, order.id);
+    // El ingreso viene del pago (no de finalizar): cobramos para que exista.
+    await registrarPago(tdb, actor, order.id, { amount: 10000 });
     const { deleteVehicle } = await import("../src/domain/vehicles.js");
     await deleteVehicle(tdb, actor, order.vehicleId!);
     const activos = await tdb.select(transactions, eq(transactions.active, true));
