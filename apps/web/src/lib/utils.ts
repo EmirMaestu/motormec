@@ -5,12 +5,26 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(value: number | null | undefined): string {
+/**
+ * El backend habla SIEMPRE en centavos (bigint). El usuario ve/tipea PESOS.
+ * `formatCurrency` recibe CENTAVOS y los muestra como pesos (divide por 100).
+ */
+export function formatCurrency(cents: number | null | undefined): string {
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(value ?? 0);
+    minimumFractionDigits: 0,
+  }).format((cents ?? 0) / 100);
+}
+
+/** Pesos (lo que tipea el usuario) → centavos enteros (lo que espera el backend). */
+export function pesosToCents(pesos: number | null | undefined): number {
+  return Math.round((pesos || 0) * 100);
+}
+
+/** Centavos (backend) → pesos (para precargar un input editable). */
+export function centsToPesos(cents: number | null | undefined): number {
+  return (cents || 0) / 100;
 }
 
 export function formatDate(value: string | null | undefined): string {

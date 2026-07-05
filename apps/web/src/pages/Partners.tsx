@@ -7,7 +7,7 @@ import { Modal } from "@/components/Modal";
 import { CardRow, DataList } from "@/components/DataList";
 import { DateInput, FormField, MoneyInput, NumberInput } from "@/components/form";
 import { Badge, Button, Input, PageHeader } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, pesosToCents } from "@/lib/utils";
 import type { Partner } from "@/lib/types";
 
 export function PartnersPage() {
@@ -93,8 +93,8 @@ function CreatePartnerModal({ onClose, onSaved }: { onClose: () => void; onSaved
         email: form.email.trim(),
         phone: form.phone.trim(),
         investmentPercentage: Number(form.investmentPercentage) || 0,
-        monthlyContribution: Number(form.monthlyContribution) || 0,
-        totalContributed: Number(form.totalContributed) || 0,
+        monthlyContribution: pesosToCents(Number(form.monthlyContribution) || 0),
+        totalContributed: pesosToCents(Number(form.totalContributed) || 0),
         joinDate: form.joinDate,
       }),
     onSuccess: () => {

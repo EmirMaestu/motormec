@@ -8,7 +8,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CardRow, DataList } from "@/components/DataList";
 import { FormField, MoneyInput, NumberInput } from "@/components/form";
 import { Button, Input, PageHeader, Textarea } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, pesosToCents } from "@/lib/utils";
 import type { Customer } from "@/lib/types";
 
 interface QuoteItem {
@@ -193,7 +193,7 @@ function CreateQuoteModal({
         vehicleInfo: vehicleInfo.trim() || undefined,
         items: items
           .filter((i) => i.description.trim())
-          .map((i) => ({ description: i.description.trim(), quantity: Number(i.quantity) || 1, unitPrice: Number(i.unitPrice) || 0 })),
+          .map((i) => ({ description: i.description.trim(), quantity: Number(i.quantity) || 1, unitPrice: pesosToCents(Number(i.unitPrice) || 0) })),
         notes: notes.trim() || undefined,
         validUntil: validUntil || undefined,
       }),
@@ -307,7 +307,7 @@ function CreateQuoteModal({
           ))}
         </div>
         <div className="mt-2 text-right font-display text-[20px] text-deep-forest">
-          Total: {formatCurrency(total)}
+          Total: {formatCurrency(pesosToCents(total))}
         </div>
       </div>
 

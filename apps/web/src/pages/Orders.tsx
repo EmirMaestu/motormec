@@ -19,7 +19,7 @@ import {
   Select,
 } from "@/components/form";
 import { Badge, Button, IconButton, Input, PageHeader } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { centsToPesos, formatCurrency, formatDate, pesosToCents } from "@/lib/utils";
 import { compressImage } from "@/lib/image";
 import { isValidPlate } from "@/lib/validation";
 import { ORDER_STATUSES, type OrderPart, type Product, type Service, type Vehicle, type WorkOrder } from "@/lib/types";
@@ -161,9 +161,10 @@ function PartsEditor({
     if (mode === "inventario") {
       const prod = products.find((p) => p.name === productName);
       if (!prod) return;
+      // `price` (MoneyInput) y el estado `parts` viven en PESOS; prod.price viene en centavos.
       onChange([
         ...parts,
-        { productId: prod.id, name: prod.name, quantity, unitPrice: Number(price) || prod.price, fromInventory: true },
+        { productId: prod.id, name: prod.name, quantity, unitPrice: Number(price) || centsToPesos(prod.price), fromInventory: true },
       ]);
       setProductName("");
     } else {
@@ -186,7 +187,7 @@ function PartsEditor({
                   {p.name} {p.fromInventory ? <span className="text-[11px] text-charcoal">(stock)</span> : null}
                 </div>
                 <div className="text-[12px] text-charcoal">
-                  {p.quantity} × {formatCurrency(p.unitPrice)} = {formatCurrency(p.quantity * p.unitPrice)}
+                  {p.quantity} × {formatCurrency(pesosToCents(p.unitPrice))} = {formatCurrency(pesosToCents(p.quantity * p.unitPrice))}
                 </div>
               </div>
               <IconButton onClick={() => onChange(parts.filter((_, j) => j !== i))}>
@@ -218,7 +219,7 @@ function PartsEditor({
               onChange={(v) => {
                 setProductName(v);
                 const prod = products.find((p) => p.name === v);
-                if (prod) setPrice(String(prod.price));
+                if (prod) setPrice(String(centsToPesos(prod.price)));
               }}
               options={products.map((p) => p.name)}
               placeholder="Elegí un producto"
@@ -296,8 +297,9 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
         customerName: owner.trim(),
         phone,
         services,
-        parts,
-        laborCost: Number(labor) || 0,
+        // El estado `parts` vive en PESOS; el backend espera centavos.
+        parts: parts.map((p) => ({ ...p, unitPrice: pesosToCents(p.unitPrice) })),
+        laborCost: pesosToCents(Number(labor) || 0),
         notes: notes.trim() || undefined,
         estimatedDate: estimated || null,
       }),
@@ -380,7 +382,7 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
       <div className="rounded-[4px] bg-deep-forest text-paper-white px-4 py-3 flex items-center justify-between">
         <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-chartreuse-lime">Total estimado</span>
         <span className="font-display text-[22px]">
-          {formatCurrency((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0))}
+          {formatCurrency(pesosToCents((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0)))}
         </span>
       </div>
     </Modal>
@@ -425,8 +427,9 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
   function startEdit() {
     if (!order) return;
     setServices(order.services);
-    setParts(order.parts);
-    setLabor(order.laborCost ? String(order.laborCost) : "");
+    // El backend guarda en centavos; el estado de edición vive en PESOS.
+    setParts(order.parts.map((p) => ({ ...p, unitPrice: centsToPesos(p.unitPrice) })));
+    setLabor(order.laborCost ? String(centsToPesos(order.laborCost)) : "");
     setNotes(order.notes ?? "");
     setEstimated(order.estimatedDate ?? "");
     setEditing(true);
@@ -444,8 +447,9 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
     mutationFn: () =>
       api.patch(`/api/orders/${id}`, {
         services,
-        parts,
-        laborCost: Number(labor) || 0,
+        // El estado `parts` vive en PESOS; el backend espera centavos.
+        parts: parts.map((p) => ({ ...p, unitPrice: pesosToCents(p.unitPrice) })),
+        laborCost: pesosToCents(Number(labor) || 0),
         notes: notes.trim() || undefined,
         estimatedDate: estimated || null,
       }),
@@ -566,7 +570,7 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
           <div className="rounded-[4px] bg-deep-forest text-paper-white px-4 py-3 flex items-center justify-between">
             <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-chartreuse-lime">Total</span>
             <span className="font-display text-[22px]">
-              {formatCurrency((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0))}
+              {formatCurrency(pesosToCents((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0)))}
             </span>
           </div>
         </div>

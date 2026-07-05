@@ -17,7 +17,7 @@ import {
   PlateInput,
 } from "@/components/form";
 import { Badge, Button, Input, PageHeader } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, pesosToCents } from "@/lib/utils";
 import { isValidPlate } from "@/lib/validation";
 import type { Customer, Service, Vehicle } from "@/lib/types";
 
@@ -415,7 +415,7 @@ function CreateVehicleModal({ onClose, onSaved }: { onClose: () => void; onSaved
         ? api.post("/api/vehicles/new-entry", {
             plate,
             services,
-            cost: Number(cost) || 0,
+            cost: pesosToCents(Number(cost) || 0),
             mileage: mileage ? Number(mileage) : null,
           })
         : api.post("/api/vehicles", {
@@ -426,7 +426,7 @@ function CreateVehicleModal({ onClose, onSaved }: { onClose: () => void; onSaved
             phone,
             customerId,
             services,
-            cost: Number(cost) || 0,
+            cost: pesosToCents(Number(cost) || 0),
             mileage: mileage ? Number(mileage) : null,
             status: "Ingresado",
           }),

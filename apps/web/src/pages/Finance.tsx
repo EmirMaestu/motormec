@@ -7,7 +7,7 @@ import { Modal } from "@/components/Modal";
 import { CardRow, DataList } from "@/components/DataList";
 import { DateInput, FormField, MoneyInput, Select } from "@/components/form";
 import { Badge, Button, Input, PageHeader, StatCard } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, pesosToCents } from "@/lib/utils";
 import type { Transaction } from "@/lib/types";
 
 interface Summary {
@@ -138,7 +138,7 @@ function CreateTxModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         description: form.description.trim(),
         type: form.type,
         category: form.category.trim() || "Otros",
-        amount: Number(form.amount) || 0,
+        amount: pesosToCents(Number(form.amount) || 0),
         supplier: form.supplier.trim() || undefined,
         paymentMethod: form.paymentMethod,
       }),
