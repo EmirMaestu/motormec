@@ -22,9 +22,23 @@
   .grain{position:fixed;inset:0;z-index:1;opacity:.045;pointer-events:none;
     background-image:radial-gradient(#fff .5px,transparent .6px);background-size:3px 3px}
 
-  .scene{position:absolute;inset:0;display:grid;place-items:center;padding:5vmin;opacity:0;visibility:hidden;z-index:2;transition:opacity .5s}
-  .scene.active{opacity:1;visibility:visible}
+  /* Transición cinematográfica de profundidad (crossfade + scale, sin cortes) */
+  .scene{position:absolute;inset:0;display:grid;place-items:center;padding:5vmin;opacity:0;visibility:hidden;z-index:2;
+    transform:scale(1.025);transition:opacity .6s var(--ease),transform .95s var(--ease)}
+  .scene.active{opacity:1;visibility:visible;transform:none;z-index:3}
+  .scene.leaving{opacity:0;visibility:visible;transform:scale(.99);z-index:2;transition:opacity .45s var(--ease),transform .6s var(--ease)}
   .wrap{width:min(1180px,94vw);text-align:center;position:relative}
+
+  /* Coreografía por elemento (fade-up / left / right / scale / blur) */
+  [data-anim]{opacity:0;will-change:transform,opacity,filter}
+  .scene.active [data-anim]{animation-duration:.7s;animation-timing-function:var(--ease);animation-fill-mode:both;
+    animation-delay:calc(.16s + var(--seq,0)*.09s + var(--d,0s))}
+  [data-anim="fade-up"]{--from:translateY(30px)} [data-anim="fade-left"]{--from:translateX(-36px)}
+  [data-anim="fade-right"]{--from:translateX(36px)} [data-anim="scale-in"]{--from:scale(.9)}
+  .scene.active [data-anim="fade-up"],.scene.active [data-anim="fade-left"],.scene.active [data-anim="fade-right"],.scene.active [data-anim="scale-in"]{animation-name:reveal}
+  @keyframes reveal{from{opacity:0;transform:var(--from)}to{opacity:1;transform:none}}
+  .scene.active [data-anim="blur"]{animation-name:blurin}
+  @keyframes blurin{from{opacity:0;filter:blur(16px);transform:scale(1.03)}to{opacity:1;filter:blur(0);transform:none}}
 
   h1{font-family:var(--serif);font-weight:600;line-height:1.02;letter-spacing:-.015em;font-size:clamp(44px,9.2vmin,128px);text-wrap:balance}
   h2{font-family:var(--serif);font-weight:600;font-size:clamp(30px,6.2vmin,76px);line-height:1.05}
@@ -194,9 +208,9 @@
       <div class="eyebrow kin" data-split="word">Planes</div>
       <h2 class="kin" data-split="word" style="--d:.15s">Un bot que crece con tu taller.</h2>
       <div class="plans">
-        <div class="plan"><div class="t">Starter</div><div class="p">$20</div><div class="ai">Bot con IA · Haiku</div></div>
-        <div class="plan feat"><div class="t">Pro</div><div class="p">$49</div><div class="ai">IA Sonnet 5 · migración incluida</div></div>
-        <div class="plan"><div class="t">Max</div><div class="p">$99</div><div class="ai">Ilimitado · soporte prioritario</div></div>
+        <div class="plan"><div class="t">Starter</div><div class="p"><span data-count="20" data-pre="$"></span></div><div class="ai">Bot con IA · Haiku</div></div>
+        <div class="plan feat"><div class="t">Pro</div><div class="p"><span data-count="49" data-pre="$"></span></div><div class="ai">IA Sonnet 5 · migración incluida</div></div>
+        <div class="plan"><div class="t">Max</div><div class="p"><span data-count="99" data-pre="$"></span></div><div class="ai">Ilimitado · soporte prioritario</div></div>
       </div>
     </div>
   </section>

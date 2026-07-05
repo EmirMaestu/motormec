@@ -1,9 +1,11 @@
-/* Motor de presentación Momec — split de texto, control de escenas, morph de fondo */
+/* Motor de presentación Momec — coreografía, transiciones cinematográficas,
+ * count-up, morph de fondo. Movimiento con propósito (Apple / Google I/O style). */
 (() => {
   const root = document.documentElement;
   const scenes = [...document.querySelectorAll(".scene")];
   const bar = document.getElementById("bar");
   const hint = document.getElementById("hint");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const BG = {
     deep: { g1: "#0f2c1e", g2: "#0a1a12", glow: "rgba(120,197,28,.20)" },
@@ -12,13 +14,13 @@
     dark: { g1: "#0a1a12", g2: "#05100b", glow: "rgba(120,197,28,.32)" },
   };
 
-  // Split text into animated spans (word | char), optional scatter vars
+  /* Split text (word|char) into spans for staggered reveals */
   scenes.forEach((sc) => {
     sc.querySelectorAll("[data-split]").forEach((el) => {
       const mode = el.dataset.split;
       const scatter = el.hasAttribute("data-scatter");
-      const src = document.createElement("div");
-      src.innerHTML = el.innerHTML;
+      const srcNode = document.createElement("div");
+      srcNode.innerHTML = el.innerHTML;
       const out = document.createElement("span");
       (function build(node, dst) {
         node.childNodes.forEach((n) => {
@@ -36,7 +38,7 @@
             build(n, c);
           }
         });
-      })(src, out);
+      })(srcNode, out);
       el.innerHTML = out.innerHTML;
       [...el.querySelectorAll("span")].forEach((s, i) => {
         s.style.setProperty("--i", i);
@@ -48,9 +50,30 @@
         }
       });
     });
+    /* Auto-secuencia de elementos coreografiados (orden del DOM) */
+    sc.querySelectorAll("[data-anim]").forEach((el, i) => {
+      if (!el.style.getPropertyValue("--seq")) el.style.setProperty("--seq", i);
+    });
   });
 
-  let i = 0, timer = null, t0 = 0, dur = 0, raf = null, playing = true;
+  /* Count-up (números que suben) */
+  function runCounts(sc) {
+    sc.querySelectorAll("[data-count]").forEach((el) => {
+      const target = parseFloat(el.dataset.count) || 0;
+      const pre = el.dataset.pre || "", suf = el.dataset.suf || "";
+      const dur = 1000, t0 = performance.now();
+      if (reduce) { el.textContent = pre + target.toLocaleString("es-AR") + suf; return; }
+      const step = (t) => {
+        const p = Math.min(1, (t - t0) / dur);
+        const eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = pre + Math.round(target * eased).toLocaleString("es-AR") + suf;
+        if (p < 1 && sc.classList.contains("active")) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  let i = 0, timer = null, t0 = 0, dur = 0, raf = null, playing = true, leaveT = null;
 
   function applyBg(name) {
     const b = BG[name] || BG.deep;
@@ -64,14 +87,24 @@
     if (p < 1 && playing) raf = requestAnimationFrame(progress);
   }
   function show(n) {
-    cancelAnimationFrame(raf); clearTimeout(timer);
-    scenes.forEach((s) => s.classList.remove("active"));
+    cancelAnimationFrame(raf); clearTimeout(timer); clearTimeout(leaveT);
+    const prev = scenes[i];
     i = (n + scenes.length) % scenes.length;
-    const sc = scenes[i];
-    applyBg(sc.dataset.bg);
-    void sc.offsetWidth; // restart animations
-    sc.classList.add("active");
-    dur = +sc.dataset.dur || 5000;
+    const cur = scenes[i];
+    applyBg(cur.dataset.bg);
+    // Transición cinematográfica: la escena saliente se va con profundidad,
+    // la entrante llega desde el fondo (crossfade + scale) — sin cortes secos.
+    scenes.forEach((s) => { if (s !== cur && s !== prev) { s.classList.remove("active", "leaving"); } });
+    if (prev && prev !== cur) {
+      prev.classList.remove("active");
+      prev.classList.add("leaving");
+      leaveT = setTimeout(() => prev.classList.remove("leaving"), 700);
+    }
+    void cur.offsetWidth; // reinicia animaciones
+    cur.classList.remove("leaving");
+    cur.classList.add("active");
+    runCounts(cur);
+    dur = +cur.dataset.dur || 5000;
     t0 = performance.now();
     if (playing) { progress(); timer = setTimeout(() => show(i + 1), dur); }
   }

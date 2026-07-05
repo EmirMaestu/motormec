@@ -24,9 +24,11 @@
       radial-gradient(120% 90% at 50% 50%, var(--g2), #05100b 74%);}
   .grain{position:absolute;inset:0;z-index:1;opacity:.05;pointer-events:none;background-image:radial-gradient(#fff .5px,transparent .6px);background-size:3px 3px}
 
-  .scene{position:absolute;inset:0;z-index:2;opacity:0;visibility:hidden;transition:opacity .45s;
+  .scene{position:absolute;inset:0;z-index:2;opacity:0;visibility:hidden;transform:scale(1.03);
+    transition:opacity .55s var(--ease),transform .9s var(--ease);
     display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:6% 6% 5%}
-  .scene.active{opacity:1;visibility:visible}
+  .scene.active{opacity:1;visibility:visible;transform:none;z-index:3}
+  .scene.leaving{opacity:0;visibility:visible;transform:scale(.985);z-index:2;transition:opacity .4s var(--ease),transform .55s var(--ease)}
   .top,.bottom{width:100%;text-align:center;flex:none}
   .mid{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;padding:3% 0}
 
