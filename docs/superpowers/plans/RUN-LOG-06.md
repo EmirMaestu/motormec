@@ -48,7 +48,7 @@ Sub-tareas PAY-2:
 |---|---|---|---|
 | 2a | Schema: `discount_amount`/`tax_rate`/`tax_amount` (+`subtotal` en work_orders) + migración | ✅ hecho | 03a4535 |
 | 2b | Dominio: computeTotals con descuento+IVA (quotes y orders) + tests | ✅ hecho | 00afb40 |
-| 2c | Rutas: aceptar discount/taxRate + desglose en quotePdf | pendiente | — |
+| 2c | Rutas: aceptar discount/taxRate + desglose en quotePdf | ✅ hecho | 1ca8cf9 |
 | 2d | Frontend: selector IVA (21/0) + descuento global + desglose | pendiente | — |
 
 ## Próximas decisiones (cuando lleguemos)
