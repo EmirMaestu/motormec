@@ -633,6 +633,8 @@ export const workOrders = pgTable(
     deliveryDate: text("delivery_date"),
     // Set once the order is finalized to avoid double stock/finance effects.
     finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+    // Monto cobrado hasta ahora (centavos). Saldo = total - paidAmount.
+    paidAmount: bigint("paid_amount", { mode: "number" }).notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -645,6 +647,45 @@ export const workOrders = pgTable(
     index("work_orders_tenant_vehicle_idx").on(t.tenantId, t.vehicleId),
     index("work_orders_tenant_customer_idx").on(t.tenantId, t.customerId),
     index("work_orders_tenant_status_idx").on(t.tenantId, t.status),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/*  payments — pagos (incluidos parciales) contra una orden / cliente.        */
+/* -------------------------------------------------------------------------- */
+
+export const paymentKind = [
+  "efectivo",
+  "transferencia",
+  "tarjeta",
+  "mercadopago",
+  "otro",
+] as const;
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    workOrderId: uuid("work_order_id").references(() => workOrders.id, {
+      onDelete: "set null",
+    }),
+    customerId: uuid("customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
+    amount: bigint("amount", { mode: "number" }).notNull(), // centavos
+    method: text("method", { enum: paymentKind }).notNull().default("efectivo"),
+    paidAt: text("paid_at").notNull(), // YYYY-MM-DD (hora AR)
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("payments_tenant_order_idx").on(t.tenantId, t.workOrderId),
+    index("payments_tenant_customer_idx").on(t.tenantId, t.customerId),
   ],
 );
 
@@ -1008,6 +1049,7 @@ export const tenantScopedTables = {
   conversaciones,
   historialTaller,
   workOrders,
+  payments,
   presupuestos,
   usageCounters,
 } as const;
@@ -1031,6 +1073,7 @@ export type HistorialTaller = typeof historialTaller.$inferSelect;
 export type Conversacion = typeof conversaciones.$inferSelect;
 export type WorkOrder = typeof workOrders.$inferSelect;
 export type NewWorkOrder = typeof workOrders.$inferInsert;
+export type Payment = typeof payments.$inferSelect;
 export type PlatformAdmin = typeof platformAdmins.$inferSelect;
 export type UsageCounter = typeof usageCounters.$inferSelect;
 export type BillingCustomer = typeof billingCustomers.$inferSelect;
