@@ -22,7 +22,35 @@ import { Badge, Button, IconButton, Input, PageHeader } from "@/components/ui";
 import { centsToPesos, formatCurrency, formatDate, pesosToCents } from "@/lib/utils";
 import { compressImage } from "@/lib/image";
 import { isValidPlate } from "@/lib/validation";
-import { ORDER_STATUSES, type OrderPart, type Product, type Service, type Vehicle, type WorkOrder } from "@/lib/types";
+import { ORDER_STATUSES, type OrderPart, type Payment, type PaymentEstado, type Product, type Service, type Vehicle, type WorkOrder } from "@/lib/types";
+
+/** Métodos de pago (deben coincidir con el enum del backend). */
+const PAYMENT_METHODS: { value: string; label: string }[] = [
+  { value: "efectivo", label: "Efectivo" },
+  { value: "transferencia", label: "Transferencia" },
+  { value: "tarjeta", label: "Tarjeta" },
+  { value: "mercadopago", label: "MercadoPago" },
+  { value: "otro", label: "Otro" },
+];
+
+const PAYMENT_ESTADO_LABEL: Record<PaymentEstado, string> = {
+  impaga: "Impaga",
+  parcial: "Parcial",
+  pagada: "Pagada",
+};
+
+function paymentEstadoTone(estado: PaymentEstado): string {
+  if (estado === "pagada") return "Entregado";
+  if (estado === "parcial") return "En Reparación";
+  return "Egreso";
+}
+
+/** Deriva el estado de cobro de una orden a partir de total y paidAmount. */
+function orderPaymentEstado(total: number, paidAmount: number): PaymentEstado {
+  if (paidAmount <= 0) return "impaga";
+  if (paidAmount >= total) return "pagada";
+  return "parcial";
+}
 
 export function OrdersPage() {
   const queryClient = useQueryClient();
@@ -420,6 +448,12 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
   const [notes, setNotes] = useState("");
   const [estimated, setEstimated] = useState("");
   const [confirmKind, setConfirmKind] = useState<null | "cancel" | "delete">(null);
+  const [showPayment, setShowPayment] = useState(false);
+
+  const { data: paymentsData } = useQuery({
+    queryKey: ["order-payments", id],
+    queryFn: () => api.get<{ payments: Payment[] }>(`/api/orders/${id}/payments`),
+  });
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["order", id] });
   const closeable = order && order.status !== "Entregado" && order.status !== "Cancelado";
@@ -639,6 +673,42 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
             </div>
           </div>
 
+          {/* Cobro: pagado, saldo y estado de pago */}
+          {(() => {
+            const paidAmount = order.paidAmount ?? 0;
+            const saldo = order.total - paidAmount;
+            const estado = orderPaymentEstado(order.total, paidAmount);
+            const pagada = saldo <= 0;
+            return (
+              <div className="space-y-2 rounded-[8px] bg-pale-sage px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="eyebrow">Cobro</span>
+                  <Badge tone={paymentEstadoTone(estado)}>{PAYMENT_ESTADO_LABEL[estado]}</Badge>
+                </div>
+                <CardRow label="Pagado">{formatCurrency(paidAmount)}</CardRow>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-deep-forest">Saldo</span>
+                  <span className="font-display text-[20px] text-deep-forest">{formatCurrency(saldo)}</span>
+                </div>
+                {paymentsData?.payments.length ? (
+                  <div className="space-y-1 border-t border-black/10 pt-2">
+                    {paymentsData.payments.map((p) => (
+                      <div key={p.id} className="flex justify-between text-[13px] text-charcoal">
+                        <span>{formatDate(p.paidAt)} · {p.method}</span>
+                        <span className="text-deep-forest">{formatCurrency(p.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {!pagada ? (
+                  <Button size="sm" className="w-full mt-1" onClick={() => setShowPayment(true)}>
+                    Registrar pago
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })()}
+
           {order.notes ? (
             <div>
               <div className="eyebrow mb-1">Observaciones</div>
@@ -712,6 +782,96 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
       }}
       onCancel={() => setConfirmKind(null)}
     />
+
+    {showPayment && order ? (
+      <RegisterPaymentModal
+        orderId={id}
+        orderNumber={order.number}
+        saldo={order.total - (order.paidAmount ?? 0)}
+        onClose={() => setShowPayment(false)}
+        onSaved={() => {
+          onChanged();
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ["order-payments", id] });
+          queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+          toast.success("Pago registrado");
+        }}
+      />
+    ) : null}
    </>
+  );
+}
+
+/* --------------------------- Register payment ---------------------------- */
+function RegisterPaymentModal({
+  orderId,
+  orderNumber,
+  saldo,
+  onClose,
+  onSaved,
+}: {
+  orderId: string;
+  orderNumber: number;
+  saldo: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [amount, setAmount] = useState(String(centsToPesos(saldo)));
+  const [method, setMethod] = useState("efectivo");
+  const [submitted, setSubmitted] = useState(false);
+
+  const pesos = Number(amount) || 0;
+  const amountError = submitted && pesos <= 0 ? "Ingresá un monto mayor a 0" : undefined;
+
+  const pay = useMutation({
+    mutationFn: () =>
+      api.post(`/api/orders/${orderId}/payments`, { amount: pesosToCents(pesos), method }),
+    onSuccess: () => {
+      onSaved();
+      onClose();
+    },
+    onError: () => toast.error("No se pudo registrar el pago"),
+  });
+
+  const submit = () => {
+    setSubmitted(true);
+    if (pesos <= 0) return;
+    pay.mutate();
+  };
+
+  return (
+    <Modal
+      open
+      onOpenChange={(v) => !v && onClose()}
+      title={`Registrar pago · Orden #${orderNumber}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={submit} disabled={pay.isPending}>
+            {pay.isPending ? "Registrando…" : "Registrar pago"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex items-center justify-between rounded-[8px] bg-pale-sage px-4 py-3">
+        <span className="eyebrow">Saldo pendiente</span>
+        <span className="font-display text-[20px] text-deep-forest">{formatCurrency(saldo)}</span>
+      </div>
+      <FormField label="Monto" required error={amountError} hint="En pesos">
+        <MoneyInput value={amount} onChange={setAmount} />
+      </FormField>
+      <FormField label="Método">
+        <Select value={method} onChange={setMethod}>
+          {PAYMENT_METHODS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </Select>
+      </FormField>
+    </Modal>
   );
 }
