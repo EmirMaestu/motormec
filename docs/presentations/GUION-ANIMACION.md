@@ -96,11 +96,13 @@ sobre el mundo:
   los viajes entre escenas hero, el mundo vuela detrás y el teléfono permanece,
   cambiando su pantalla por crossfade.
 
-### Deck 9:16 (`presentacion-redes.html` + `engine.js`)
+### Deck 9:16 (`presentacion-redes.html` + `engine-camera.js`)
 
-- **Depth crossfade** entre escenas (scale + fade, sin cortes secos).
-- **Shared element:** teléfono único persistente con crossfade de pantalla.
-- **Fondo:** el gradiente **morfea** de tono entre escenas (deep/lime/warm/dark).
+Misma gramática de cámara que el 16:9, en vertical: escenas de 1080×1920 en un
+**recorrido descendente tipo feed** (~21.000 px de alto) con vaivén lateral y
+rotaciones alternadas. Ruta punteada, palabras ambientales, teléfono compartido
+fijo a la cámara, y **plano final que muestra todo el recorrido**. Se graba en
+una ventana 9:16 (o se recorta a 9:16 en edición).
 
 ### Anti-recorte (ambos decks)
 
