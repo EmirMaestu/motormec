@@ -73,9 +73,38 @@ Logo M se dibuja · "Empezá hoy." por palabras · bajada · "momec.pro" en lima
 
 ## Transiciones entre slides
 
-- **Depth crossfade** por defecto: la saliente se aleja (scale 0.99 + fade), la
-  entrante llega desde el fondo (scale 1.02→1 + fade). Sin cortes secos.
-- **Shared element:** cuando el teléfono existe en dos slides seguidas, **no se
-  reinicia** — permanece y sólo cambia su contenido (crossfade + scroll).
-- **Fondo:** el gradiente del fondo **morfea** de tono entre escenas (deep / lime
-  / warm / dark) acompañando la narrativa.
+### Deck 16:9 — cámara espacial (`presentacion.html` + `engine-camera.js`)
+
+No hay "slides": hay un **lienzo gigante** (~19.000×3.000 px) con las escenas
+colocadas en posiciones y rotaciones distintas, unidas por una **ruta punteada**
+y sobrevoladas por palabras ambientales gigantes. La "cámara" es un transform
+sobre el mundo:
+
+- **Vuelo con pull-back:** entre escenas la cámara **se aleja a mitad de vuelo**
+  (zoom out proporcional a la distancia), viaja y vuelve a acercarse — el gesto
+  Prezi, con curvas propias (`cubic-bezier(.5,0,.4,1)` → `(.55,0,.3,1)`).
+- **Rotación compensada:** cada escena vive rotada (−8°…+6°); la cámara aterriza
+  derecha, así el viaje describe arcos y el aterrizaje queda siempre recto.
+- **Zoom continuity:** escenas más chicas (la palabra "presupuestos") = cámara
+  más cerca; escenas anchas (tríptico, planes) = plano abierto.
+- **Coreografía al llegar:** cada escena recibe `--arr` (≈55% del vuelo); su
+  secuencia interna arranca cuando la cámara está aterrizando, nunca antes.
+- **Memoria del recorrido:** las escenas visitadas quedan `.played` (contenido
+  visible, atenuado). El **plano final se aleja y muestra todo el camino
+  recorrido** con el cierre "Todo tu taller. Un solo lugar."
+- **Shared element:** el teléfono está **fijo a la cámara** (no al lienzo): en
+  los viajes entre escenas hero, el mundo vuela detrás y el teléfono permanece,
+  cambiando su pantalla por crossfade.
+
+### Deck 9:16 (`presentacion-redes.html` + `engine.js`)
+
+- **Depth crossfade** entre escenas (scale + fade, sin cortes secos).
+- **Shared element:** teléfono único persistente con crossfade de pantalla.
+- **Fondo:** el gradiente **morfea** de tono entre escenas (deep/lime/warm/dark).
+
+### Anti-recorte (ambos decks)
+
+Las capturas se ajustan **por ancho** (`width:100%; height:auto`) — es imposible
+el recorte horizontal — y el scroll interno es `translateY` hasta
+`calc(100cqh − 100%)` (container queries), con guarda `min(0px, …)` para
+imágenes más cortas que la pantalla.

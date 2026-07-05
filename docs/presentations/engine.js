@@ -85,9 +85,9 @@
     const img = incoming.querySelector("img");
     if (img.getAttribute("src") !== src) img.src = src;
     img.style.animation = "none";
+    img.style.transform = "translateY(0)";
     void img.offsetWidth;
     if (panSecs && !reduce) img.style.animation = `pan ${panSecs}s linear .4s both`;
-    else img.style.objectPosition = "50% 0%";
     incoming.style.opacity = "1";
     if (outgoing && outgoing !== incoming) outgoing.style.opacity = "0";
     curLayer = incoming;

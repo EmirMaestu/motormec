@@ -49,14 +49,15 @@
   .phone{height:100%;max-height:100%;width:auto;max-width:86%;aspect-ratio:.462;border-radius:8%/3.8%;background:#0a0f0c;padding:2.4%;position:relative;
     box-shadow:0 0 0 2px #16261d,0 3vh 9vh rgba(0,0,0,.7),0 0 10vh var(--glow)}
   .phone::after{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(200,241,105,.4)}
-  .screen{width:100%;height:100%;border-radius:6.6%/3.2%;overflow:hidden;background:#eef2e3}
-  .screen img{width:100%;height:100%;object-fit:cover;object-position:50% 0%;display:block}
+  /* La imagen se ajusta por ANCHO (nunca recorta horizontal); el scroll es translateY */
+  .screen{width:100%;height:100%;border-radius:6.6%/3.2%;overflow:hidden;background:#eef2e3;container-type:size}
+  .screen img{width:100%;height:auto;display:block}
   .phone.enter{opacity:0;transform:translateY(4vh) scale(.94)}
   .active .phone.enter{animation:pin .9s var(--ease) .1s forwards}
   @keyframes pin{to{opacity:1;transform:none}}
   .active .phone.pan .screen img{animation:pan var(--pan,7s) linear .4s both}
-  @keyframes pan{0%{object-position:50% 0%}14%{object-position:50% 0%}100%{object-position:50% 100%}}
-  .active .phone.pdf .screen img{object-fit:contain;background:#fff}
+  @keyframes pan{0%,14%{transform:translateY(0)}100%{transform:translateY(min(0px,calc(100cqh - 100%)))}}
+  .phone.pdf .screen img,.active .phone.pdf .screen img{width:100%;height:100%;object-fit:contain;background:#fff}
 
   /* Shared element: teléfono ÚNICO que persiste entre escenas (crossfade de la app) */
   #sphone{position:absolute;left:50%;top:53.5%;height:56%;aspect-ratio:.462;z-index:2;
@@ -66,10 +67,10 @@
     transition:opacity .55s var(--ease),transform .8s var(--ease),box-shadow .8s var(--ease)}
   #sphone.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
   #sphone::after{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(200,241,105,.4)}
-  #sphone .screen{position:relative;width:100%;height:100%;border-radius:6.6%/3.2%;overflow:hidden;background:#eef2e3}
+  #sphone .screen{position:relative;width:100%;height:100%;border-radius:6.6%/3.2%;overflow:hidden;background:#eef2e3;container-type:size}
   #sphone .layer{position:absolute;inset:0;opacity:0;transition:opacity .65s var(--ease)}
-  #sphone .layer img{width:100%;height:100%;object-fit:cover;object-position:50% 0%;display:block}
-  #sphone.pdf .layer img{object-fit:contain;background:#fff}
+  #sphone .layer img{width:100%;height:auto;display:block}
+  #sphone.pdf .layer img{width:100%;height:100%;object-fit:contain;background:#fff}
 
   /* Chat vertical */
   .chat{width:94%;background:#0c1712dd;border:1px solid #1c2c22;border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 3vh 9vh rgba(0,0,0,.6)}
