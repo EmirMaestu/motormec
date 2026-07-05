@@ -55,7 +55,7 @@ export function DashboardPage() {
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <h2 className="font-display text-[22px] text-deep-forest mb-3">
             {data.role === "admin" ? "Vehículos en el taller" : "Mis vehículos"}
