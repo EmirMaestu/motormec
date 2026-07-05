@@ -20,9 +20,18 @@ function todayDate(): string {
   return argYmd();
 }
 
-function computeTotals(parts: OrderPart[], laborCost: number) {
+function computeTotals(
+  parts: OrderPart[],
+  laborCost: number,
+  discountAmount = 0,
+  taxRate = 0,
+) {
   const partsCost = parts.reduce((s, p) => s + (p.unitPrice ?? 0) * (p.quantity ?? 0), 0);
-  return { partsCost, total: partsCost + laborCost };
+  const subtotal = partsCost + laborCost;
+  const base = Math.max(0, subtotal - discountAmount);
+  const taxAmount = Math.round((base * taxRate) / 10000);
+  const total = base + taxAmount;
+  return { partsCost, subtotal, discountAmount, taxRate, taxAmount, total };
 }
 
 /** Next per-tenant order number (sequential, gap-tolerant). */
@@ -43,6 +52,8 @@ export interface CreateOrderInput {
   services?: string[];
   parts?: OrderPart[];
   laborCost?: number;
+  discountAmount?: number;
+  taxRate?: number;
   mileage?: number | null;
   notes?: string;
   estimatedDate?: string | null;
@@ -97,7 +108,12 @@ export async function createOrder(
 
   const parts = input.parts ?? [];
   const laborCost = input.laborCost ?? 0;
-  const { partsCost, total } = computeTotals(parts, laborCost);
+  const { partsCost, subtotal, discountAmount, taxRate, taxAmount, total } = computeTotals(
+    parts,
+    laborCost,
+    input.discountAmount ?? 0,
+    input.taxRate ?? 0,
+  );
 
   const order = await tdb.insertOne(workOrders, {
     number: await nextNumber(tdb),
@@ -111,6 +127,10 @@ export async function createOrder(
     parts,
     laborCost,
     partsCost,
+    subtotal,
+    discountAmount,
+    taxRate,
+    taxAmount,
     total,
     mileage: input.mileage ?? null,
     notes: input.notes ?? null,
@@ -135,6 +155,8 @@ export interface UpdateOrderInput {
   services?: string[];
   parts?: OrderPart[];
   laborCost?: number;
+  discountAmount?: number;
+  taxRate?: number;
   notes?: string;
   estimatedDate?: string | null;
   mileage?: number | null;
@@ -163,13 +185,22 @@ export async function updateOrder(
 
   const parts = input.parts ?? existing.parts;
   const laborCost = input.laborCost ?? existing.laborCost;
-  const { partsCost, total } = computeTotals(parts, laborCost);
+  const { partsCost, subtotal, discountAmount, taxRate, taxAmount, total } = computeTotals(
+    parts,
+    laborCost,
+    input.discountAmount ?? existing.discountAmount ?? 0,
+    input.taxRate ?? existing.taxRate ?? 0,
+  );
 
   const patch: Record<string, unknown> = {
     ...input,
     parts,
     laborCost,
     partsCost,
+    subtotal,
+    discountAmount,
+    taxRate,
+    taxAmount,
     total,
     updatedAt: new Date(),
   };
@@ -303,7 +334,12 @@ export async function createOrderForVehicle(
   },
 ): Promise<WorkOrder> {
   const laborCost = input.laborCost ?? 0;
-  const { partsCost, total } = computeTotals([], laborCost);
+  const { partsCost, subtotal, discountAmount, taxRate, taxAmount, total } = computeTotals(
+    [],
+    laborCost,
+    0,
+    0,
+  );
   const customer = vehicle.customerId ? await tdb.findById(customers, vehicle.customerId) : null;
   return tdb.insertOne(workOrders, {
     number: await nextNumber(tdb),
@@ -317,6 +353,10 @@ export async function createOrderForVehicle(
     parts: [],
     laborCost,
     partsCost,
+    subtotal,
+    discountAmount,
+    taxRate,
+    taxAmount,
     total,
     mileage: input.mileage ?? null,
     entryDate: input.entryDate ?? vehicle.entryDate,

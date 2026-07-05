@@ -5,6 +5,7 @@ import { createTenant } from "../src/db/admin.js";
 import { forTenant, type TenantDb } from "../src/db/scope.js";
 import { products, transactions, vehicles, workOrders } from "../src/db/schema.js";
 import { createOrder, finalizeOrder, updateOrder } from "../src/domain/orders.js";
+import { createQuote } from "../src/domain/quotes.js";
 import { registrarPago } from "../src/domain/payments.js";
 import { resetDb } from "./helpers.js";
 
@@ -51,6 +52,41 @@ describe("work orders", () => {
     });
     expect(order.partsCost).toBe(10000);
     expect(order.total).toBe(30000);
+  });
+
+  it("applies IVA on the subtotal (taxRate in basis points)", async () => {
+    const order = await createOrder(tdb, actor, {
+      plate: "IVA100",
+      laborCost: 10000,
+      taxRate: 2100, // 21%
+    });
+    expect(order.subtotal).toBe(10000);
+    expect(order.discountAmount).toBe(0);
+    expect(order.taxRate).toBe(2100);
+    expect(order.taxAmount).toBe(2100);
+    expect(order.total).toBe(12100);
+  });
+
+  it("applies a global discount before IVA", async () => {
+    const order = await createOrder(tdb, actor, {
+      plate: "DSC100",
+      laborCost: 10000,
+      discountAmount: 1000,
+      taxRate: 2100, // 21% over base 9000
+    });
+    expect(order.subtotal).toBe(10000);
+    expect(order.discountAmount).toBe(1000);
+    expect(order.taxAmount).toBe(1890); // round(9000 * 2100 / 10000)
+    expect(order.total).toBe(10890); // 9000 + 1890
+  });
+
+  it("backward-compat: taxRate 0 and no discount keeps total = subtotal", async () => {
+    const order = await createOrder(tdb, actor, { plate: "BWC100", laborCost: 10000 });
+    expect(order.subtotal).toBe(10000);
+    expect(order.discountAmount).toBe(0);
+    expect(order.taxRate).toBe(0);
+    expect(order.taxAmount).toBe(0);
+    expect(order.total).toBe(10000);
   });
 
   it("finalize deducts inventory stock, logs movement, marks delivered (no income until paid)", async () => {
@@ -243,5 +279,35 @@ describe("work orders", () => {
     await expect(
       updateOrder(tdb, order.id, { laborCost: 99999 }),
     ).rejects.toThrow(/finalizada/i);
+  });
+});
+
+describe("quote totals (discount + IVA)", () => {
+  const items = [{ description: "Repuesto", quantity: 1, unitPrice: 10000 }];
+
+  it("applies IVA on the subtotal", async () => {
+    const q = await createQuote(tdb, "Test", { items, taxRate: 2100 });
+    expect(q.subtotal).toBe(10000);
+    expect(q.discountAmount).toBe(0);
+    expect(q.taxRate).toBe(2100);
+    expect(q.taxAmount).toBe(2100);
+    expect(q.total).toBe(12100);
+  });
+
+  it("applies a global discount before IVA", async () => {
+    const q = await createQuote(tdb, "Test", { items, discountAmount: 1000, taxRate: 2100 });
+    expect(q.subtotal).toBe(10000);
+    expect(q.discountAmount).toBe(1000);
+    expect(q.taxAmount).toBe(1890); // round(9000 * 2100 / 10000)
+    expect(q.total).toBe(10890); // 9000 + 1890
+  });
+
+  it("backward-compat: no discount and taxRate 0 keeps total = subtotal", async () => {
+    const q = await createQuote(tdb, "Test", { items });
+    expect(q.subtotal).toBe(10000);
+    expect(q.discountAmount).toBe(0);
+    expect(q.taxRate).toBe(0);
+    expect(q.taxAmount).toBe(0);
+    expect(q.total).toBe(10000);
   });
 });

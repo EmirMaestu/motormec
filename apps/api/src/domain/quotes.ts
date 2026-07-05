@@ -19,13 +19,28 @@ export interface CreateQuoteInput {
   vehiclePlate?: string;
   vehicleInfo?: string;
   items: QuoteItem[];
+  discountAmount?: number;
+  taxRate?: number;
   notes?: string;
   validUntil?: string;
 }
 
-function computeTotals(items: QuoteItem[]): { subtotal: number; total: number } {
+function computeTotals(
+  items: QuoteItem[],
+  discountAmount = 0,
+  taxRate = 0,
+): {
+  subtotal: number;
+  discountAmount: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+} {
   const subtotal = items.reduce((s, i) => s + (i.quantity || 0) * (i.unitPrice || 0), 0);
-  return { subtotal, total: subtotal };
+  const base = Math.max(0, subtotal - discountAmount);
+  const taxAmount = Math.round((base * taxRate) / 10000);
+  const total = base + taxAmount;
+  return { subtotal, discountAmount, taxRate, taxAmount, total };
 }
 
 async function nextNumber(tdb: TenantDb): Promise<number> {
@@ -48,7 +63,11 @@ export async function createQuote(
       phone = phone || c.phone;
     }
   }
-  const { subtotal, total } = computeTotals(input.items);
+  const { subtotal, discountAmount, taxRate, taxAmount, total } = computeTotals(
+    input.items,
+    input.discountAmount ?? 0,
+    input.taxRate ?? 0,
+  );
   return tdb.insertOne(presupuestos, {
     number: await nextNumber(tdb),
     customerId: input.customerId ?? null,
@@ -59,6 +78,9 @@ export async function createQuote(
     items: input.items,
     notes: input.notes ?? null,
     subtotal,
+    discountAmount,
+    taxRate,
+    taxAmount,
     total,
     validUntil: input.validUntil ?? null,
     createdByName: actorName,
