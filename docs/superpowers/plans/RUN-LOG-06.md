@@ -34,6 +34,23 @@
 $42.000, estado "parcial", ingreso de $20.000 creado, deuda del cliente $42.000. Backend 138
 tests verdes, frontend build verde, montos en pantalla correctos (centavos→pesos).
 
+### PAY-2 (IVA + descuentos) — decisiones
+- **Alícuotas habilitadas: 21% (general) y 0% (exento/Monotributo).**
+- **Precios NETOS + IVA aparte:** el precio cargado es sin IVA; el IVA se calcula sobre el neto
+  y se muestra desglosado (Subtotal / Descuento / IVA / Total).
+- **Descuento GLOBAL** sobre el total (monto o %).
+- Implementación: `taxRate` en basis points (2100 = 21%, 0 = exento). **Default DB/dominio = 0**
+  (backward-compat con los tests existentes); el **frontend** propone 21% por defecto en docs nuevos.
+  Cálculo: `base = subtotal - descuento`; `iva = round(base * taxRate/10000)`; `total = base + iva`.
+
+Sub-tareas PAY-2:
+| # | Sub-tarea | Estado | Commit |
+|---|---|---|---|
+| 2a | Schema: `discount_amount`/`tax_rate`/`tax_amount` (+`subtotal` en work_orders) + migración | pendiente | — |
+| 2b | Dominio: computeTotals con descuento+IVA (quotes y orders) + tests | pendiente | — |
+| 2c | Rutas: aceptar discount/taxRate + desglose en quotePdf | pendiente | — |
+| 2d | Frontend: selector IVA (21/0) + descuento global + desglose | pendiente | — |
+
 ## Próximas decisiones (cuando lleguemos)
-- PAY-2 IVA/descuentos, PAY-5 presupuesto→orden, PAY-6 payouts socios.
+- PAY-5 presupuesto→orden, PAY-6 payouts socios.
 - Diferidas: PAY-3 Mercado Pago, PAY-4 AFIP (requieren credenciales + decisiones regulatorias).
