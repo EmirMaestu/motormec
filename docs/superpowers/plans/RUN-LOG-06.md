@@ -46,8 +46,8 @@ tests verdes, frontend build verde, montos en pantalla correctos (centavos→pes
 Sub-tareas PAY-2:
 | # | Sub-tarea | Estado | Commit |
 |---|---|---|---|
-| 2a | Schema: `discount_amount`/`tax_rate`/`tax_amount` (+`subtotal` en work_orders) + migración | pendiente | — |
-| 2b | Dominio: computeTotals con descuento+IVA (quotes y orders) + tests | pendiente | — |
+| 2a | Schema: `discount_amount`/`tax_rate`/`tax_amount` (+`subtotal` en work_orders) + migración | ✅ hecho | 03a4535 |
+| 2b | Dominio: computeTotals con descuento+IVA (quotes y orders) + tests | ✅ hecho | 00afb40 |
 | 2c | Rutas: aceptar discount/taxRate + desglose en quotePdf | pendiente | — |
 | 2d | Frontend: selector IVA (21/0) + descuento global + desglose | pendiente | — |
 
