@@ -58,6 +58,19 @@
   @keyframes pan{0%{object-position:50% 0%}14%{object-position:50% 0%}100%{object-position:50% 100%}}
   .active .phone.pdf .screen img{object-fit:contain;background:#fff}
 
+  /* Shared element: teléfono ÚNICO que persiste entre escenas (crossfade de la app) */
+  #sphone{position:absolute;left:50%;top:53.5%;height:56%;aspect-ratio:.462;z-index:2;
+    transform:translate(-50%,-50%) scale(.9);opacity:0;pointer-events:none;
+    border-radius:8%/3.8%;background:#0a0f0c;padding:1.1vh;
+    box-shadow:0 0 0 2px #16261d,0 3vh 9vh rgba(0,0,0,.7),0 0 11vh var(--glow);
+    transition:opacity .55s var(--ease),transform .8s var(--ease),box-shadow .8s var(--ease)}
+  #sphone.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  #sphone::after{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(200,241,105,.4)}
+  #sphone .screen{position:relative;width:100%;height:100%;border-radius:6.6%/3.2%;overflow:hidden;background:#eef2e3}
+  #sphone .layer{position:absolute;inset:0;opacity:0;transition:opacity .65s var(--ease)}
+  #sphone .layer img{width:100%;height:100%;object-fit:cover;object-position:50% 0%;display:block}
+  #sphone.pdf .layer img{object-fit:contain;background:#fff}
+
   /* Chat vertical */
   .chat{width:94%;background:#0c1712dd;border:1px solid #1c2c22;border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 3vh 9vh rgba(0,0,0,.6)}
   .bub{max-width:86%;padding:11px 14px;border-radius:15px;font-size:2.5vh;line-height:1.32;opacity:0}
@@ -86,6 +99,12 @@
 <div id="frame">
   <div class="bg"></div><div class="grain"></div><div id="bar"></div>
 
+  <!-- Teléfono compartido (persiste entre escenas; su pantalla hace crossfade) -->
+  <div id="sphone"><div class="screen">
+    <div class="layer"><img alt=""></div>
+    <div class="layer"><img alt=""></div>
+  </div></div>
+
   <section class="scene" data-dur="4200" data-bg="deep">
     <div class="top"></div>
     <div class="mid"><div>
@@ -95,9 +114,9 @@
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.5s">El taller, <span class="lime">en tu celular.</span></p></div>
   </section>
 
-  <section class="scene" data-dur="4800" data-bg="lime">
+  <section class="scene" data-dur="4800" data-bg="lime" data-screen="screenshots/m02-dashboard.png" data-pan="6.5">
     <div class="top"><div class="eyebrow kin" data-split="word">Todo en un lugar</div><h2 class="wipe">Tu taller,<br><span class="lime">ordenado.</span></h2></div>
-    <div class="mid"><div class="phone enter pan" style="--pan:6.5s"><div class="screen"><img src="screenshots/m02-dashboard.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Autos, órdenes, finanzas — de un vistazo.</p></div>
   </section>
 
@@ -112,33 +131,33 @@
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.3s">Hablándole normal. Sin abrir la compu.</p></div>
   </section>
 
-  <section class="scene" data-dur="4600" data-bg="lime">
+  <section class="scene" data-dur="4600" data-bg="lime" data-screen="screenshots/m10-presupuesto-pdf.png" data-pdf>
     <div class="top"><div class="eyebrow kin" data-split="word">Con tu marca</div><h2 class="wipe">El PDF, <span class="lime">con tu logo.</span></h2></div>
-    <div class="mid"><div class="phone enter pdf"><div class="screen"><img src="screenshots/m10-presupuesto-pdf.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Listo para reenviarle al cliente.</p></div>
   </section>
 
-  <section class="scene" data-dur="4600" data-bg="lime">
+  <section class="scene" data-dur="4600" data-bg="lime" data-screen="screenshots/m03-vehiculos.png" data-pan="6">
     <div class="top"><div class="eyebrow kin" data-split="word">Cargá un auto</div><h2 class="wipe">Aparece <span class="lime">solo.</span></h2></div>
-    <div class="mid"><div class="phone enter pan" style="--pan:6s"><div class="screen"><img src="screenshots/m03-vehiculos.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Estado, fotos e historial de cada uno.</p></div>
   </section>
 
-  <section class="scene" data-dur="4600" data-bg="lime">
+  <section class="scene" data-dur="4600" data-bg="lime" data-screen="screenshots/m04-ordenes.png" data-pan="6">
     <div class="top"><div class="eyebrow kin" data-split="word">Órdenes</div><h2 class="wipe">Seguí <span class="lime">cada trabajo.</span></h2></div>
-    <div class="mid"><div class="phone enter pan" style="--pan:6s"><div class="screen"><img src="screenshots/m04-ordenes.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">De ingresado a entregado, sin perder nada.</p></div>
   </section>
 
-  <section class="scene" data-dur="4600" data-bg="lime">
+  <section class="scene" data-dur="4600" data-bg="lime" data-screen="screenshots/m07-finanzas.png" data-pan="6">
     <div class="top"><div class="eyebrow kin" data-split="word">Finanzas</div><h2 class="wipe">La plata <span class="lime">entra sola.</span></h2></div>
-    <div class="mid"><div class="phone enter pan" style="--pan:6s"><div class="screen"><img src="screenshots/m07-finanzas.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Entregás un auto y se registra el ingreso.</p></div>
   </section>
 
-  <section class="scene" data-dur="4400" data-bg="deep">
+  <section class="scene" data-dur="4400" data-bg="deep" data-screen="screenshots/m02-dashboard.png">
     <div class="top"><div class="eyebrow kin" data-split="word">En tu celular</div><h2 class="wipe">Se instala<br><span class="lime">como app.</span></h2></div>
-    <div class="mid"><div class="phone enter" style="transform:none"><div class="screen"><img src="screenshots/m02-dashboard.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Sin Play Store. Un ícono en tu inicio.</p></div>
   </section>
 

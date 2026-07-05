@@ -73,6 +73,37 @@
     });
   }
 
+  /* Shared element: un teléfono persistente cuyo contenido (la app) hace
+   * crossfade entre escenas → continuidad cinematográfica (no reaparece). */
+  const sphone = document.getElementById("sphone");
+  let curLayer = null;
+  function setScreen(src, panSecs) {
+    if (!sphone) return;
+    const layers = sphone.querySelectorAll(".layer");
+    const incoming = curLayer === layers[0] ? layers[1] : layers[0];
+    const outgoing = curLayer;
+    const img = incoming.querySelector("img");
+    if (img.getAttribute("src") !== src) img.src = src;
+    img.style.animation = "none";
+    void img.offsetWidth;
+    if (panSecs && !reduce) img.style.animation = `pan ${panSecs}s linear .4s both`;
+    else img.style.objectPosition = "50% 0%";
+    incoming.style.opacity = "1";
+    if (outgoing && outgoing !== incoming) outgoing.style.opacity = "0";
+    curLayer = incoming;
+  }
+  /** Ajusta el teléfono compartido según la escena (persiste entre escenas). */
+  function syncPhone(scene) {
+    if (!sphone) return;
+    if (scene.dataset.screen) {
+      sphone.classList.toggle("pdf", scene.hasAttribute("data-pdf"));
+      sphone.classList.add("on");
+      setScreen(scene.dataset.screen, parseFloat(scene.dataset.pan) || 0);
+    } else {
+      sphone.classList.remove("on");
+    }
+  }
+
   let i = 0, timer = null, t0 = 0, dur = 0, raf = null, playing = true, leaveT = null;
 
   function applyBg(name) {
@@ -103,6 +134,7 @@
     void cur.offsetWidth; // reinicia animaciones
     cur.classList.remove("leaving");
     cur.classList.add("active");
+    syncPhone(cur);
     runCounts(cur);
     dur = +cur.dataset.dur || 5000;
     t0 = performance.now();

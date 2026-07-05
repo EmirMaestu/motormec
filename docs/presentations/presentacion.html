@@ -80,6 +80,23 @@
   .row{display:flex;gap:5vmin;align-items:center;justify-content:center;flex-wrap:wrap}
   .txtcol{text-align:left;max-width:min(44ch,42vw)}
 
+  /* Shared element: teléfono ÚNICO reutilizado entre escenas (crossfade + scroll) */
+  #sphone{position:fixed;left:26%;top:50%;width:clamp(268px,37vmin,398px);aspect-ratio:.462;z-index:2;
+    transform:translate(-50%,-50%) scale(.9);opacity:0;pointer-events:none;
+    border-radius:8%/3.8%;background:#0a0f0c;padding:2.2%;
+    box-shadow:0 0 0 2px #16261d,0 40px 110px rgba(0,0,0,.7),0 0 90px var(--glow);
+    transition:opacity .5s var(--ease),transform .85s var(--ease)}
+  #sphone.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  #sphone::after{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(200,241,105,.4)}
+  #sphone .screen{position:relative;width:100%;height:100%;border-radius:6.6%/3.2%;overflow:hidden;background:#eef2e3}
+  #sphone .layer{position:absolute;inset:0;opacity:0;transition:opacity .6s var(--ease)}
+  #sphone .layer img{width:100%;height:100%;object-fit:cover;object-position:50% 0%;display:block}
+  #sphone.pdf .layer img{object-fit:contain;background:#fff}
+  #sphone.on{animation:flo 6s ease-in-out 1s infinite}
+  /* En escenas "hero" el texto ocupa la mitad derecha (deja libre el teléfono) */
+  .scene.hero{place-items:center end}
+  .scene.hero .wrap{width:auto;max-width:min(560px,44vw);margin-right:5vw;text-align:left}
+
   /* Chat */
   .chat{width:min(540px,86vw);background:#0c1712cc;border:1px solid #1c2c22;border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 30px 90px rgba(0,0,0,.6);backdrop-filter:blur(6px)}
   .bub{max-width:82%;padding:12px 15px;border-radius:16px;font-size:clamp(14px,2vmin,19px);line-height:1.35;opacity:0}
@@ -119,6 +136,10 @@
 </head>
 <body>
 <div class="bg"></div><div class="grain"></div><div id="bar"></div>
+<div id="sphone"><div class="screen">
+  <div class="layer"><img alt=""></div>
+  <div class="layer"><img alt=""></div>
+</div></div>
 <div id="stage">
 
   <section class="scene" data-dur="5200" data-bg="deep">
@@ -136,16 +157,11 @@
     </div>
   </section>
 
-  <section class="scene" data-dur="8500" data-bg="lime">
+  <section class="scene hero" data-dur="8500" data-bg="lime" data-screen="screenshots/m02-dashboard.png" data-pan="6.5">
     <div class="wrap">
-      <div class="row">
-        <div class="phone pop float tilt pan" style="--pan:6.5s"><div class="screen"><img src="screenshots/m02-dashboard.png" alt=""></div></div>
-        <div class="txtcol">
-          <div class="eyebrow kin" data-split="word">En tu bolsillo</div>
-          <h2 class="wipe">Todo tu taller,<br>en el <span class="lime">celular.</span></h2>
-          <p class="lead kin" data-split="word" style="--d:.7s">Qué autos hay, cuánto entró hoy, qué está en reparación. De un vistazo.</p>
-        </div>
-      </div>
+      <div class="eyebrow kin" data-split="word">En tu bolsillo</div>
+      <h2 class="wipe">Todo tu taller,<br>en el <span class="lime">celular.</span></h2>
+      <p class="lead kin" data-split="word" style="--d:.7s">Qué autos hay, cuánto entró hoy, qué está en reparación. De un vistazo.</p>
     </div>
   </section>
 
@@ -191,15 +207,10 @@
     </div>
   </section>
 
-  <section class="scene" data-dur="5600" data-bg="deep">
+  <section class="scene hero" data-dur="5600" data-bg="deep" data-screen="screenshots/m02-dashboard.png" data-pan="5">
     <div class="wrap">
-      <div class="row">
-        <div class="phone pop float tilt pan" style="--pan:5s"><div class="screen"><img src="screenshots/m02-dashboard.png" alt=""></div></div>
-        <div class="txtcol">
-          <h2 class="wipe">Se instala <span class="lime">como app.</span></h2>
-          <p class="lead kin" data-split="word" style="--d:.5s">Sin Play Store, sin ocupar lugar. Un ícono en la pantalla de inicio.</p>
-        </div>
-      </div>
+      <h2 class="wipe">Se instala <span class="lime">como app.</span></h2>
+      <p class="lead kin" data-split="word" style="--d:.5s">Sin Play Store, sin ocupar lugar. Un ícono en la pantalla de inicio.</p>
     </div>
   </section>
 
