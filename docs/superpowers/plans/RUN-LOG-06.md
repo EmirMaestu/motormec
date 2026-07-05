@@ -25,8 +25,8 @@
 
 | # | Sub-tarea | Estado | Commit |
 |---|---|---|---|
-| 1a | Schema: tabla `payments` + `work_orders.paid_amount` + migración | pendiente | — |
-| 1b | Dominio: `registrarPago` (ingreso por pago) + quitar ingreso de finalize/reopen/sync + tests | pendiente | — |
+| 1a | Schema: tabla `payments` + `work_orders.paid_amount` + migración | ✅ hecho | 47ce3a4 |
+| 1b | Dominio: `registrarPago` (ingreso por pago) + quitar ingreso de finalize/reopen/sync + tests | ✅ hecho | 2b40029 |
 | 1c | Rutas: POST/GET `/api/orders/:id/payments` + GET `/api/customers/:id/balance` | pendiente | — |
 | 1d | Frontend: registrar pago + mostrar saldo/deuda (verificar en navegador) | pendiente | — |
 
