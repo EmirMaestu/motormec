@@ -493,10 +493,11 @@ describe("WhatsApp bot — comandos (editar/borrar)", () => {
     const { deps } = fakeDeps(EMPTY);
     await procesarMensaje(tdb, textMsg("k3", `km #${order.number} 50000`), deps);
     expect((await tdb.findById(workOrders, order.id))?.mileage).toBe(50000);
+    // "25000" es en PESOS; el dinero se guarda en CENTAVOS (×100) → $25.000.
     await procesarMensaje(tdb, textMsg("k4", `mano de obra #${order.number} 25000`), deps);
     const o = await tdb.findById(workOrders, order.id);
-    expect(o?.laborCost).toBe(25000);
-    expect(o?.total).toBe(25000);
+    expect(o?.laborCost).toBe(2500000);
+    expect(o?.total).toBe(2500000);
   });
 
   it("un ingreso normal NO se interpreta como comando", async () => {
@@ -515,11 +516,12 @@ describe("WhatsApp presupuesto formatting", () => {
       customerName: "Juan",
       vehiclePlate: "AB123CD",
       vehicleInfo: "Ford Focus",
+      // Montos en CENTAVOS (el dinero se guarda ×100); fmtMoney los muestra en pesos.
       items: [
-        { description: "Pastillas", quantity: 1, unitPrice: 15000 },
-        { description: "Mano de obra", quantity: 2, unitPrice: 4000 },
+        { description: "Pastillas", quantity: 1, unitPrice: 1500000 },
+        { description: "Mano de obra", quantity: 2, unitPrice: 400000 },
       ],
-      total: 23000,
+      total: 2300000,
       validUntil: null,
       notes: null,
     });

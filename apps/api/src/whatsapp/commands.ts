@@ -100,8 +100,11 @@ export async function ejecutarComando(tdb: TenantDb, cmd: BotCommand): Promise<s
       await updateOrder(tdb, order.id, { mileage: cmd.amount });
       return `✏️ Orden #${cmd.number} → ${cmd.amount} km.`;
     case "mano_obra": {
-      const updated = await updateOrder(tdb, order.id, { laborCost: cmd.amount });
-      return `✏️ Orden #${cmd.number} → mano de obra $${cmd.amount}. Total: $${updated?.total ?? "?"}.`;
+      // El usuario dicta PESOS; el dinero se guarda en CENTAVOS (×100).
+      const pesos = cmd.amount ?? 0;
+      const updated = await updateOrder(tdb, order.id, { laborCost: Math.round(pesos * 100) });
+      const money = (c: number) => Math.round((c ?? 0) / 100).toLocaleString("es-AR");
+      return `✏️ Orden #${cmd.number} → mano de obra $${pesos.toLocaleString("es-AR")}. Total: $${money(updated?.total ?? 0)}.`;
     }
   }
 }

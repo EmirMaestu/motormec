@@ -169,7 +169,9 @@ const TOOLS: Anthropic.Tool[] = [
 const ENTREGADOS = new Set(["Entregado", "Suspendido"]);
 
 function fmtMoney(n: number): string {
-  return `$ ${Math.round(n).toLocaleString("es-AR")}`;
+  // `n` viene en CENTAVOS (el dinero se guarda como entero de centavos); se
+  // muestra en pesos dividiendo por 100.
+  return `$ ${Math.round((n ?? 0) / 100).toLocaleString("es-AR")}`;
 }
 
 /** Presupuesto formateado para WhatsApp (negritas *…*, itálicas _…_). Verbatim. */
@@ -231,9 +233,9 @@ export async function ejecutarTool(
         modelo: sanitizeToolText(v.model, 40),
         estado: v.status,
         dueño: sanitizeToolText(v.owner, 80),
-        costo: v.cost,
+        costo: fmtMoney(v.cost),
         ultimaOrden: last
-          ? { numero: last.number, estado: last.status, total: last.total }
+          ? { numero: last.number, estado: last.status, total: fmtMoney(last.total) }
           : null,
       });
     }
@@ -281,7 +283,7 @@ export async function ejecutarTool(
         numero: o.number,
         patente: sanitizeToolText(o.vehiclePlate, 10),
         estado: o.status,
-        total: o.total,
+        total: fmtMoney(o.total),
         servicios: Array.isArray(o.services)
           ? o.services.map((s) => sanitizeToolText(String(s), 120))
           : o.services,
@@ -373,7 +375,9 @@ export async function ejecutarTool(
           return {
             description: String(o.descripcion ?? "").trim(),
             quantity: Number(o.cantidad) || 1,
-            unitPrice: Number(o.precio) || 0,
+            // El usuario dicta PESOS ("pastillas 15000"); el dinero se guarda en
+            // CENTAVOS, así que convertimos ×100.
+            unitPrice: Math.round((Number(o.precio) || 0) * 100),
           };
         })
         .filter((i) => i.description);
@@ -395,7 +399,7 @@ export async function ejecutarTool(
         ok: true,
         id: quote.id,
         presupuesto: quote.number,
-        total: quote.total,
+        total: fmtMoney(quote.total),
         documento,
         nota: "El presupuesto YA se le envía al usuario en un mensaje aparte. Confirmá en UNA línea (ej: 'Listo, te paso el presupuesto 👇') SIN repetir los ítems ni el total.",
       });
