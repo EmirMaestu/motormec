@@ -1,16 +1,20 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { TenantDb } from "../db/scope.js";
 import { db } from "../db/client.js";
 import {
   customers,
   presupuestos,
   tenants,
+  workOrders,
   type Presupuesto,
   type QuoteItem,
   type TenantSettings,
+  type WorkOrder,
 } from "../db/schema.js";
 import { localDisk } from "../storage/provider.js";
 import { renderQuotePdf } from "./quotePdf.js";
+import { createOrder } from "./orders.js";
+import type { Actor } from "./movements.js";
 
 export interface CreateQuoteInput {
   customerId?: string | null;
@@ -119,5 +123,85 @@ export async function buildQuotePdf(tenantId: string, quote: Presupuesto): Promi
     logo,
     currency: settings.currency ?? "ARS",
     quote,
+  });
+}
+
+/** Se lanza al intentar convertir un presupuesto que ya tiene orden. */
+export class QuoteAlreadyConvertedError extends Error {
+  constructor(public readonly workOrderId?: string) {
+    super("El presupuesto ya fue convertido en orden");
+    this.name = "QuoteAlreadyConvertedError";
+  }
+}
+
+export interface ConvertQuoteResult {
+  order: WorkOrder;
+  quote: Presupuesto;
+}
+
+/**
+ * Convierte un presupuesto aprobado en una orden de trabajo (PAY-5).
+ *
+ * Reusa `createOrder`, que resuelve/crea el vehículo (por patente) y el cliente
+ * (por nombre) y recalcula los totales — así el total de la orden queda idéntico
+ * al del presupuesto. Los ítems del presupuesto entran como repuestos NO de
+ * inventario (el presupuesto no separa mano de obra); se pueden reclasificar en
+ * la orden. El presupuesto queda `aceptado` con `workOrderId` mediante un claim
+ * atómico, que impide convertirlo dos veces.
+ *
+ * Devuelve `null` si el presupuesto no existe; lanza `QuoteAlreadyConvertedError`
+ * si ya fue convertido.
+ */
+export async function convertQuoteToOrder(
+  tdb: TenantDb,
+  actor: Actor,
+  quoteId: string,
+): Promise<ConvertQuoteResult | null> {
+  const quote = await tdb.findById(presupuestos, quoteId);
+  if (!quote) return null;
+  if (quote.workOrderId) throw new QuoteAlreadyConvertedError(quote.workOrderId);
+
+  return tdb.transaction(async (tx) => {
+    const parts = quote.items.map((i) => ({
+      productId: null,
+      name: i.description,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      fromInventory: false,
+    }));
+
+    // El presupuesto guarda la descripción del vehículo como texto ("Marca Modelo");
+    // se parte para poder crear el vehículo si la patente es nueva.
+    const [brand, ...rest] = (quote.vehicleInfo ?? "").trim().split(/\s+/);
+    const order = await createOrder(tx, actor, {
+      customerId: quote.customerId,
+      customerName: quote.customerName,
+      phone: quote.customerPhone ?? undefined,
+      plate: quote.vehiclePlate ?? undefined,
+      brand: brand || undefined,
+      model: rest.join(" ") || undefined,
+      parts,
+      laborCost: 0,
+      discountAmount: quote.discountAmount,
+      taxRate: quote.taxRate,
+      notes: quote.notes ?? undefined,
+    });
+
+    // Sin patente no hay vehículo vinculado: preservar la descripción en la orden.
+    if (!order.vehicleId && quote.vehicleInfo) {
+      await tx.updateById(workOrders, order.id, { vehicleInfo: quote.vehicleInfo });
+      order.vehicleInfo = quote.vehicleInfo;
+    }
+
+    // Claim atómico: marcar aceptado sólo si sigue sin orden (guard anti doble
+    // conversión). Si otra conversión ganó, esto no matchea y hacemos ROLLBACK.
+    const claimed = await tx.update(
+      presupuestos,
+      { status: "aceptado", workOrderId: order.id },
+      and(eq(presupuestos.id, quoteId), isNull(presupuestos.workOrderId)),
+    );
+    if (claimed.length === 0) throw new QuoteAlreadyConvertedError();
+
+    return { order, quote: claimed[0] as Presupuesto };
   });
 }

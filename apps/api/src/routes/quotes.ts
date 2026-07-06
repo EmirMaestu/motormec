@@ -76,6 +76,25 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ quote });
   });
 
+  // Convertir un presupuesto aprobado en orden de trabajo (PAY-5).
+  app.post("/api/quotes/:id/convert", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb, auth } = authed(request);
+    const { id } = request.params as { id: string };
+    const actor = { userId: auth.userId, userName: auth.userName };
+    try {
+      const result = await Q.convertQuoteToOrder(tenantDb, actor, id);
+      if (!result) return reply.code(404).send({ error: "not_found" });
+      return reply.code(201).send({ order: result.order, quote: result.quote });
+    } catch (e) {
+      if (e instanceof Q.QuoteAlreadyConvertedError) {
+        return reply
+          .code(409)
+          .send({ error: "already_converted", workOrderId: e.workOrderId });
+      }
+      throw e;
+    }
+  });
+
   app.delete("/api/quotes/:id", { preHandler: requireAuth }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const { id } = request.params as { id: string };

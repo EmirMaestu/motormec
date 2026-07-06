@@ -3,9 +3,13 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { pool } from "../src/db/client.js";
 import { createTenant } from "../src/db/admin.js";
 import { forTenant, type TenantDb } from "../src/db/scope.js";
-import { products, transactions, vehicles, workOrders } from "../src/db/schema.js";
+import { presupuestos, products, transactions, vehicles, workOrders } from "../src/db/schema.js";
 import { createOrder, finalizeOrder, updateOrder } from "../src/domain/orders.js";
-import { createQuote } from "../src/domain/quotes.js";
+import {
+  convertQuoteToOrder,
+  createQuote,
+  QuoteAlreadyConvertedError,
+} from "../src/domain/quotes.js";
 import { registrarPago } from "../src/domain/payments.js";
 import { resetDb } from "./helpers.js";
 
@@ -309,5 +313,71 @@ describe("quote totals (discount + IVA)", () => {
     expect(q.taxRate).toBe(0);
     expect(q.taxAmount).toBe(0);
     expect(q.total).toBe(10000);
+  });
+});
+
+describe("convert quote to order (PAY-5)", () => {
+  it("creates an order with the same items and total, and marks the quote accepted", async () => {
+    const quote = await createQuote(tdb, "Test", {
+      customerName: "Juan",
+      vehiclePlate: "QQ111QQ",
+      vehicleInfo: "Ford Focus",
+      items: [
+        { description: "Pastillas", quantity: 1, unitPrice: 15000 },
+        { description: "Mano de obra", quantity: 1, unitPrice: 8000 },
+      ],
+      taxRate: 2100, // 21%
+    });
+
+    const res = await convertQuoteToOrder(tdb, actor, quote.id);
+    expect(res).not.toBeNull();
+    const order = res!.order;
+
+    // Total idéntico al presupuesto (subtotal 23000 + IVA 21% = 27830).
+    expect(order.subtotal).toBe(quote.subtotal);
+    expect(order.taxAmount).toBe(quote.taxAmount);
+    expect(order.total).toBe(quote.total);
+    // Ítems → repuestos (no de inventario), mano de obra 0.
+    expect(order.parts).toHaveLength(2);
+    expect(order.parts.map((p) => p.name).sort()).toEqual(["Mano de obra", "Pastillas"]);
+    expect(order.parts.every((p) => p.fromInventory === false)).toBe(true);
+    expect(order.laborCost).toBe(0);
+    expect(order.partsCost).toBe(23000);
+    // Vehículo creado y vinculado por patente.
+    expect(order.vehicleId).toBeTruthy();
+    expect(order.vehiclePlate).toBe("QQ111QQ");
+
+    // Presupuesto aceptado con referencia a la orden.
+    const q = await tdb.findById(presupuestos, quote.id);
+    expect(q?.status).toBe("aceptado");
+    expect(q?.workOrderId).toBe(order.id);
+  });
+
+  it("links an existing vehicle by plate instead of duplicating it", async () => {
+    const existing = await createOrder(tdb, actor, { plate: "REUSE1", brand: "VW", model: "Gol" });
+    const quote = await createQuote(tdb, "Test", {
+      vehiclePlate: "reuse1", // distinta caja: debe matchear el vehículo existente
+      items: [{ description: "Service", quantity: 1, unitPrice: 10000 }],
+    });
+    const res = await convertQuoteToOrder(tdb, actor, quote.id);
+    expect(res!.order.vehicleId).toBe(existing.vehicleId);
+    expect(await tdb.count(vehicles)).toBe(1);
+  });
+
+  it("refuses to convert the same quote twice", async () => {
+    const quote = await createQuote(tdb, "Test", {
+      items: [{ description: "X", quantity: 1, unitPrice: 5000 }],
+    });
+    await convertQuoteToOrder(tdb, actor, quote.id);
+    await expect(convertQuoteToOrder(tdb, actor, quote.id)).rejects.toBeInstanceOf(
+      QuoteAlreadyConvertedError,
+    );
+    // No creó una segunda orden.
+    expect(await tdb.count(workOrders)).toBe(1);
+  });
+
+  it("returns null for a missing quote", async () => {
+    const res = await convertQuoteToOrder(tdb, actor, "00000000-0000-0000-0000-000000000000");
+    expect(res).toBeNull();
   });
 });

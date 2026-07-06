@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Printer, Trash2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { Plus, Printer, Trash2, Wrench } from "lucide-react";
+import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/toast";
 import { Modal } from "@/components/Modal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -33,6 +33,8 @@ interface Quote {
   validUntil?: string | null;
   createdByName?: string | null;
   createdAt: string;
+  status?: string | null;
+  workOrderId?: string | null;
 }
 
 export function QuotesPage() {
@@ -40,6 +42,7 @@ export function QuotesPage() {
   const toast = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Quote | null>(null);
+  const [confirmConvert, setConfirmConvert] = useState<Quote | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["quotes"],
@@ -54,6 +57,23 @@ export function QuotesPage() {
       toast.success("Presupuesto eliminado");
     },
     onError: () => toast.error("No se pudo eliminar"),
+  });
+
+  const convert = useMutation({
+    mutationFn: (id: string) =>
+      api.post<{ order: { number: number } }>(`/api/quotes/${id}/convert`),
+    onSuccess: (res) => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      toast.success(`Orden #${res.order.number} creada desde el presupuesto`);
+    },
+    onError: (e) =>
+      toast.error(
+        e instanceof ApiError && e.status === 409
+          ? "Ese presupuesto ya fue convertido en orden"
+          : "No se pudo convertir en orden",
+      ),
   });
 
   const print = usePrintQuote();
@@ -85,7 +105,16 @@ export function QuotesPage() {
           {
             header: "",
             cell: (q) => (
-              <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                {q.workOrderId ? (
+                  <span className="rounded-full bg-deep-forest/10 px-2 py-0.5 text-[11px] font-medium text-deep-forest">
+                    Convertido
+                  </span>
+                ) : (
+                  <Button size="sm" variant="ghost" title="Convertir en orden" onClick={() => setConfirmConvert(q)}>
+                    <Wrench size={15} />
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" onClick={() => print(q)}>
                   <Printer size={15} />
                 </Button>
@@ -104,7 +133,16 @@ export function QuotesPage() {
             </div>
             <CardRow label="Vehículo">{q.vehicleInfo || q.vehiclePlate || "—"}</CardRow>
             <CardRow label="Fecha">{formatDate(q.createdAt)}</CardRow>
-            <div className="flex gap-2 pt-1">
+            <div className="flex flex-wrap gap-2 pt-1">
+              {q.workOrderId ? (
+                <span className="self-center rounded-full bg-deep-forest/10 px-2 py-0.5 text-[12px] font-medium text-deep-forest">
+                  Convertido en orden
+                </span>
+              ) : (
+                <Button size="sm" variant="ghost" onClick={() => setConfirmConvert(q)}>
+                  <Wrench size={15} /> A orden
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => print(q)}>
                 <Printer size={15} /> PDF
               </Button>
@@ -140,6 +178,20 @@ export function QuotesPage() {
           setConfirmDelete(null);
         }}
         onCancel={() => setConfirmDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmConvert !== null}
+        title="Convertir en orden"
+        message={`¿Crear una orden de trabajo a partir del presupuesto #${confirmConvert?.number}? Se copian los ítems y el total; si la patente o el cliente no existen, se crean.`}
+        confirmLabel="Crear orden"
+        cancelLabel="Volver"
+        loading={convert.isPending}
+        onConfirm={() => {
+          if (confirmConvert) convert.mutate(confirmConvert.id);
+          setConfirmConvert(null);
+        }}
+        onCancel={() => setConfirmConvert(null)}
       />
     </div>
   );

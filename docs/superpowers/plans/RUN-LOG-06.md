@@ -72,6 +72,27 @@ Sub-tareas PAY-2 (originales):
 | 2c | Rutas: aceptar discount/taxRate + desglose en quotePdf | ✅ hecho | 1ca8cf9 |
 | 2d | Frontend: selector IVA (21/0) + descuento global + desglose | pendiente | — |
 
+### PAY-5 (presupuesto → orden) — decisiones + implementación
+- **Reusa `createOrder`:** la conversión no reimplementa nada; llama al `createOrder` del dominio,
+  que resuelve/crea el vehículo (por patente) y el cliente (por nombre) y recalcula totales. Así
+  el total de la orden queda **idéntico** al del presupuesto (mismos ítems, descuento y tasa de IVA).
+- **Mapeo de ítems:** cada `QuoteItem` entra como **repuesto NO de inventario** (`fromInventory:
+  false`), mano de obra $0. El presupuesto no separa mano de obra; se puede reclasificar en la orden.
+- **Guard anti doble conversión:** columna nueva `presupuestos.work_order_id` (migración 0014). El
+  presupuesto queda `status: "aceptado"` + `workOrderId` mediante un **claim atómico**
+  (`UPDATE ... WHERE work_order_id IS NULL`); si otra conversión ganó, ROLLBACK. Convertir dos veces
+  lanza `QuoteAlreadyConvertedError` → la ruta responde **409**.
+
+| # | Sub-tarea | Estado | Notas |
+|---|---|---|---|
+| 5a | Schema + migración 0014: `presupuestos.work_order_id` | ✅ hecho | aditiva, nullable, ON DELETE set null |
+| 5b | Dominio: `convertQuoteToOrder` + `QuoteAlreadyConvertedError` + tests | ✅ hecho | 4 tests nuevos (total 159 verdes) |
+| 5c | Ruta: `POST /api/quotes/:id/convert` (201 / 404 / 409) | ✅ hecho | actor = auth.userId/userName |
+| 5d | Frontend: botón "Convertir en orden" + confirm + chip "Convertido" | ✅ hecho | typecheck web verde |
+
+**PAY-5 COMPLETO** — backend 159 tests verdes, typecheck API + web verdes. Con esto **Plan 06 queda
+cerrado** salvo PAY-6 (payouts socios) y las diferidas (PAY-3 MP, PAY-4 AFIP).
+
 ## Próximas decisiones (cuando lleguemos)
-- PAY-5 presupuesto→orden, PAY-6 payouts socios.
+- PAY-6 payouts socios (BUG 22): definir la "ganancia" base del reparto + historial de %.
 - Diferidas: PAY-3 Mercado Pago, PAY-4 AFIP (requieren credenciales + decisiones regulatorias).

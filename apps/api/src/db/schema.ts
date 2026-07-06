@@ -833,6 +833,11 @@ export const presupuestos = pgTable(
     total: bigint("total", { mode: "number" }).notNull().default(0),
     validUntil: text("valid_until"),
     status: text("status").notNull().default("borrador"),
+    // Orden de trabajo creada al aceptar el presupuesto (PAY-5). Sirve de guard
+    // de doble conversión: un presupuesto con work_order_id ya está convertido.
+    workOrderId: uuid("work_order_id").references(() => workOrders.id, {
+      onDelete: "set null",
+    }),
     createdByName: text("created_by_name"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
