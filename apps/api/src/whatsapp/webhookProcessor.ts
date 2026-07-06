@@ -5,7 +5,7 @@ import { forTenant } from "../db/scope.js";
 import { env } from "../config/env.js";
 import { storage } from "../storage/provider.js";
 import { limitsFor, withinLimit } from "../domain/plans.js";
-import { getIaUsage, incIaTokens, incIaUsage } from "../domain/usage.js";
+import { getIaUsage, incIaTokens, incIaUsage, withinTokenBudget } from "../domain/usage.js";
 import { buildQuotePdf } from "../domain/quotes.js";
 import {
   descargarMedia,
@@ -20,9 +20,14 @@ import { redactarNatural } from "./responder.js";
 import { agenteConsulta } from "./agente.js";
 import { sameNumber } from "./phone.js";
 import { procesarMensaje, type BotDeps, type WAMessage } from "./stateMachine.js";
+import { PhoneRateLimiter } from "./rateLimiter.js";
 import type { TenantDb } from "../db/scope.js";
 
 const SUPPORTED = new Set(["text", "image", "interactive"]);
+
+// Rate limit por número: 10 mensajes por minuto. Frena floods del mismo
+// remitente antes de tocar IA (cuota/tokens) o crear registros masivos.
+const phoneLimiter = new PhoneRateLimiter(10, 60_000);
 
 function makeDeps(
   ctx: SendCtx,
@@ -31,7 +36,8 @@ function makeDeps(
   plan: string,
   tallerNombre: string,
 ): BotDeps {
-  const maxIa = limitsFor(plan).maxIaMonthly;
+  const planLimits = limitsFor(plan);
+  const maxIa = planLimits.maxIaMonthly;
   return {
     send: (to, texto) => enviarMensaje(ctx, to, texto),
     sendButtons: (to, texto, botones) => enviarMensajeConBotones(ctx, to, texto, botones),
@@ -48,8 +54,9 @@ function makeDeps(
       await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
       return r.texto;
     },
-    agente: async (from, texto) => {
-      const r = await agenteConsulta(tdb, texto, tallerNombre, from, {
+    agente: async (from, texto, historialPrevio) => {
+      const textoAcotado = texto.slice(0, 1000);
+      const r = await agenteConsulta(tdb, textoAcotado, tallerNombre, from, {
         // Modelo del bot según el plan: Starter→Haiku, Pro→Sonnet 5, Max→Opus.
         model: limitsFor(plan).model,
         // Devuelve el presupuesto como PDF con la marca del taller (misma fuente
@@ -71,12 +78,20 @@ function makeDeps(
             return false;
           }
         },
-      });
+      }, historialPrevio);
       await incIaTokens(tenantId, r.inputTokens, r.outputTokens);
-      return r.texto;
+      // Memoria multi-turno: devolvemos también el historial actualizado para
+      // que la máquina de estados lo persista y continúe la conversación.
+      return { texto: r.texto, historial: r.historial };
     },
     iaQuota: {
-      check: async () => withinLimit(await getIaUsage(tenantId), maxIa),
+      // Hay cupo si NO se agotó la cuota de mensajes NI el tope de tokens del
+      // plan. El tope de tokens acota el costo real (un mensaje puede disparar
+      // varias llamadas API); si se superó, se corta con el mismo aviso que la
+      // cuota de mensajes, sin procesar.
+      check: async () =>
+        withinLimit(await getIaUsage(tenantId), maxIa) &&
+        (await withinTokenBudget(tenantId, planLimits)),
       tick: async () => {
         await incIaUsage(tenantId);
       },
@@ -145,6 +160,10 @@ export async function processWhatsAppPayload(payload: MetaPayload): Promise<void
         const rows = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
         const tenant = rows[0];
         if (!tenant || !tenant.active) continue;
+
+        // Rate limit por remitente ANTES de procesar/llamar al agente y ANTES de
+        // consumir cuota de IA: si superó el límite, descartamos en silencio.
+        if (!phoneLimiter.allow(from)) continue;
 
         const tdb = forTenant(tenant.id);
         const deps = makeDeps(ctx, tdb, tenant.id, tenant.plan, tenant.name);

@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { QuoteItem } from "../db/schema.js";
+import { formatArs, type Currency } from "../lib/money.js";
 
 /* Paleta Momec */
 const FOREST = rgb(4 / 255, 63 / 255, 46 / 255);
@@ -14,6 +15,8 @@ export interface QuotePdfInput {
   tallerNombre: string;
   header?: { phone?: string; address?: string; email?: string } | null;
   logo?: { bytes: Buffer; mime: string } | null;
+  /** Moneda del taller para todos los montos del PDF (default "ARS"). */
+  currency?: Currency;
   quote: {
     number: number;
     customerName: string;
@@ -21,15 +24,15 @@ export interface QuotePdfInput {
     vehiclePlate?: string | null;
     vehicleInfo?: string | null;
     items: QuoteItem[];
+    subtotal?: number;
+    discountAmount?: number;
+    taxRate?: number;
+    taxAmount?: number;
     total: number;
     validUntil?: string | null;
     notes?: string | null;
     createdAt: string | Date;
   };
-}
-
-function money(n: number): string {
-  return `$ ${Math.round(n).toLocaleString("es-AR")}`;
 }
 
 function drawRight(
@@ -70,6 +73,9 @@ function wrap(text: string, font: PDFFont, size: number, maxWidth: number): stri
 /** Genera un presupuesto en PDF con la marca del taller y los colores de Momec. */
 export async function renderQuotePdf(input: QuotePdfInput): Promise<Buffer> {
   const { quote } = input;
+  const currency: Currency = input.currency ?? "ARS";
+  /** Formatea centavos con la moneda del taller (ej. 123456 → "$ 1.235"). */
+  const money = (cents: number): string => formatArs(cents, currency);
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]); // A4
   const { width, height } = page.getSize();
@@ -172,11 +178,32 @@ export async function renderQuotePdf(input: QuotePdfInput): Promise<Buffer> {
     y -= 18;
   }
 
-  /* --- Total (recuadro chartreuse) --- */
-  y -= 6;
+  /* --- Desglose: Subtotal / Descuento / IVA --- */
   const boxW = 210;
-  const boxH = 36;
   const boxX = width - M - boxW;
+  const labelX = boxX + 16;
+  const valueX = boxX + boxW - 16;
+  const discount = quote.discountAmount ?? 0;
+  const taxRate = quote.taxRate ?? 0;
+  const taxAmount = quote.taxAmount ?? 0;
+  // Subtotal: usar el guardado o, si no vino, sumarlo desde los ítems (bot legacy).
+  const subtotal =
+    quote.subtotal ??
+    quote.items.reduce((s, it) => s + (it.quantity || 0) * (it.unitPrice || 0), 0);
+
+  y -= 10;
+  const breakdown: Array<[string, string]> = [["Subtotal", money(subtotal)]];
+  if (discount > 0) breakdown.push(["Descuento", `- ${money(discount)}`]);
+  if (taxRate > 0) breakdown.push([`IVA (${taxRate / 100}%)`, money(taxAmount)]);
+  for (const [label, value] of breakdown) {
+    page.drawText(label, { x: labelX, y, size: 10, font, color: MUTED });
+    drawRight(page, value, valueX, y, 10, font, INK);
+    y -= 16;
+  }
+
+  /* --- Total (recuadro chartreuse) --- */
+  y -= 2;
+  const boxH = 36;
   const boxY = y - boxH;
   page.drawRectangle({ x: boxX, y: boxY, width: boxW, height: boxH, color: LIME });
   page.drawText("TOTAL", { x: boxX + 16, y: boxY + boxH / 2 - 5, size: 12, font: bold, color: FOREST });

@@ -6,10 +6,22 @@ import { useToast } from "@/components/toast";
 import { Modal } from "@/components/Modal";
 import { CardRow, DataList } from "@/components/DataList";
 import { FormField, NumberInput } from "@/components/form";
-import { Button, Input, PageHeader, StatCard, Textarea } from "@/components/ui";
+import { Badge, Button, Input, PageHeader, StatCard, Textarea } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { isValidPhone } from "@/lib/validation";
-import type { Customer } from "@/lib/types";
+import type { Customer, CustomerBalance, PaymentEstado } from "@/lib/types";
+
+const CUSTOMER_ESTADO_LABEL: Record<PaymentEstado, string> = {
+  impaga: "Impaga",
+  parcial: "Parcial",
+  pagada: "Pagada",
+};
+
+function customerEstadoTone(estado: PaymentEstado): string {
+  if (estado === "pagada") return "Entregado";
+  if (estado === "parcial") return "En Reparación";
+  return "Egreso";
+}
 
 interface Stats {
   totalCustomers: number;
@@ -22,6 +34,7 @@ export function CustomersPage() {
   const toast = useToast();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["customers"],
@@ -72,6 +85,7 @@ export function CustomersPage() {
         items={filtered}
         loading={isLoading}
         keyOf={(c) => c.id}
+        onRowClick={(c) => setDetailId(c.id)}
         emptyTitle="No hay clientes"
         columns={[
           { header: "Nombre", cell: (c) => <span className="font-medium">{c.name}</span> },
@@ -103,7 +117,95 @@ export function CustomersPage() {
           onError={(m) => toast.error(m)}
         />
       ) : null}
+
+      {detailId ? (
+        <CustomerDetailModal
+          customer={data?.customers.find((c) => c.id === detailId) ?? null}
+          id={detailId}
+          onClose={() => setDetailId(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/* --------------------------- Customer detail ----------------------------- */
+function CustomerDetailModal({
+  id,
+  customer,
+  onClose,
+}: {
+  id: string;
+  customer: Customer | null;
+  onClose: () => void;
+}) {
+  const { data: balance } = useQuery({
+    queryKey: ["customer-balance", id],
+    queryFn: () => api.get<CustomerBalance>(`/api/customers/${id}/balance`),
+  });
+  const deudaTotal = balance?.deudaTotal ?? 0;
+  const ordenes = balance?.ordenes ?? [];
+
+  return (
+    <Modal
+      open
+      onOpenChange={(v) => !v && onClose()}
+      title={customer?.name ?? "Cliente"}
+      footer={
+        <Button variant="ghost" onClick={onClose}>
+          Cerrar
+        </Button>
+      }
+    >
+      <div className="space-y-1">
+        <CardRow label="Teléfono">{customer?.phone || "—"}</CardRow>
+        {customer?.email ? <CardRow label="Email">{customer.email}</CardRow> : null}
+        <CardRow label="Vehículos">{customer?.totalVehicles ?? 0}</CardRow>
+        <CardRow label="Última visita">{formatDate(customer?.lastVisit)}</CardRow>
+      </div>
+
+      {/* Cuenta corriente: deuda total + órdenes con saldo */}
+      <div
+        className={
+          deudaTotal > 0
+            ? "rounded-[8px] bg-red-50 border border-red-200 px-4 py-3"
+            : "rounded-[8px] bg-pale-sage px-4 py-3"
+        }
+      >
+        <div className="flex items-center justify-between">
+          <span className="eyebrow">Deuda</span>
+          <span
+            className={
+              deudaTotal > 0
+                ? "font-display text-[22px] text-red-700"
+                : "font-display text-[22px] text-deep-forest"
+            }
+          >
+            {formatCurrency(deudaTotal)}
+          </span>
+        </div>
+        {deudaTotal <= 0 ? (
+          <p className="mt-1 text-[13px] text-charcoal">Sin saldos pendientes.</p>
+        ) : null}
+      </div>
+
+      {ordenes.length ? (
+        <div>
+          <div className="eyebrow mb-1">Órdenes con saldo</div>
+          <div className="space-y-1">
+            {ordenes.map((o) => (
+              <div key={o.id} className="flex items-center justify-between text-[14px]">
+                <span className="flex items-center gap-2">
+                  <span className="text-deep-forest">#{o.number}</span>
+                  <Badge tone={customerEstadoTone(o.estado)}>{CUSTOMER_ESTADO_LABEL[o.estado]}</Badge>
+                </span>
+                <span className="text-deep-forest">{formatCurrency(o.saldo)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </Modal>
   );
 }
 

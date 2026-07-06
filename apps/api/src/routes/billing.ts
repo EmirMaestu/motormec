@@ -62,7 +62,9 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
         return reply.code(201).send(result);
       } catch (err) {
         request.log.error({ err }, "billing start failed");
-        return reply.code(502).send({ error: "provider_error", message: (err as Error).message });
+        return reply
+          .code(502)
+          .send({ error: "provider_error", message: "No se pudo procesar el pago. Probá de nuevo." });
       }
     },
   );

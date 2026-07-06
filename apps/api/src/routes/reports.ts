@@ -9,6 +9,8 @@ import {
   vehicles,
 } from "../db/schema.js";
 import { authed, requireAuth, requireRole } from "../auth/middleware.js";
+import { argMonth } from "../lib/time.js";
+import { env } from "../config/env.js";
 
 function daysBetween(a: Date, b: Date): number {
   return Math.ceil((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
@@ -16,7 +18,10 @@ function daysBetween(a: Date, b: Date): number {
 
 export async function reportRoutes(app: FastifyInstance): Promise<void> {
   // ---- Financial ----
-  app.get("/api/reports/financial", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.get("/api/reports/financial", {
+    preHandler: requireRole("admin"),
+    config: { rateLimit: { max: env.NODE_ENV === "production" ? 20 : 100000, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const q = request.query as {
       startDate?: string;
@@ -75,7 +80,10 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ---- Customers ----
-  app.get("/api/reports/customers", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.get("/api/reports/customers", {
+    preHandler: requireRole("admin"),
+    config: { rateLimit: { max: env.NODE_ENV === "production" ? 20 : 100000, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const q = request.query as { startDate?: string; endDate?: string; customerId?: string };
     let active = await tenantDb.select(customers, eq(customers.active, true));
@@ -114,7 +122,10 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ---- Inventory ----
-  app.get("/api/reports/inventory", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.get("/api/reports/inventory", {
+    preHandler: requireRole("admin"),
+    config: { rateLimit: { max: env.NODE_ENV === "production" ? 20 : 100000, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const q = request.query as { startDate?: string; endDate?: string; productType?: string };
     const prods = await tenantDb.select(products);
@@ -157,7 +168,10 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ---- Mechanics ----
-  app.get("/api/reports/mechanics", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.get("/api/reports/mechanics", {
+    preHandler: requireRole("admin"),
+    config: { rateLimit: { max: env.NODE_ENV === "production" ? 20 : 100000, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const all = await tenantDb.select(vehicles);
     const map = new Map<
@@ -207,7 +221,10 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ---- Partners ----
-  app.get("/api/reports/partners", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.get("/api/reports/partners", {
+    preHandler: requireRole("admin"),
+    config: { rateLimit: { max: env.NODE_ENV === "production" ? 20 : 100000, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const q = request.query as { startDate?: string; endDate?: string };
     const socios = await tenantDb.select(partners, eq(partners.active, true));
@@ -235,7 +252,10 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ---- Operational ----
-  app.get("/api/reports/operational", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.get("/api/reports/operational", {
+    preHandler: requireRole("admin"),
+    config: { rateLimit: { max: env.NODE_ENV === "production" ? 20 : 100000, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const q = request.query as { startDate?: string; endDate?: string };
     let all = await tenantDb.select(vehicles);
@@ -280,7 +300,10 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ---- Strategic ----
-  app.get("/api/reports/strategic", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.get("/api/reports/strategic", {
+    preHandler: requireRole("admin"),
+    config: { rateLimit: { max: env.NODE_ENV === "production" ? 20 : 100000, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const active = await tenantDb.select(customers, eq(customers.active, true));
     const all = await tenantDb.select(vehicles);
@@ -341,15 +364,15 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ---- Calendario de ingresos: qué vehículos entraron cada día de un mes ----
-  app.get("/api/reports/intake-calendar", { preHandler: requireAuth }, async (request, reply) => {
+  app.get("/api/reports/intake-calendar", {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: env.NODE_ENV === "production" ? 20 : 100000, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const q = request.query as { month?: string };
-    // month = "YYYY-MM"; por defecto el mes actual (UTC).
-    const now = new Date();
+    // month = "YYYY-MM"; por defecto el mes actual en hora AR (UTC-3).
     const month =
-      q.month && /^\d{4}-\d{2}$/.test(q.month)
-        ? q.month
-        : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+      q.month && /^\d{4}-\d{2}$/.test(q.month) ? q.month : argMonth();
     const start = `${month}-01`;
     const [y, m] = month.split("-").map(Number);
     const lastDay = new Date(Date.UTC(y!, m!, 0)).getUTCDate();

@@ -204,6 +204,18 @@ export class TenantDb {
       .where(this.scope(table, where));
     return res[0]?.c ?? 0;
   }
+
+  /**
+   * Ejecuta `fn` dentro de una transacción Postgres, con un TenantDb scopeado al
+   * mismo tenant. Si `fn` lanza, se hace ROLLBACK de todo. Si esta instancia ya
+   * está dentro de una transacción, Drizzle usa un SAVEPOINT (transacción anidada).
+   */
+  async transaction<T>(fn: (tx: TenantDb) => Promise<T>): Promise<T> {
+    return this.database.transaction(async (txdb) => {
+      const scoped = new TenantDb(txdb as unknown as Database, this.tenantId);
+      return fn(scoped);
+    });
+  }
 }
 
 /** Entry point: obtain a tenant-scoped data accessor. */

@@ -11,6 +11,7 @@ import {
   workOrders,
 } from "../db/schema.js";
 import { createTenant, createUser } from "../db/admin.js";
+import { assertStrongPassword } from "../auth/passwordPolicy.js";
 import { encryptSecret } from "../crypto/secrets.js";
 import { env } from "../config/env.js";
 import { PLANS, limitsFor, limitsForJson, withinLimit } from "../domain/plans.js";
@@ -101,6 +102,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       .safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
     const d = parsed.data;
+
+    try {
+      assertStrongPassword(d.adminPassword);
+    } catch (e) {
+      return reply.code(400).send({ error: "weak_password", message: (e as Error).message });
+    }
 
     const existing = await db.select().from(tenants).where(eq(tenants.slug, d.slug)).limit(1);
     if (existing[0]) return reply.code(409).send({ error: "slug_taken" });
@@ -207,6 +214,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       })
       .safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+
+    try {
+      assertStrongPassword(parsed.data.password);
+    } catch (e) {
+      return reply.code(400).send({ error: "weak_password", message: (e as Error).message });
+    }
+
     const t = await tenantById(id);
     if (!t) return reply.code(404).send({ error: "not_found" });
 

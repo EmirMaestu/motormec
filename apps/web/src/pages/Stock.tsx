@@ -8,7 +8,7 @@ import { Modal } from "@/components/Modal";
 import { CardRow, DataList } from "@/components/DataList";
 import { FormField, MoneyInput, NumberInput } from "@/components/form";
 import { Badge, Button, IconButton, Input, PageHeader } from "@/components/ui";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, pesosToCents } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
 export function StockPage() {
@@ -125,7 +125,7 @@ function CreateProductModal({ onClose, onSaved }: { onClose: () => void; onSaved
         type: form.type.trim(),
         unit: form.unit.trim() || "unidad",
         quantity: Number(form.quantity) || 0,
-        price: Number(form.price) || 0,
+        price: pesosToCents(Number(form.price) || 0),
         reorderPoint: Number(form.reorderPoint) || 0,
       }),
     onSuccess: () => {

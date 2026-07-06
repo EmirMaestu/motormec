@@ -12,10 +12,10 @@ import {
   type Vehicle,
   type WorkOrder,
 } from "../db/schema.js";
-import { categorizeService } from "./categorize.js";
 import { recalcCustomerMetrics } from "./customerMetrics.js";
 import { logVehicleMovement, type Actor } from "./movements.js";
 import { createOrderForVehicle, finalizeOrder, reopenOrder } from "./orders.js";
+import { argYmd } from "../lib/time.js";
 
 const DELIVERED = "Entregado";
 const SUSPENDED = "Suspendido";
@@ -31,9 +31,9 @@ const VEH_TO_ORDER: Record<string, WorkOrder["status"]> = {
 };
 
 /**
- * Al cambiar el estado del vehículo, sincroniza su última orden y, si se entrega,
- * genera el ingreso en finanzas (finaliza la orden, o crea el movimiento con el
- * costo del vehículo si no hay orden). Evita ingresos duplicados.
+ * Al cambiar el estado del vehículo, sincroniza su última orden: si se entrega,
+ * finaliza la orden (descuenta stock); si vuelve a un estado de trabajo, la
+ * reabre. NO genera ingresos: el ingreso viene de cada pago (registrarPago).
  */
 async function syncOrderAndFinance(
   tdb: TenantDb,
@@ -58,48 +58,14 @@ async function syncOrderAndFinance(
 
   if (vehicle.status === DELIVERED) {
     if (latest && !latest.finalizedAt) {
-      try {
-        await finalizeOrder(tdb, actor, latest.id);
-      } catch {
-        // Falta de stock u otro problema: al menos dejamos la orden entregada.
-        await tdb.updateById(workOrders, latest.id, {
-          status: "Entregado",
-          deliveryDate: todayDate(),
-          updatedAt: new Date(),
-        });
-      }
+      // Si falta stock, finalizeOrder lanza y la operación se revierte entera.
+      // Propagamos el error: el caller (updateVehicle) revierte el cambio de estado
+      // del vehículo para no dejarlo "Entregado" a medias, y la ruta lo muestra.
+      // finalizeOrder ya NO genera ingreso: el ingreso viene de cada pago.
+      await finalizeOrder(tdb, actor, latest.id);
       return;
     }
-    if (!latest && (vehicle.cost ?? 0) > 0) {
-      // Vehículo entregado sin orden → generar ingreso con el costo del vehículo,
-      // salvo que ya exista un ingreso activo para este vehículo.
-      const yaHay = await tdb.selectOne(
-        transactions,
-        and(
-          eq(transactions.vehicleId, vehicle.id),
-          eq(transactions.type, "Ingreso"),
-          eq(transactions.active, true),
-        ),
-      );
-      if (!yaHay) {
-        await tdb.insert(transactions, {
-          date: todayDate(),
-          description: `${vehicle.plate} - ${`${vehicle.brand} ${vehicle.model}`.trim()} (${vehicle.owner})`,
-          type: "Ingreso",
-          category: categorizeService(vehicle.services ?? []),
-          amount: vehicle.cost,
-          active: true,
-          vehicleId: vehicle.id,
-          vehicleDetails: {
-            plate: vehicle.plate,
-            brand: vehicle.brand,
-            model: vehicle.model,
-            customer: vehicle.owner,
-          },
-          paymentMethod: "Efectivo",
-        });
-      }
-    }
+    // Sin orden no se genera ingreso: el ingreso viene de los pagos (registrarPago).
     return;
   }
 
@@ -116,7 +82,7 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 function todayDate(): string {
-  return new Date().toISOString().split("T")[0] as string;
+  return argYmd();
 }
 function computeInTaller(status: string): boolean {
   return status !== DELIVERED && status !== SUSPENDED;
@@ -275,55 +241,61 @@ export async function updateVehicle(
   }
 
   patch.updatedAt = new Date();
-  const updated = await tdb.updateById(vehicles, id, patch);
-  if (!updated) return null;
 
-  // Customer metrics on customer reassignment.
-  if (input.customerId !== undefined && input.customerId !== existing.customerId) {
-    if (existing.customerId) await recalcCustomerMetrics(tdb, existing.customerId);
-    if (input.customerId) await recalcCustomerMetrics(tdb, input.customerId);
-  } else if (existing.customerId && input.cost !== undefined) {
-    await recalcCustomerMetrics(tdb, existing.customerId);
-  }
+  // Todo en una transacción: si la finalización de la orden falla (p.ej. falta
+  // stock), se revierte también el cambio de estado del vehículo — así NO queda
+  // "Entregado" a medias. El error se propaga para que la ruta lo muestre.
+  return tdb.transaction(async (t) => {
+    const updated = await t.updateById(vehicles, id, patch);
+    if (!updated) return null;
 
-  // Movement log.
-  if (input.status && input.status !== existing.status) {
-    const movementType =
-      input.status === DELIVERED
-        ? "delivered"
-        : input.status === SUSPENDED
-          ? "suspended"
-          : "status_changed";
-    await logVehicleMovement(tdb, actor, {
-      vehicleId: id,
-      vehiclePlate: updated.plate,
-      vehicleInfo: vehicleInfo(updated),
-      owner: updated.owner,
-      movementType,
-      previousStatus: existing.status,
-      newStatus: input.status,
-    });
-  } else {
-    await logVehicleMovement(tdb, actor, {
-      vehicleId: id,
-      vehiclePlate: updated.plate,
-      vehicleInfo: vehicleInfo(updated),
-      owner: updated.owner,
-      movementType: "updated",
-      previousCost: existing.cost,
-      newCost: updated.cost,
-      costChange: updated.cost - existing.cost,
-      previousServices: existing.services,
-      newServices: updated.services,
-    });
-  }
+    // Customer metrics on customer reassignment.
+    if (input.customerId !== undefined && input.customerId !== existing.customerId) {
+      if (existing.customerId) await recalcCustomerMetrics(t, existing.customerId);
+      if (input.customerId) await recalcCustomerMetrics(t, input.customerId);
+    } else if (existing.customerId && input.cost !== undefined) {
+      await recalcCustomerMetrics(t, existing.customerId);
+    }
 
-  // Sincronizar la orden y finanzas cuando cambió el estado del vehículo.
-  if (input.status && input.status !== existing.status) {
-    await syncOrderAndFinance(tdb, actor, updated);
-  }
+    // Movement log.
+    if (input.status && input.status !== existing.status) {
+      const movementType =
+        input.status === DELIVERED
+          ? "delivered"
+          : input.status === SUSPENDED
+            ? "suspended"
+            : "status_changed";
+      await logVehicleMovement(t, actor, {
+        vehicleId: id,
+        vehiclePlate: updated.plate,
+        vehicleInfo: vehicleInfo(updated),
+        owner: updated.owner,
+        movementType,
+        previousStatus: existing.status,
+        newStatus: input.status,
+      });
+    } else {
+      await logVehicleMovement(t, actor, {
+        vehicleId: id,
+        vehiclePlate: updated.plate,
+        vehicleInfo: vehicleInfo(updated),
+        owner: updated.owner,
+        movementType: "updated",
+        previousCost: existing.cost,
+        newCost: updated.cost,
+        costChange: updated.cost - existing.cost,
+        previousServices: existing.services,
+        newServices: updated.services,
+      });
+    }
 
-  return updated;
+    // Sincronizar la orden y finanzas cuando cambió el estado del vehículo.
+    if (input.status && input.status !== existing.status) {
+      await syncOrderAndFinance(t, actor, updated);
+    }
+
+    return updated;
+  });
 }
 
 export async function deleteVehicle(
@@ -333,19 +305,29 @@ export async function deleteVehicle(
 ): Promise<Vehicle | null> {
   const existing = await tdb.findById(vehicles, id);
   if (!existing) return null;
-  // Borrar también las órdenes de este vehículo (si no, quedan en Órdenes).
-  await tdb.delete(workOrders, eq(workOrders.vehicleId, id));
-  const removed = await tdb.deleteById(vehicles, id);
-  if (!removed) return null;
-  await logVehicleMovement(tdb, actor, {
-    vehicleId: null,
-    vehiclePlate: existing.plate,
-    vehicleInfo: vehicleInfo(existing),
-    owner: existing.owner,
-    movementType: "deleted",
+  return tdb.transaction(async (t) => {
+    // Desactivar los ingresos ligados a este vehículo (no borrarlos: preservar auditoría).
+    const ingresos = await t.select(
+      transactions,
+      and(eq(transactions.vehicleId, id), eq(transactions.type, "Ingreso"), eq(transactions.active, true)),
+    );
+    for (const inc of ingresos) {
+      await t.updateById(transactions, inc.id, { active: false, updatedAt: new Date() });
+    }
+    // Borrar también las órdenes de este vehículo (si no, quedan en Órdenes).
+    await t.delete(workOrders, eq(workOrders.vehicleId, id));
+    const removed = await t.deleteById(vehicles, id);
+    if (!removed) return null;
+    await logVehicleMovement(t, actor, {
+      vehicleId: null,
+      vehiclePlate: existing.plate,
+      vehicleInfo: vehicleInfo(existing),
+      owner: existing.owner,
+      movementType: "deleted",
+    });
+    if (existing.customerId) await recalcCustomerMetrics(t, existing.customerId);
+    return removed;
   });
-  if (existing.customerId) await recalcCustomerMetrics(tdb, existing.customerId);
-  return removed;
 }
 
 /* ----------------------------- work timer ------------------------------- */
@@ -378,9 +360,13 @@ export async function startWork(
   };
   if (isNew) responsibles.push(resp);
   const startedAt = nowIso();
+  // Cerrar cualquier sesión abierta previa de este responsable (evita solapadas).
+  resp.workSessions = (resp.workSessions ?? []).map((s) =>
+    s.endTime ? s : { ...s, endTime: startedAt, duration: Date.parse(startedAt) - Date.parse(s.startTime) },
+  );
   resp.isWorking = true;
   resp.workStartedAt = startedAt;
-  resp.workSessions = [...(resp.workSessions ?? []), { startTime: startedAt }];
+  resp.workSessions = [...resp.workSessions, { startTime: startedAt }];
 
   const status = vehicle.status !== IN_REPAIR ? IN_REPAIR : vehicle.status;
   const updated = await tdb.updateById(vehicles, vehicleId, {

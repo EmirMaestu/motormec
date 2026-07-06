@@ -15,6 +15,7 @@ import {
   workOrders,
 } from "../src/db/schema.js";
 import { createOrder } from "../src/domain/orders.js";
+import { ejecutarTool } from "../src/whatsapp/agente.js";
 import { procesarMensaje, type BotDeps, type WAMessage } from "../src/whatsapp/stateMachine.js";
 import type { DatosVehiculo } from "../src/whatsapp/parser.js";
 import { verifySignature } from "../src/whatsapp/signature.js";
@@ -115,7 +116,14 @@ describe("WhatsApp bot — state machine", () => {
 
   it("routes fresh messages to the agent when present (prod path)", async () => {
     const { deps, sent } = fakeDeps(EMPTY);
-    deps.agente = async () => "respuesta del agente";
+    // Firma nueva (memoria multi-turno): el agente devuelve { texto, historial }.
+    deps.agente = async (_from, texto) => ({
+      texto: "respuesta del agente",
+      historial: [
+        { role: "user", content: texto },
+        { role: "assistant", content: "respuesta del agente" },
+      ],
+    });
     const r = await procesarMensaje(tdb, textMsg("ag1", "cómo va todo"), deps);
     expect(r).toBe("agente");
     expect(sent.join(" ")).toContain("respuesta del agente");
@@ -276,6 +284,185 @@ describe("WhatsApp bot — state machine", () => {
   });
 });
 
+describe("WhatsApp bot — confirmación de ingreso del agente (BOT-3)", () => {
+  it("registrar_ingreso NO crea la orden: deja propuesta pendiente para confirmar", async () => {
+    // El agente llama a la tool con un auto que "entró". No debe escribir todavía.
+    const out = await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "ABC123", marca: "vw", modelo: "Gol", cliente: "Juan", tarea: "service" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    const parsed = JSON.parse(out) as { pendiente_confirmacion?: boolean; resumen?: string };
+    expect(parsed.pendiente_confirmacion).toBe(true);
+    expect(parsed.resumen).toContain("ABC123");
+
+    // No se creó ninguna orden ni vehículo: sólo quedó una conversación pendiente.
+    expect(await tdb.count(workOrders)).toBe(0);
+    expect(await tdb.count(vehicles)).toBe(0);
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("confirmar_ingreso_agente");
+  });
+
+  it('un "sí" en confirmar_ingreso_agente SÍ crea la orden real', async () => {
+    // 1) El agente stage-a la propuesta (sin escribir).
+    await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "ABC123", marca: "vw", modelo: "Gol", cliente: "Juan", tarea: "service" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    expect(await tdb.count(workOrders)).toBe(0);
+
+    // 2) El usuario responde "sí" → la máquina de estados ejecuta createOrder.
+    const { deps, sent } = fakeDeps(EMPTY);
+    const r = await procesarMensaje(tdb, textMsg("si1", "sí"), deps);
+    expect(r).toBe("ingreso_confirmado");
+
+    const orders = await tdb.select(workOrders);
+    expect(orders).toHaveLength(1);
+    expect(orders[0]?.vehiclePlate).toBe("ABC123");
+    const vs = await tdb.select(vehicles);
+    expect(vs).toHaveLength(1);
+    expect(vs[0]?.brand).toBe("Volkswagen"); // marca normalizada
+    expect(sent.join(" ")).toMatch(/ABC123/);
+
+    // La etapa pasa a esperando_foto (para adjuntar fotos), no queda pendiente.
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("esperando_foto");
+  });
+
+  it('un "no" en confirmar_ingreso_agente descarta sin crear nada', async () => {
+    // BOT-4: la patente debe ser válida para que se arme la propuesta pendiente;
+    // "ZZ9" (formato inválido) ahora hace repreguntar y no deja propuesta.
+    await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "ZZ999AA", marca: "Ford", modelo: "Focus" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    const { deps } = fakeDeps(EMPTY);
+    const r = await procesarMensaje(tdb, textMsg("no1", "no"), deps);
+    expect(r).toBe("ingreso_descartado");
+    expect(await tdb.count(workOrders)).toBe(0);
+    expect(await tdb.count(vehicles)).toBe(0);
+    expect(await tdb.count(conversaciones)).toBe(0);
+  });
+
+  it("BOT-4: registrar_ingreso con patente inválida NO deja propuesta (repregunta)", async () => {
+    const out = await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "XXX", marca: "Ford", modelo: "Focus", cliente: "Juan" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    const parsed = JSON.parse(out) as { ok?: boolean; patente_invalida?: boolean };
+    expect(parsed.patente_invalida).toBe(true);
+    expect(parsed.ok).toBe(false);
+    // No quedó ninguna propuesta pendiente ni se creó nada.
+    expect(await tdb.count(conversaciones)).toBe(0);
+    expect(await tdb.count(workOrders)).toBe(0);
+    expect(await tdb.count(vehicles)).toBe(0);
+  });
+});
+
+describe("WhatsApp bot — memoria de conversación multi-turno del agente", () => {
+  type Turno = { role: "user" | "assistant"; content: string };
+
+  it("tras un mensaje libre queda una conversación agente_libre con historial guardado", async () => {
+    const { deps, sent } = fakeDeps(EMPTY);
+    // El agente responde sin disparar registro: NO crea conversación por su cuenta.
+    deps.agente = async (_from, texto) => ({
+      texto: "Contame la patente 🙂",
+      historial: [
+        { role: "user", content: texto },
+        { role: "assistant", content: "Contame la patente 🙂" },
+      ],
+    });
+    const r = await procesarMensaje(tdb, textMsg("mt1", "entró un auto"), deps);
+    expect(r).toBe("agente");
+    expect(sent.join(" ")).toContain("Contame la patente");
+
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("agente_libre");
+    const historial = (conv?.datos as { historial?: Turno[] }).historial ?? [];
+    expect(historial.length).toBeGreaterThan(0);
+    expect(historial.some((h) => h.content.includes("entró un auto"))).toBe(true);
+  });
+
+  it("un segundo mensaje en agente_libre pasa el historialPrevio y lo actualiza", async () => {
+    // Turno 1: deja la conversación agente_libre con historial.
+    const { deps, sent } = fakeDeps(EMPTY);
+    let historialRecibido: Turno[] | undefined;
+    deps.agente = async (_from, texto, historialPrevio) => {
+      historialRecibido = historialPrevio;
+      const historial: Turno[] = [
+        ...(historialPrevio ?? []),
+        { role: "user", content: texto },
+        { role: "assistant", content: `eco: ${texto}` },
+      ];
+      return { texto: `eco: ${texto}`, historial };
+    };
+
+    await procesarMensaje(tdb, textMsg("mt2a", "entró un auto"), deps);
+    // Primer turno: el agente recibe historial vacío/undefined.
+    expect(historialRecibido ?? []).toHaveLength(0);
+
+    // Turno 2: mismo remitente, ya en etapa agente_libre.
+    const r2 = await procesarMensaje(tdb, textMsg("mt2b", "la patente es ABC123"), deps);
+    expect(r2).toBe("agente");
+    // El agente recibió el historial acumulado del turno anterior.
+    expect(historialRecibido).toBeDefined();
+    expect(historialRecibido!.some((h) => h.content.includes("entró un auto"))).toBe(true);
+    expect(sent.join(" ")).toContain("eco: la patente es ABC123");
+
+    // El historial guardado se actualizó con el segundo turno.
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("agente_libre");
+    const historial = (conv?.datos as { historial?: Turno[] }).historial ?? [];
+    expect(historial.some((h) => h.content.includes("la patente es ABC123"))).toBe(true);
+  });
+
+  it("si el agente disparó registrar_ingreso, el branch NO pisa la conversación con agente_libre", async () => {
+    const { deps } = fakeDeps(EMPTY);
+    // El agente fake simula que su tool registrar_ingreso creó una conversación
+    // confirmar_ingreso_agente (como lo hace el agente real).
+    deps.agente = async (from, texto) => {
+      await tdb.delete(conversaciones, eq(conversaciones.phone, from));
+      await tdb.insert(conversaciones, {
+        phone: from,
+        etapa: "confirmar_ingreso_agente",
+        datos: {
+          patente: "ABC123",
+          marca: "Volkswagen",
+          modelo: "Gol",
+          cliente: "Juan",
+          tarea: "service",
+          kilometraje: null,
+        },
+      });
+      return {
+        texto: "¿Confirmo el ingreso de ABC123?",
+        historial: [
+          { role: "user", content: texto },
+          { role: "assistant", content: "¿Confirmo el ingreso de ABC123?" },
+        ],
+      };
+    };
+    const r = await procesarMensaje(tdb, textMsg("mt3", "agregá un VW Gol ABC123 de Juan"), deps);
+    expect(r).toBe("agente");
+
+    // El branch NO debe haber reemplazado la conversación del agente.
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    expect(conv?.etapa).toBe("confirmar_ingreso_agente");
+    expect(await tdb.count(conversaciones)).toBe(1);
+  });
+});
+
 describe("WhatsApp bot — comandos (editar/borrar)", () => {
   const actor = { userId: null, userName: "Bot" };
 
@@ -306,10 +493,11 @@ describe("WhatsApp bot — comandos (editar/borrar)", () => {
     const { deps } = fakeDeps(EMPTY);
     await procesarMensaje(tdb, textMsg("k3", `km #${order.number} 50000`), deps);
     expect((await tdb.findById(workOrders, order.id))?.mileage).toBe(50000);
+    // "25000" es en PESOS; el dinero se guarda en CENTAVOS (×100) → $25.000.
     await procesarMensaje(tdb, textMsg("k4", `mano de obra #${order.number} 25000`), deps);
     const o = await tdb.findById(workOrders, order.id);
-    expect(o?.laborCost).toBe(25000);
-    expect(o?.total).toBe(25000);
+    expect(o?.laborCost).toBe(2500000);
+    expect(o?.total).toBe(2500000);
   });
 
   it("un ingreso normal NO se interpreta como comando", async () => {
@@ -328,11 +516,12 @@ describe("WhatsApp presupuesto formatting", () => {
       customerName: "Juan",
       vehiclePlate: "AB123CD",
       vehicleInfo: "Ford Focus",
+      // Montos en CENTAVOS (el dinero se guarda ×100); fmtMoney los muestra en pesos.
       items: [
-        { description: "Pastillas", quantity: 1, unitPrice: 15000 },
-        { description: "Mano de obra", quantity: 2, unitPrice: 4000 },
+        { description: "Pastillas", quantity: 1, unitPrice: 1500000 },
+        { description: "Mano de obra", quantity: 2, unitPrice: 400000 },
       ],
-      total: 23000,
+      total: 2300000,
       validUntil: null,
       notes: null,
     });

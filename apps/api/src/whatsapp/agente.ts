@@ -5,14 +5,14 @@ import type { TenantDb } from "../db/scope.js";
 import {
   conversaciones,
   customers,
-  historialTaller,
   presupuestos,
   vehicles,
   workOrders,
   type Presupuesto,
 } from "../db/schema.js";
-import { createOrder } from "../domain/orders.js";
 import { createQuote } from "../domain/quotes.js";
+import { esPatenteValida, normalizarPatente } from "./patente.js";
+import { sanitizePromptField, sanitizeToolText } from "./sanitize.js";
 
 const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
 
@@ -60,6 +60,9 @@ function parseKm(v: unknown): number | null {
  * tools. La app mantiene el control: el agente sólo LEE (no crea ni borra).
  * Ante fallo o sin API key, devuelve un texto de ayuda de respaldo.
  */
+
+/** Modelo barato y disponible para reintentar si el modelo del plan cae (BOT-6). */
+const MODELO_FALLBACK = "claude-haiku-4-5";
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic | null {
@@ -166,7 +169,9 @@ const TOOLS: Anthropic.Tool[] = [
 const ENTREGADOS = new Set(["Entregado", "Suspendido"]);
 
 function fmtMoney(n: number): string {
-  return `$ ${Math.round(n).toLocaleString("es-AR")}`;
+  // `n` viene en CENTAVOS (el dinero se guarda como entero de centavos); se
+  // muestra en pesos dividiendo por 100.
+  return `$ ${Math.round((n ?? 0) / 100).toLocaleString("es-AR")}`;
 }
 
 /** Presupuesto formateado para WhatsApp (negritas *…*, itálicas _…_). Verbatim. */
@@ -192,7 +197,17 @@ export function formatPresupuesto(
   return lineas.join("\n");
 }
 
-async function ejecutarTool(
+/** Propuesta de ingreso pendiente de confirmar, guardada en `conversaciones.datos`. */
+export interface PropuestaIngreso {
+  patente: string;
+  marca: string;
+  modelo: string;
+  cliente: string;
+  tarea: string;
+  kilometraje: number | null;
+}
+
+export async function ejecutarTool(
   tdb: TenantDb,
   name: string,
   input: Record<string, unknown>,
@@ -213,14 +228,14 @@ async function ejecutarTool(
       const last = ords[0];
       return JSON.stringify({
         encontrado: true,
-        patente: v.plate,
-        marca: v.brand,
-        modelo: v.model,
+        patente: sanitizeToolText(v.plate, 10),
+        marca: sanitizeToolText(v.brand, 40),
+        modelo: sanitizeToolText(v.model, 40),
         estado: v.status,
-        dueño: v.owner,
-        costo: v.cost,
+        dueño: sanitizeToolText(v.owner, 80),
+        costo: fmtMoney(v.cost),
         ultimaOrden: last
-          ? { numero: last.number, estado: last.status, total: last.total }
+          ? { numero: last.number, estado: last.status, total: fmtMoney(last.total) }
           : null,
       });
     }
@@ -231,11 +246,11 @@ async function ejecutarTool(
       return JSON.stringify({
         cantidad: dentro.length,
         vehiculos: dentro.map((v) => ({
-          patente: v.plate,
-          marca: v.brand,
-          modelo: v.model,
+          patente: sanitizeToolText(v.plate, 10),
+          marca: sanitizeToolText(v.brand, 40),
+          modelo: sanitizeToolText(v.model, 40),
           estado: v.status,
-          dueño: v.owner,
+          dueño: sanitizeToolText(v.owner, 80),
         })),
       });
     }
@@ -248,9 +263,14 @@ async function ejecutarTool(
       const vs = await tdb.select(vehicles, eq(vehicles.customerId, c.id));
       return JSON.stringify({
         encontrado: true,
-        nombre: c.name,
+        nombre: sanitizeToolText(c.name, 80),
         telefono: c.phone,
-        vehiculos: vs.map((v) => ({ patente: v.plate, marca: v.brand, modelo: v.model, estado: v.status })),
+        vehiculos: vs.map((v) => ({
+          patente: sanitizeToolText(v.plate, 10),
+          marca: sanitizeToolText(v.brand, 40),
+          modelo: sanitizeToolText(v.model, 40),
+          estado: v.status,
+        })),
       });
     }
 
@@ -261,10 +281,12 @@ async function ejecutarTool(
       return JSON.stringify({
         encontrado: true,
         numero: o.number,
-        patente: o.vehiclePlate,
+        patente: sanitizeToolText(o.vehiclePlate, 10),
         estado: o.status,
-        total: o.total,
-        servicios: o.services,
+        total: fmtMoney(o.total),
+        servicios: Array.isArray(o.services)
+          ? o.services.map((s) => sanitizeToolText(String(s), 120))
+          : o.services,
       });
     }
 
@@ -280,10 +302,10 @@ async function ejecutarTool(
       return JSON.stringify({
         cantidad: entregados.length,
         vehiculos: entregados.map((v) => ({
-          patente: v.plate,
-          marca: v.brand,
-          modelo: v.model,
-          dueño: v.owner,
+          patente: sanitizeToolText(v.plate, 10),
+          marca: sanitizeToolText(v.brand, 40),
+          modelo: sanitizeToolText(v.model, 40),
+          dueño: sanitizeToolText(v.owner, 80),
           entregado: fecha(v),
           costo: v.cost,
         })),
@@ -291,8 +313,18 @@ async function ejecutarTool(
     }
 
     if (name === "registrar_ingreso") {
-      const patente = String(input.patente ?? "").toUpperCase().trim();
+      const patente = normalizarPatente(String(input.patente ?? ""));
       if (!patente) return JSON.stringify({ ok: false, motivo: "falta la patente" });
+
+      // BOT-4: validar el formato de patente (viejo AAA000 / Mercosur AA000AA).
+      // Si no es válida, NO dejar la propuesta pendiente: pedir que la repitan.
+      if (!esPatenteValida(patente)) {
+        return JSON.stringify({
+          ok: false,
+          patente_invalida: true,
+          nota: "La patente no tiene un formato válido (esperado AAA000 o AA000AA). NO registres nada; pedile al usuario que te repita la patente (ej: 'Esa patente no parece válida, ¿me la repetís?').",
+        });
+      }
 
       const crudo = [input.marca, input.modelo].filter(Boolean).join(" ").trim();
       const { marca, modelo } = normalizarMarcaModelo(crudo);
@@ -304,48 +336,33 @@ async function ejecutarTool(
         (v) => v.plate.toUpperCase() === patente,
       );
 
-      const order = await createOrder(tdb, BOT_ACTOR, {
-        plate: patente,
-        brand: marca || existente?.brand || "",
-        model: modelo || existente?.model || "",
-        customerName: cliente || existente?.owner || "",
-        phone: from,
-        services: tarea ? [tarea] : [],
-        mileage: km,
-      });
-
-      // Historial (para el panel y para adjuntar fotos) + modo "esperando foto".
-      const h = await tdb.insertOne(historialTaller, {
-        waMessageId: `agent-${order.id}`,
-        waFrom: from,
-        waTimestamp: String(Math.floor(Date.now() / 1000)),
-        rawMessage: null,
-        marcaModelo: `${marca} ${modelo}`.trim() || null,
+      // BOT-3: NO escribir todavía. Dejar la propuesta pendiente en la conversación
+      // (etapa `confirmar_ingreso_agente`) y pedir confirmación. La máquina de estados
+      // ejecuta el createOrder real recién cuando el usuario responde afirmativamente.
+      // Esto evita creaciones masivas/accidentales desde un teléfono comprometido.
+      const propuesta: PropuestaIngreso = {
         patente,
-        kilometraje: km != null ? String(km) : null,
-        tarea: tarea || null,
-        cliente: cliente || null,
-        vehicleId: order.vehicleId,
-        workOrderId: order.id,
-        status: "linked",
-        fotoPaths: [],
-      });
+        marca: marca || existente?.brand || "",
+        modelo: modelo || existente?.model || "",
+        cliente: cliente || existente?.owner || "",
+        tarea,
+        kilometraje: km,
+      };
       await tdb.delete(conversaciones, eq(conversaciones.phone, from));
       await tdb.insert(conversaciones, {
         phone: from,
-        etapa: "esperando_foto",
-        datos: { fotoPaths: [] },
-        historialId: h.id,
+        etapa: "confirmar_ingreso_agente",
+        datos: propuesta as unknown as Record<string, unknown>,
       });
 
+      const vehiculo = `${propuesta.marca} ${propuesta.modelo}`.trim() || "vehículo";
       return JSON.stringify({
-        ok: true,
-        patente,
-        vehiculo: `${marca} ${modelo}`.trim() || "vehículo",
-        cliente: cliente || existente?.owner || null,
+        pendiente_confirmacion: true,
+        resumen: `Ingreso de ${sanitizeToolText(patente, 10)} ${sanitizeToolText(vehiculo, 80)}${
+          propuesta.cliente ? ` de ${sanitizeToolText(propuesta.cliente, 80)}` : ""
+        }`,
         yaExistia: Boolean(existente),
-        orden: order.number,
-        nota: "Registrado. Se puede pedir al usuario que mande fotos del vehículo (opcional).",
+        nota: "NO se registró todavía. Pedí confirmación al usuario en UNA línea (ej: '¿Confirmo el ingreso de ABC123 de Juan? Respondé Sí para cargarlo'). Al responder Sí, se carga solo.",
       });
     }
 
@@ -358,7 +375,9 @@ async function ejecutarTool(
           return {
             description: String(o.descripcion ?? "").trim(),
             quantity: Number(o.cantidad) || 1,
-            unitPrice: Number(o.precio) || 0,
+            // El usuario dicta PESOS ("pastillas 15000"); el dinero se guarda en
+            // CENTAVOS, así que convertimos ×100.
+            unitPrice: Math.round((Number(o.precio) || 0) * 100),
           };
         })
         .filter((i) => i.description);
@@ -380,7 +399,7 @@ async function ejecutarTool(
         ok: true,
         id: quote.id,
         presupuesto: quote.number,
-        total: quote.total,
+        total: fmtMoney(quote.total),
         documento,
         nota: "El presupuesto YA se le envía al usuario en un mensaje aparte. Confirmá en UNA línea (ej: 'Listo, te paso el presupuesto 👇') SIN repetir los ítems ni el total.",
       });
@@ -391,10 +410,25 @@ async function ejecutarTool(
   return JSON.stringify({ error: "herramienta desconocida" });
 }
 
+/** Un turno de la memoria liviana de conversación (solo texto plano). */
+export interface TurnoHistorial {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** Cantidad máxima de turnos que se conservan (acota costo/tokens). */
+const MAX_HISTORIAL = 12;
+
 export interface AgenteResultado {
   texto: string;
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Historial actualizado (memoria multi-turno): el historial previo + el
+   * mensaje del usuario + la respuesta final del asistente, capado a los
+   * últimos MAX_HISTORIAL turnos. Solo texto plano (sin tool_use/tool_result).
+   */
+  historial: TurnoHistorial[];
 }
 
 export interface AgenteHooks {
@@ -411,33 +445,67 @@ export async function agenteConsulta(
   tallerNombre: string,
   from: string,
   hooks?: AgenteHooks,
+  historialPrevio: TurnoHistorial[] = [],
 ): Promise<AgenteResultado> {
   const c = getClient();
   const fallback =
     "Puedo ayudarte a cargar un ingreso, consultar un vehículo o cliente, o ver el estado de una orden. Contame qué necesitás. 🙂";
-  if (!c) return { texto: fallback, inputTokens: 0, outputTokens: 0 };
+
+  // Construye el historial actualizado a partir de la respuesta final del
+  // asistente, capado a los últimos MAX_HISTORIAL turnos. Solo texto plano.
+  const construirHistorial = (respuesta: string): TurnoHistorial[] =>
+    [
+      ...historialPrevio,
+      { role: "user", content: texto },
+      { role: "assistant", content: respuesta },
+    ].slice(-MAX_HISTORIAL) as TurnoHistorial[];
+
+  if (!c)
+    return {
+      texto: fallback,
+      inputTokens: 0,
+      outputTokens: 0,
+      historial: construirHistorial(fallback),
+    };
 
   const hoy = new Date().toISOString().split("T")[0];
-  const system = `Sos el asistente de WhatsApp del taller ${tallerNombre || "mecánico"}. Atendés al personal del taller. Hoy es ${hoy}.
+  const nombreTaller = sanitizePromptField(tallerNombre, 60);
+  const system = `Sos el asistente de WhatsApp del taller ${nombreTaller || "mecánico"}. Atendés al personal del taller. Hoy es ${hoy}.
 - Respondé SOLO con datos reales obtenidos de las herramientas. Nunca inventes patentes, estados, montos ni nombres.
 - HACER UN PRESUPUESTO: si el usuario pide "hacé/armá un presupuesto", "cotizá", "presupuestá" (ej: "presupuestá a Juan: pastillas 15000, mano de obra 8000" o "presupuesto de 10000 para Juan de cambio de correa, repuestos 30mil"), llamá a "crear_presupuesto" DE UNA con lo que tengas. SOLO hacen falta el cliente y al menos un ítem. NUNCA pidas patente, número de orden, marca ni modelo para un presupuesto — no hacen falta y NO existe "orden" en el presupuesto. Interpretá montos naturales: "10000 de mano de obra" → ítem "Mano de obra" 10000; "repuestos 30mil" → ítem "Repuestos" 30000; "3mil"=3000, "30mil"=30000, "1.5 palo"=1500000. El PDF se envía solo; vos confirmá en UNA línea (ej: "Listo, te paso el presupuesto 👇") SIN repetir ítems ni total.
-- CARGAR UN INGRESO: si el usuario describe un auto que entró o pide agregar uno (ej: "agregá un VW Gol patente ABC123 de Juan, service"), usá la herramienta "registrar_ingreso" y CARGALO DIRECTAMENTE. Sólo la patente es obligatoria; marca, modelo, km, cliente y tarea son opcionales (cargá lo que haya). Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). No pidas que repita el mensaje si ya lo entendiste. Si falta SOLO la patente, pedila. Tras registrar, confirmá con la orden creada y ofrecé mandar fotos del vehículo.
-- Si al registrar el vehículo YA EXISTÍA (yaExistia=true), aclaralo con naturalidad ("ya lo teníamos, le sumé una nueva entrada").
+- CARGAR UN INGRESO: si el usuario quiere agregar/cargar un auto. Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). Si "registrar_ingreso" devuelve "patente_invalida", NO digas que quedó registrado: pedí la patente de nuevo en UNA línea. Hay DOS caminos:
+  (a) TODO JUNTO (ej: "agregá un VW Gol patente ABC123 de Juan, service"): llamá a "registrar_ingreso" de una con lo que haya (sólo la patente es obligatoria).
+  (b) POR PARTES (ej: "agregá un auto", o le faltan datos): GUIALO pidiendo UN dato por vez, breve y natural, RECORDANDO lo que ya te dijo antes en la charla. Orden: 1) patente; 2) nombre del cliente → cuando te lo diga usá "buscar_cliente": si hay una coincidencia parecida confirmá ("¿Es Juan Morales?"), si no existe avisá y ofrecé crearlo ("No tengo a Juan Pérez, ¿lo creo?"); 3) marca y modelo; 4) tarea/servicio (opcional). Preguntá una cosa a la vez, sin abrumar. Cuando tengas al menos la patente, llamá a "registrar_ingreso" con TODO lo que juntaste en la conversación.
+- CONFIRMAR EL INGRESO: el ingreso NO se carga solo. La herramienta devuelve "pendiente_confirmacion": en ese caso NO digas que quedó registrado; pedí confirmación en UNA línea con los datos del "resumen" (ej: "¿Confirmo el ingreso de ABC123 Gol de Juan? Respondé *Sí* para cargarlo"). Al responder Sí, la app lo carga sola. Si el vehículo YA EXISTÍA (yaExistia=true), aclaralo con naturalidad ("ya lo teníamos, le sumaría una nueva entrada").
 - CONSULTAS: usá las herramientas para vehículos, clientes, órdenes, entregas o qué hay en el taller. Para "entregados hoy/esta semana" usá "entregados" con "desde" (calculado desde hoy=${hoy}); para "los últimos N" usá "limite".
 - Si es un saludo o algo general, respondé breve y explicá qué podés hacer.
 - Sé breve, cálido y en español rioplatense (voseo). Máximo 4 líneas. 1-2 emojis está bien.`;
 
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: texto }];
+  // Tokens consumidos por TODOS los intentos (para no perder el conteo si el
+  // primer modelo falla y reintentamos con otro).
   let inputTokens = 0;
   let outputTokens = 0;
-  let presupuestoDoc = "";
-  let presupuestoId = "";
 
-  try {
+  /**
+   * Corre el loop del agente con un modelo dado, partiendo de un estado limpio
+   * (el mensaje del usuario). Puede lanzar si la API del modelo falla/limita.
+   */
+  const runLoop = async (model: string): Promise<AgenteResultado> => {
+    // Memoria multi-turno: prependemos el historial previo (texto plano) para
+    // dar contexto de la conversación antes del mensaje actual del usuario.
+    const messages: Anthropic.MessageParam[] = [
+      ...historialPrevio.map(
+        (t): Anthropic.MessageParam => ({ role: t.role, content: t.content }),
+      ),
+      { role: "user", content: texto },
+    ];
+    let presupuestoDoc = "";
+    let presupuestoId = "";
+
     for (let i = 0; i < 4; i++) {
       const res = await c.messages.create(
         {
-          model: hooks?.model || env.CLAUDE_MODEL_AGENT,
+          model,
           max_tokens: 1024,
           system,
           tools: TOOLS,
@@ -465,7 +533,14 @@ export async function agenteConsulta(
           }
           if (!enviadoPdf && presupuestoDoc) finalText = `${finalText}\n\n${presupuestoDoc}`;
         }
-        return { texto: finalText, inputTokens, outputTokens };
+        // El historial guarda solo el texto final del asistente (no el doc del
+        // presupuesto ni bloques de tool), para mantener la memoria simple/barata.
+        return {
+          texto: finalText,
+          inputTokens,
+          outputTokens,
+          historial: construirHistorial(txt || finalText),
+        };
       }
 
       messages.push({ role: "assistant", content: res.content });
@@ -493,8 +568,35 @@ export async function agenteConsulta(
       }
       messages.push({ role: "user", content: toolResults });
     }
-    return { texto: "No pude completar la consulta, probá de nuevo.", inputTokens, outputTokens };
+    const incompleto = "No pude completar la consulta, probá de nuevo.";
+    return {
+      texto: incompleto,
+      inputTokens,
+      outputTokens,
+      historial: construirHistorial(incompleto),
+    };
+  };
+
+  const primaryModel = hooks?.model || env.CLAUDE_MODEL_AGENT;
+  try {
+    return await runLoop(primaryModel);
   } catch {
-    return { texto: fallback, inputTokens, outputTokens };
+    // BOT-6: fallback de modelo. Si el modelo primario cayó/limitó, reintentar
+    // UNA vez con Haiku (barato y disponible) antes de rendirnos — solo si el
+    // modelo usado era otro. Había cliente (c != null); un fallo real de API,
+    // no falta de config.
+    if (primaryModel !== MODELO_FALLBACK) {
+      try {
+        return await runLoop(MODELO_FALLBACK);
+      } catch {
+        /* el reintento también falló: caemos al texto de respaldo */
+      }
+    }
+    return {
+      texto: fallback,
+      inputTokens,
+      outputTokens,
+      historial: construirHistorial(fallback),
+    };
   }
 }

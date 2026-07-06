@@ -184,7 +184,17 @@ export interface WorkOrder {
   parts: OrderPart[];
   laborCost: number;
   partsCost: number;
+  /** Subtotal antes de descuento e IVA (centavos). */
+  subtotal?: number;
+  /** Descuento global aplicado (centavos). */
+  discountAmount?: number;
+  /** Alícuota de IVA en basis points (2100 = 21%, 0 = sin IVA). */
+  taxRate?: number;
+  /** Monto de IVA calculado (centavos). */
+  taxAmount?: number;
   total: number;
+  /** Monto cobrado hasta ahora (centavos). Saldo = total - paidAmount. */
+  paidAmount?: number;
   mileage?: number | null;
   notes?: string | null;
   entryDate: string;
@@ -192,6 +202,35 @@ export interface WorkOrder {
   deliveryDate?: string | null;
   finalizedAt?: string | null;
   createdAt: string;
+}
+
+export type PaymentMethod = "efectivo" | "transferencia" | "tarjeta" | "mercadopago" | "otro";
+export type PaymentEstado = "impaga" | "parcial" | "pagada";
+
+export interface Payment {
+  id: string;
+  workOrderId: string;
+  customerId: string | null;
+  amount: number;
+  method: PaymentMethod;
+  paidAt: string;
+  note?: string | null;
+  createdAt: string;
+}
+
+/** Una orden con saldo pendiente, en la cuenta corriente del cliente. */
+export interface CustomerBalanceOrder {
+  id: string;
+  number: number;
+  total: number;
+  paidAmount: number;
+  saldo: number;
+  estado: PaymentEstado;
+}
+
+export interface CustomerBalance {
+  deudaTotal: number;
+  ordenes: CustomerBalanceOrder[];
 }
 
 export interface VehicleStats {

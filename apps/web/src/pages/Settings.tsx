@@ -1,11 +1,61 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
-import { MessageSquare, LogOut, Building2, ImageUp } from "lucide-react";
+import { MessageSquare, LogOut, Building2, ImageUp, Coins } from "lucide-react";
 import { useAuth } from "@/auth";
 import { api } from "@/lib/api";
+import type { Currency } from "@/lib/utils";
 import { useToast } from "@/components/toast";
 import { Button, Card, PageHeader } from "@/components/ui";
+
+const CURRENCIES: { value: Currency; label: string }[] = [
+  { value: "ARS", label: "Peso argentino (ARS)" },
+  { value: "CLP", label: "Peso chileno (CLP)" },
+  { value: "USD", label: "Dólar (USD)" },
+];
+
+/** Moneda del taller: se usa en presupuestos, cobros y toda la app. */
+function CurrencySelector({ current }: { current: Currency }) {
+  const toast = useToast();
+  const { refreshMe } = useAuth();
+  const save = useMutation({
+    mutationFn: (currency: Currency) =>
+      api.patch<{ ok: boolean; settings: Record<string, unknown> }>("/api/settings", { currency }),
+    onSuccess: async () => {
+      // Refetch de /api/me → el useEffect del AuthContext corre setActiveCurrency
+      // y toda la app re-renderiza con la nueva moneda.
+      await refreshMe();
+      toast.success("Moneda actualizada");
+    },
+    onError: () => toast.error("No se pudo actualizar la moneda"),
+  });
+
+  return (
+    <Card>
+      <div className="mb-3 flex items-center gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-[4px] bg-pale-sage text-deep-forest">
+          <Coins size={20} />
+        </span>
+        <div>
+          <div className="font-medium text-deep-forest">Moneda del taller</div>
+          <div className="text-[13px] text-charcoal">Se usa en presupuestos, cobros y montos</div>
+        </div>
+      </div>
+      <select
+        value={current}
+        disabled={save.isPending}
+        onChange={(e) => save.mutate(e.target.value as Currency)}
+        className="w-full rounded-[4px] border border-ink-black bg-white px-3 py-2 text-[14px] text-deep-forest disabled:opacity-60"
+      >
+        {CURRENCIES.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+    </Card>
+  );
+}
 
 /** Logo propio del taller (aparece en los presupuestos). */
 function LogoUploader({ currentPath }: { currentPath?: string }) {
@@ -73,6 +123,7 @@ function readDataUrl(file: File): Promise<string> {
 export function SettingsPage() {
   const { user, tenant, isAdmin, logout } = useAuth();
   const logoPath = (tenant?.settings as { logoPath?: string } | undefined)?.logoPath;
+  const currency = (tenant?.settings as { currency?: Currency } | undefined)?.currency ?? "ARS";
   return (
     <div>
       <PageHeader eyebrow="Cuenta" title="Configuración" />
@@ -99,6 +150,8 @@ export function SettingsPage() {
             </div>
           </dl>
         </Card>
+
+        {isAdmin ? <CurrencySelector current={currency} /> : null}
 
         {isAdmin ? <LogoUploader currentPath={logoPath} /> : null}
 

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Momec — Reel</title>
 <style>
+  /* Deck 9:16 para redes. Grabá una ventana vertical (o recortá a 9:16 en edición).
+   * Mismo lenguaje que el deck 16:9: lienzo gigante + cámara con pull-back. */
   :root{
     --forest:#043f2e; --chartreuse:#c8f169; --vivid:#78c51c; --paper:#fcfcfc;
     --ease:cubic-bezier(0.22,1,0.36,1);
@@ -13,144 +15,211 @@
     --g1:#0f2c1e; --g2:#0a1a12; --glow:rgba(120,197,28,.24);
   }
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;background:#000;overflow:hidden;font-family:var(--sans);color:var(--paper)}
-  /* 9:16 frame centrado (grabá este recuadro o abrí en ventana vertical) */
-  #frame{position:relative;height:100vh;aspect-ratio:9/16;max-width:100vw;margin:0 auto;overflow:hidden;background:#05100b}
-  @media (max-aspect-ratio:9/16){#frame{width:100vw;height:auto;aspect-ratio:9/16}}
-  .bg{position:absolute;inset:0;z-index:0;transition:background 1.1s var(--ease);
+  html,body{height:100%;background:#05100b;overflow:hidden;font-family:var(--sans);color:var(--paper)}
+  .bg{position:fixed;inset:0;z-index:0;transition:background 1.1s var(--ease);
     background:
       radial-gradient(80% 40% at 30% 8%, var(--g1), transparent 60%),
       radial-gradient(70% 50% at 80% 92%, var(--glow), transparent 60%),
       radial-gradient(120% 90% at 50% 50%, var(--g2), #05100b 74%);}
-  .grain{position:absolute;inset:0;z-index:1;opacity:.05;pointer-events:none;background-image:radial-gradient(#fff .5px,transparent .6px);background-size:3px 3px}
+  .grain{position:fixed;inset:0;z-index:6;opacity:.05;pointer-events:none;background-image:radial-gradient(#fff .5px,transparent .6px);background-size:3px 3px}
 
-  .scene{position:absolute;inset:0;z-index:2;opacity:0;visibility:hidden;transition:opacity .45s;
-    display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:6% 6% 5%}
-  .scene.active{opacity:1;visibility:visible}
+  /* ===== Mundo + cámara ===== */
+  #viewport{position:fixed;inset:0;overflow:hidden;z-index:2}
+  #world{position:absolute;left:0;top:0;transform-origin:0 0;width:0;height:0}
+  .amb{position:absolute;font-family:var(--serif);font-weight:600;color:rgba(200,241,105,.05);
+    pointer-events:none;white-space:nowrap;letter-spacing:-.02em}
+
+  /* ===== Escenas 1080×1920 sobre el lienzo ===== */
+  .scene{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+    padding:120px 90px 110px;border-radius:56px;
+    background:rgba(10,22,15,.45);border:2px solid rgba(200,241,105,.08);
+    box-shadow:0 90px 240px rgba(0,0,0,.4);
+    opacity:.45;transition:opacity .9s var(--ease)}
+  .scene.active{opacity:1}
+  .scene.bare{background:none;border:none;box-shadow:none}
   .top,.bottom{width:100%;text-align:center;flex:none}
-  .mid{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;padding:3% 0}
+  .mid{flex:1;width:100%}
 
-  .eyebrow{font-size:2.3vh;letter-spacing:.26em;text-transform:uppercase;color:var(--chartreuse);font-weight:600;margin-bottom:1.2vh}
-  h1{font-family:var(--serif);font-weight:600;font-size:7.6vh;line-height:1.02;letter-spacing:-.01em;text-wrap:balance}
-  h2{font-family:var(--serif);font-weight:600;font-size:5vh;line-height:1.06;text-wrap:balance}
-  .lead{font-size:2.7vh;color:#cfe6d4;line-height:1.32;margin-top:.8vh}
+  /* ===== Tipografía (px = unidades del lienzo) ===== */
+  .eyebrow{font-size:44px;letter-spacing:.26em;text-transform:uppercase;color:var(--chartreuse);font-weight:600;margin-bottom:26px}
+  h1{font-family:var(--serif);font-weight:600;font-size:150px;line-height:1.02;letter-spacing:-.01em;text-wrap:balance}
+  h2{font-family:var(--serif);font-weight:600;font-size:98px;line-height:1.06;text-wrap:balance}
+  .lead{font-size:53px;color:#cfe6d4;line-height:1.32;margin-top:16px}
   .lime{color:var(--chartreuse)} .grn{color:var(--vivid)}
 
+  /* ===== Coreografía (arranca al llegar la cámara: --arr) ===== */
   .kin span{display:inline-block;opacity:0;transform:translateY(.5em) rotate(2deg);filter:blur(6px)}
-  .active .kin span{animation:rise .8s var(--ease) forwards;animation-delay:calc(var(--i)*.07s + var(--d,0s))}
+  .active .kin span{animation:rise .8s var(--ease) forwards;animation-delay:calc(var(--arr,.15s) + var(--i)*.07s + var(--d,0s))}
   @keyframes rise{to{opacity:1;transform:none;filter:blur(0)}}
+  .played .kin span{opacity:1;transform:none;filter:none}
   .wipe{clip-path:inset(0 100% 0 0)}
-  .active .wipe{animation:wp .9s var(--ease) .15s forwards}
+  .active .wipe{animation:wp .9s var(--ease) calc(var(--arr,.15s) + .1s) forwards}
   @keyframes wp{to{clip-path:inset(0 0 0 0)}}
+  .played .wipe{clip-path:inset(0 0 0 0)}
 
-  /* Phone — protagonista (se dimensiona por ALTO para entrar en el área central) */
-  .phone{height:100%;max-height:100%;width:auto;max-width:86%;aspect-ratio:.462;border-radius:8%/3.8%;background:#0a0f0c;padding:2.4%;position:relative;
-    box-shadow:0 0 0 2px #16261d,0 3vh 9vh rgba(0,0,0,.7),0 0 10vh var(--glow)}
-  .phone::after{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(200,241,105,.4)}
-  .screen{width:100%;height:100%;border-radius:6.6%/3.2%;overflow:hidden;background:#eef2e3}
-  .screen img{width:100%;height:100%;object-fit:cover;object-position:50% 0%;display:block}
-  .phone.enter{opacity:0;transform:translateY(4vh) scale(.94)}
-  .active .phone.enter{animation:pin .9s var(--ease) .1s forwards}
-  @keyframes pin{to{opacity:1;transform:none}}
-  .active .phone.pan .screen img{animation:pan var(--pan,7s) linear .4s both}
-  @keyframes pan{0%{object-position:50% 0%}14%{object-position:50% 0%}100%{object-position:50% 100%}}
-  .active .phone.pdf .screen img{object-fit:contain;background:#fff}
+  /* ===== Shared element: teléfono fijo a la cámara (el mundo vuela detrás) ===== */
+  #sphone{position:fixed;left:50%;top:53.5%;height:56%;aspect-ratio:.462;z-index:4;
+    transform:translate(-50%,-50%) scale(.9);opacity:0;pointer-events:none;
+    border-radius:8%/3.8%;background:#0a0f0c;padding:1.1vh;
+    box-shadow:0 0 0 2px #16261d,0 3vh 9vh rgba(0,0,0,.7),0 0 11vh var(--glow);
+    transition:opacity .55s var(--ease),transform .8s var(--ease)}
+  #sphone.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  #sphone::after{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(200,241,105,.4)}
+  #sphone .screen{position:relative;width:100%;height:100%;border-radius:6.6%/3.2%;overflow:hidden;background:#eef2e3;container-type:size}
+  #sphone .layer{position:absolute;inset:0;opacity:0;transition:opacity .65s var(--ease)}
+  #sphone .layer img{width:100%;height:auto;display:block}
+  #sphone.pdf .layer img{width:100%;height:100%;object-fit:contain;background:#fff}
+  @keyframes pan{0%,14%{transform:translateY(0)}100%{transform:translateY(min(0px,calc(100cqh - 100%)))}}
 
-  /* Chat vertical */
-  .chat{width:94%;background:#0c1712dd;border:1px solid #1c2c22;border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 3vh 9vh rgba(0,0,0,.6)}
-  .bub{max-width:86%;padding:11px 14px;border-radius:15px;font-size:2.5vh;line-height:1.32;opacity:0}
-  .me{align-self:flex-end;background:#255c34;border-bottom-right-radius:5px}
-  .bot{align-self:flex-start;background:#14231b;border:1px solid #223528;border-bottom-left-radius:5px}
-  @keyframes pop{from{opacity:0;transform:translateY(9px) scale(.96)}to{opacity:1;transform:none}}
-  @keyframes fadeout{to{opacity:0;transform:translateY(-6px)}}
-  .doc{align-self:flex-start;display:flex;gap:10px;align-items:center;background:#14231b;border:1px solid #223528;border-radius:13px;padding:11px 14px;opacity:0}
-  .doc .ic{width:30px;height:38px;border-radius:5px;background:#c8f169;color:#05100b;display:grid;place-items:center;font-weight:700;font-size:12px;flex:none;font-family:var(--serif)}
-  .typing{align-self:flex-start;display:flex;gap:5px;padding:11px 15px;background:#14231b;border-radius:15px;opacity:0}
-  .typing i{width:7px;height:7px;border-radius:50%;background:#7f9686;animation:blink 1.2s infinite}
+  /* ===== Chat ===== */
+  .chat{width:94%;margin:0 auto;background:#0c1712dd;border:2px solid #1c2c22;border-radius:44px;padding:36px;
+    display:flex;flex-direction:column;gap:24px;box-shadow:0 60px 180px rgba(0,0,0,.6)}
+  .bub{max-width:86%;padding:26px 32px;border-radius:34px;font-size:47px;line-height:1.32;opacity:0}
+  .me{align-self:flex-end;background:#255c34;border-bottom-right-radius:12px}
+  .bot{align-self:flex-start;background:#14231b;border:2px solid #223528;border-bottom-left-radius:12px}
+  @keyframes pop{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:none}}
+  @keyframes fadeout{to{opacity:0;transform:translateY(-12px)}}
+  .doc{align-self:flex-start;display:flex;gap:22px;align-items:center;background:#14231b;border:2px solid #223528;border-radius:30px;padding:26px 32px;opacity:0}
+  .doc .ic{width:66px;height:84px;border-radius:12px;background:#c8f169;color:#05100b;display:grid;place-items:center;font-weight:700;font-size:26px;flex:none;font-family:var(--serif)}
+  .doc b{font-size:44px}.doc .sub{color:#9db7a5;font-size:30px}
+  .typing{align-self:flex-start;display:flex;gap:11px;padding:26px 34px;background:#14231b;border-radius:34px;opacity:0}
+  .typing i{width:15px;height:15px;border-radius:50%;background:#7f9686;animation:blink 1.2s infinite}
   .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
   @keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
+  .active .bub,.active .doc{animation:pop .5s var(--ease) forwards;animation-delay:calc(var(--arr,0s) + var(--bd,0s))}
+  .active .typing{animation:pop .4s var(--ease) calc(var(--arr,0s) + 2.3s) forwards, fadeout .3s ease calc(var(--arr,0s) + 3.7s) forwards}
+  .played .bub,.played .doc{opacity:1!important;animation:none!important;transform:none}
+  .played .typing{display:none}
 
-  .mark{width:14vh;height:14vh;margin:0 auto 2vh}
-  .mark rect{opacity:0}.active .mark rect{animation:pin .55s var(--ease) forwards}
-  .mark path{stroke-dasharray:120;stroke-dashoffset:120}.active .mark path{animation:draw 1s var(--ease) .3s forwards}
+  /* ===== Marca M ===== */
+  .mark{width:270px;height:270px;margin:0 auto 40px}
+  .mark rect{opacity:0}.active .mark rect{animation:mk .55s var(--ease) calc(var(--arr,.15s)) forwards}
+  @keyframes mk{to{opacity:1}}
+  .mark path{stroke-dasharray:120;stroke-dashoffset:120}
+  .active .mark path{animation:draw 1s var(--ease) calc(var(--arr,.15s) + .3s) forwards}
   @keyframes draw{to{stroke-dashoffset:0}}
+  .played .mark rect{opacity:1}.played .mark path{stroke-dashoffset:0}
 
-  #bar{position:absolute;left:0;top:0;height:.4vh;background:var(--chartreuse);width:0;z-index:5;box-shadow:0 0 12px var(--chartreuse)}
-  #hint{position:fixed;bottom:6px;left:0;right:0;text-align:center;color:#4a6353;font-size:11px;z-index:9;transition:opacity .4s}
+  /* ===== Overview ===== */
+  .ov h1{font-size:1250px;line-height:1.04}
+  .ov .lead{font-size:520px;margin-top:300px;font-weight:600}
+
+  #bar{position:fixed;left:0;top:0;height:4px;background:var(--chartreuse);width:0;z-index:7;box-shadow:0 0 12px var(--chartreuse)}
+  #hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;color:#4a6353;font-size:11px;z-index:7;transition:opacity .4s}
   @media (prefers-reduced-motion:reduce){*{animation-duration:.001s!important}}
 </style>
 </head>
 <body>
-<div id="frame">
-  <div class="bg"></div><div class="grain"></div><div id="bar"></div>
+<div class="bg"></div><div id="bar"></div>
 
-  <section class="scene" data-dur="4200" data-bg="deep">
+<!-- Teléfono compartido: fijo a la cámara; su pantalla hace crossfade -->
+<div id="sphone"><div class="screen">
+  <div class="layer"><img alt=""></div>
+  <div class="layer"><img alt=""></div>
+</div></div>
+
+<div id="viewport"><div id="world">
+
+  <!-- Palabras ambientales del recorrido -->
+  <div class="amb" style="left:-500px;top:3350px;font-size:380px;transform:rotate(-8deg)">órdenes</div>
+  <div class="amb" style="left:1750px;top:5950px;font-size:330px;transform:rotate(6deg)">clientes</div>
+  <div class="amb" style="left:-650px;top:8500px;font-size:350px;transform:rotate(-5deg)">finanzas</div>
+  <div class="amb" style="left:1850px;top:13250px;font-size:320px;transform:rotate(7deg)">fotos</div>
+  <div class="amb" style="left:-700px;top:15800px;font-size:330px;transform:rotate(-6deg)">WhatsApp</div>
+
+  <!-- 1 · Apertura -->
+  <section class="scene" data-x="0" data-y="0" data-w="1080" data-h="1920" data-rot="0" data-dur="4200" data-bg="deep">
     <div class="top"></div>
-    <div class="mid"><div>
+    <div class="mid" style="display:grid;place-items:center"><div>
       <svg class="mark" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#043f2e"/><path d="M14 47 V17 L32 35 L50 17 V47" fill="none" stroke="#c8f169" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <h1 class="kin" data-split="word" style="text-align:center">Momec</h1>
     </div></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.5s">El taller, <span class="lime">en tu celular.</span></p></div>
   </section>
 
-  <section class="scene" data-dur="4800" data-bg="lime">
+  <!-- 2 · Dashboard (hero: entra el teléfono compartido) -->
+  <section class="scene" data-x="1500" data-y="2400" data-w="1080" data-h="1920" data-rot="5" data-dur="4800" data-bg="lime"
+           data-screen="screenshots/m02-dashboard.png" data-pan="6.5">
     <div class="top"><div class="eyebrow kin" data-split="word">Todo en un lugar</div><h2 class="wipe">Tu taller,<br><span class="lime">ordenado.</span></h2></div>
-    <div class="mid"><div class="phone enter pan" style="--pan:6.5s"><div class="screen"><img src="screenshots/m02-dashboard.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Autos, órdenes, finanzas — de un vistazo.</p></div>
   </section>
 
-  <section class="scene" data-dur="8200" data-bg="dark">
+  <!-- 3 · WhatsApp (el teléfono sale; entra el chat) -->
+  <section class="scene" data-x="-200" data-y="4800" data-w="1080" data-h="1920" data-rot="-6" data-dur="8200" data-bg="dark">
     <div class="top"><div class="eyebrow kin" data-split="word">Lo más rápido</div><h2 class="wipe">Presupuestos<br>por <span class="grn">WhatsApp</span>.</h2></div>
-    <div class="mid"><div class="chat">
-      <div class="bub me" style="animation:pop .5s var(--ease) 1.1s forwards">Presupuestá a Juan: pastillas 15mil, mano de obra 8mil</div>
-      <div class="typing" style="animation:pop .4s var(--ease) 2.3s forwards, fadeout .3s ease 3.7s forwards"><i></i><i></i><i></i></div>
-      <div class="bub bot" style="animation:pop .5s var(--ease) 3.9s forwards">Listo, te paso el presupuesto 👇</div>
-      <div class="doc" style="animation:pop .5s var(--ease) 4.7s forwards"><span class="ic">PDF</span><div><b>Presupuesto&nbsp;#12</b><br><span style="color:#9db7a5;font-size:12px">con tu logo</span></div></div>
+    <div class="mid" style="display:grid;place-items:center"><div class="chat">
+      <div class="bub me" style="--bd:1.1s">Presupuestá a Juan: pastillas 15mil, mano de obra 8mil</div>
+      <div class="typing"><i></i><i></i><i></i></div>
+      <div class="bub bot" style="--bd:3.9s">Listo, te paso el presupuesto 👇</div>
+      <div class="doc" style="--bd:4.7s"><span class="ic">PDF</span><div><b>Presupuesto&nbsp;#12</b><br><span class="sub">con tu logo</span></div></div>
     </div></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.3s">Hablándole normal. Sin abrir la compu.</p></div>
   </section>
 
-  <section class="scene" data-dur="4600" data-bg="lime">
+  <!-- 4 · El PDF (vuelve el teléfono, modo documento) -->
+  <section class="scene" data-x="1400" data-y="7200" data-w="1080" data-h="1920" data-rot="4" data-dur="4600" data-bg="lime"
+           data-screen="screenshots/m10-presupuesto-pdf.png" data-pdf>
     <div class="top"><div class="eyebrow kin" data-split="word">Con tu marca</div><h2 class="wipe">El PDF, <span class="lime">con tu logo.</span></h2></div>
-    <div class="mid"><div class="phone enter pdf"><div class="screen"><img src="screenshots/m10-presupuesto-pdf.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Listo para reenviarle al cliente.</p></div>
   </section>
 
-  <section class="scene" data-dur="4600" data-bg="lime">
+  <!-- 5 · Vehículos -->
+  <section class="scene" data-x="-100" data-y="9600" data-w="1080" data-h="1920" data-rot="-5" data-dur="4600" data-bg="lime"
+           data-screen="screenshots/m03-vehiculos.png" data-pan="6">
     <div class="top"><div class="eyebrow kin" data-split="word">Cargá un auto</div><h2 class="wipe">Aparece <span class="lime">solo.</span></h2></div>
-    <div class="mid"><div class="phone enter pan" style="--pan:6s"><div class="screen"><img src="screenshots/m03-vehiculos.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Estado, fotos e historial de cada uno.</p></div>
   </section>
 
-  <section class="scene" data-dur="4600" data-bg="lime">
+  <!-- 6 · Órdenes -->
+  <section class="scene" data-x="1500" data-y="12000" data-w="1080" data-h="1920" data-rot="6" data-dur="4600" data-bg="lime"
+           data-screen="screenshots/m04-ordenes.png" data-pan="6">
     <div class="top"><div class="eyebrow kin" data-split="word">Órdenes</div><h2 class="wipe">Seguí <span class="lime">cada trabajo.</span></h2></div>
-    <div class="mid"><div class="phone enter pan" style="--pan:6s"><div class="screen"><img src="screenshots/m04-ordenes.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">De ingresado a entregado, sin perder nada.</p></div>
   </section>
 
-  <section class="scene" data-dur="4600" data-bg="lime">
+  <!-- 7 · Finanzas -->
+  <section class="scene" data-x="0" data-y="14400" data-w="1080" data-h="1920" data-rot="-4" data-dur="4600" data-bg="lime"
+           data-screen="screenshots/m07-finanzas.png" data-pan="6">
     <div class="top"><div class="eyebrow kin" data-split="word">Finanzas</div><h2 class="wipe">La plata <span class="lime">entra sola.</span></h2></div>
-    <div class="mid"><div class="phone enter pan" style="--pan:6s"><div class="screen"><img src="screenshots/m07-finanzas.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Entregás un auto y se registra el ingreso.</p></div>
   </section>
 
-  <section class="scene" data-dur="4400" data-bg="deep">
+  <!-- 8 · Se instala como app -->
+  <section class="scene" data-x="1450" data-y="16800" data-w="1080" data-h="1920" data-rot="3" data-dur="4400" data-bg="deep"
+           data-screen="screenshots/m02-dashboard.png">
     <div class="top"><div class="eyebrow kin" data-split="word">En tu celular</div><h2 class="wipe">Se instala<br><span class="lime">como app.</span></h2></div>
-    <div class="mid"><div class="phone enter" style="transform:none"><div class="screen"><img src="screenshots/m02-dashboard.png" alt=""></div></div></div>
+    <div class="mid"></div>
     <div class="bottom"><p class="lead kin" data-split="word" style="--d:.4s">Sin Play Store. Un ícono en tu inicio.</p></div>
   </section>
 
-  <section class="scene" data-dur="5000" data-bg="deep">
+  <!-- 9 · CTA -->
+  <section class="scene" data-x="100" data-y="19200" data-w="1080" data-h="1920" data-rot="0" data-dur="5000" data-bg="deep">
     <div class="top"></div>
-    <div class="mid"><div>
+    <div class="mid" style="display:grid;place-items:center"><div>
       <svg class="mark" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#043f2e"/><path d="M14 47 V17 L32 35 L50 17 V47" fill="none" stroke="#c8f169" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <h1 class="kin" data-split="word" style="text-align:center;font-size:6.4vh">Probalo gratis.</h1>
+      <h1 class="kin" data-split="word" style="text-align:center;font-size:126px">Probalo gratis.</h1>
     </div></div>
-    <div class="bottom"><p class="lead lime kin" data-split="word" style="--d:.5s;font-weight:600;font-size:3.6vh">momec.pro</p></div>
+    <div class="bottom"><p class="lead lime kin" data-split="word" style="--d:.5s;font-weight:600;font-size:70px">momec.pro</p></div>
   </section>
 
-</div>
-<div id="hint">Espacio / clic = siguiente · F = pantalla completa · R = reiniciar · P = pausar</div>
-<script src="engine.js"></script>
+  <!-- 10 · Plano final: todo el recorrido -->
+  <section class="scene bare ov" data-x="-5550" data-y="-1400" data-w="13500" data-h="24000" data-rot="0" data-dur="7000" data-bg="dark">
+    <div class="top"></div>
+    <div class="mid" style="display:grid;place-items:center"><div style="text-align:center">
+      <h1 class="kin" data-split="word">Todo tu taller.<br><span class="lime">Un solo lugar.</span></h1>
+      <p class="lead lime kin" data-split="word" style="--d:.9s">momec.pro</p>
+    </div></div>
+    <div class="bottom"></div>
+  </section>
+
+</div></div>
+
+<div id="hint">Espacio / clic = siguiente · F = pantalla completa · R = reiniciar · P = pausar · grabá una ventana 9:16</div>
+<script src="engine-camera.js"></script>
 </body>
 </html>

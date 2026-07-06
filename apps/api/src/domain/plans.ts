@@ -19,6 +19,12 @@ export interface PlanLimits {
   maxNumbers: number;
   /** Máximo de mensajes procesados con IA por mes (bot). */
   maxIaMonthly: number;
+  /**
+   * Tope mensual de TOKENS de IA (input + output) del bot. Un mensaje puede
+   * disparar varias llamadas API, así que este tope acota el costo real mejor
+   * que `maxIaMonthly`. `Infinity` = sin tope (planes internos/legado).
+   */
+  maxIaTokensMonthly: number;
   /** Modelo de Claude que usa el AGENTE del bot para este plan. */
   model: string;
   /** Incluye migración de datos (cuaderno/planillas) hecha por el equipo. */
@@ -31,6 +37,7 @@ const STARTER: PlanLimits = {
   maxUsers: 3,
   maxNumbers: 2,
   maxIaMonthly: 300,
+  maxIaTokensMonthly: 300_000,
   model: "claude-haiku-4-5",
   dataMigration: false,
 };
@@ -41,6 +48,7 @@ const PRO: PlanLimits = {
   maxUsers: 10,
   maxNumbers: 5,
   maxIaMonthly: 1500,
+  maxIaTokensMonthly: 2_000_000,
   model: "claude-sonnet-5",
   dataMigration: true,
 };
@@ -51,6 +59,7 @@ const MAX: PlanLimits = {
   maxUsers: Infinity,
   maxNumbers: 20,
   maxIaMonthly: 6000,
+  maxIaTokensMonthly: 8_000_000,
   model: "claude-sonnet-5",
   dataMigration: true,
 };
@@ -62,6 +71,7 @@ const STANDARD: PlanLimits = {
   maxUsers: Infinity,
   maxNumbers: Infinity,
   maxIaMonthly: Infinity,
+  maxIaTokensMonthly: Infinity,
   model: "claude-sonnet-4-6",
   dataMigration: true,
 };
@@ -112,6 +122,7 @@ export function limitsForJson(plan: string | null | undefined) {
     maxUsers: num(l.maxUsers),
     maxNumbers: num(l.maxNumbers),
     maxIaMonthly: num(l.maxIaMonthly),
+    maxIaTokensMonthly: num(l.maxIaTokensMonthly),
     model: l.model,
     dataMigration: l.dataMigration,
   };

@@ -8,8 +8,15 @@ import { z } from "zod";
  * precedence because loadEnvFile does not overwrite already-set variables.
  */
 function loadDotEnv(): void {
+  // En tests (vitest setea VITEST=true y NODE_ENV=test), priorizar `.env.test` y
+  // NO cargar el `.env` de desarrollo: evita que la suite apunte a la base o a
+  // las credenciales de dev (correr tests contra la base de dev la truncaría).
+  const isTest = process.env.VITEST === "true" || process.env.NODE_ENV === "test";
   const candidates = [
     process.env.ENV_FILE,
+    ...(isTest
+      ? [resolve(process.cwd(), ".env.test"), resolve(process.cwd(), "apps/api/.env.test")]
+      : []),
     resolve(process.cwd(), ".env"),
     resolve(process.cwd(), "apps/api/.env"),
   ].filter((p): p is string => Boolean(p));

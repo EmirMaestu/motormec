@@ -10,7 +10,9 @@ import {
 } from "../db/schema.js";
 import { createVehicle } from "../domain/vehicles.js";
 import { createOrder } from "../domain/orders.js";
+import type { PropuestaIngreso, TurnoHistorial } from "./agente.js";
 import { detectarComando, ejecutarComando } from "./commands.js";
+import { esPatenteValida, normalizarPatente } from "./patente.js";
 import { sameNumber } from "./phone.js";
 import type { StorageProvider } from "../storage/provider.js";
 import type { DatosVehiculo } from "./parser.js";
@@ -24,7 +26,12 @@ import {
   BTN,
 } from "./keywords.js";
 
-const EXPIRY_MS = 30 * 60 * 1000;
+// Ventana de contexto de la conversación: dentro de estos minutos el bot mantiene
+// el hilo (memoria del agente + flujos); pasado ese tiempo de inactividad, arranca
+// una charla nueva desde cero (y avisa al usuario que se reinició).
+const EXPIRY_MS = 5 * 60 * 1000;
+const AVISO_REINICIO =
+  "🔄 Pasaron unos minutos sin actividad, así que arranco una charla nueva.\n\n";
 const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
 
 export interface WAMessage {
@@ -70,8 +77,16 @@ export interface BotDeps {
    * Agente conversacional con herramientas (opcional). Responde consultas libres
    * ("cómo va la patente X", "qué autos hay", etc.) con datos reales. Si no se
    * provee, se cae a las plantillas de saludo/consulta.
+   *
+   * Memoria multi-turno: recibe el `historialPrevio` (texto plano de turnos
+   * anteriores) y devuelve el `historial` actualizado para persistir y continuar
+   * la conversación en el próximo mensaje.
    */
-  agente?: (from: string, texto: string) => Promise<string>;
+  agente?: (
+    from: string,
+    texto: string,
+    historialPrevio?: TurnoHistorial[],
+  ) => Promise<{ texto: string; historial: TurnoHistorial[] }>;
 }
 
 /** Reescribe `base` en tono natural si hay redactor; si no, devuelve `base`. */
@@ -276,11 +291,14 @@ export async function procesarMensaje(
   const historialId = await guardarHistorial(tdb, msg, texto);
   if (!historialId) return "duplicate";
 
-  // 3. Conversation state (with 30-min expiry).
+  // 3. Conversation state (ventana de contexto de 5 min). Si venía una charla y
+  // pasó la ventana, la reiniciamos y marcamos para avisar al usuario.
   let conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, from));
+  let reinicioPorExpiracion = false;
   if (conv && Date.now() - conv.updatedAt.getTime() > EXPIRY_MS) {
     await tdb.deleteById(conversaciones, conv.id);
     conv = null;
+    reinicioPorExpiracion = true;
   }
 
   // 3b. Modo "esperando foto" (tras un registro hecho por el agente).
@@ -335,7 +353,23 @@ export async function procesarMensaje(
     if (deps.agente) {
       if (deps.iaQuota) await deps.iaQuota.tick();
       await tdb.updateById(historialTaller, historialId, { status: "processed" });
-      await deps.send(from, await deps.agente(from, texto));
+      const r = await deps.agente(from, texto);
+      await deps.send(from, (reinicioPorExpiracion ? AVISO_REINICIO : "") + r.texto);
+      // Memoria multi-turno: si el agente YA creó/reemplazó una conversación
+      // (p. ej. registrar_ingreso dejó etapa confirmar_ingreso_agente), NO la
+      // tocamos. Si no hay ninguna, guardamos una etapa "agente_libre" con el
+      // historial para continuar la conversación en el próximo mensaje.
+      const convDespues = await tdb.selectOne(
+        conversaciones,
+        eq(conversaciones.phone, from),
+      );
+      if (!convDespues) {
+        await tdb.insert(conversaciones, {
+          phone: from,
+          etapa: "agente_libre",
+          datos: { historial: r.historial },
+        });
+      }
       return "agente";
     }
 
@@ -413,6 +447,117 @@ export async function procesarMensaje(
   const negativo = esBotonNegativo(btnId) || esNegativo(texto);
   const listo = esBotonListo(btnId) || esListo(texto);
   const datos = (conv.datos ?? {}) as ConvDatos;
+
+  // Memoria multi-turno: conversación libre con el agente en curso. Cada mensaje
+  // se le pasa con el historial acumulado, para que entienda el contexto (p. ej.
+  // completar un ingreso paso a paso o consultas de seguimiento). El TTL de 30
+  // min limpia esta etapa sola si el usuario deja de responder.
+  if (conv.etapa === "agente_libre") {
+    if (!deps.agente) {
+      await deps.send(from, await natural(deps, saludoAyuda(deps.tallerNombre)));
+      return "saludo";
+    }
+    // Cuota IA (mismo patrón que el ingreso nuevo): sin cupo, avisamos y cortamos.
+    if (deps.iaQuota && !(await deps.iaQuota.check())) {
+      await tdb.updateById(historialTaller, historialId, {
+        status: "error",
+        errorMessage: "ia_quota_exceeded",
+      });
+      await deps.send(
+        from,
+        "⚠️ El taller alcanzó el límite de mensajes con IA de este mes. Pedile al administrador que actualice el plan para seguir cargando ingresos automáticamente.",
+      );
+      return "ia_quota";
+    }
+    const historialPrevio = ((conv.datos as { historial?: TurnoHistorial[] })?.historial ??
+      []) as TurnoHistorial[];
+    if (deps.iaQuota) await deps.iaQuota.tick();
+    await tdb.updateById(historialTaller, historialId, { status: "processed" });
+    const r = await deps.agente(from, texto, historialPrevio);
+    await deps.send(from, r.texto);
+    // Si el agente reemplazó la conversación (p. ej. registrar_ingreso dejó
+    // confirmar_ingreso_agente), la respetamos; si no, refrescamos el historial
+    // y el TTL para el próximo turno.
+    const convDespues = await tdb.selectOne(conversaciones, eq(conversaciones.phone, from));
+    if (convDespues && convDespues.etapa === "agente_libre") {
+      await tdb.updateById(conversaciones, convDespues.id, {
+        datos: { historial: r.historial },
+        updatedAt: new Date(),
+      });
+    }
+    return "agente";
+  }
+
+  // BOT-3: confirmación de un ingreso propuesto por el agente. El agente NO escribió;
+  // sólo dejó la propuesta pendiente. Recién acá, con un "sí", se ejecuta el createOrder.
+  if (conv.etapa === "confirmar_ingreso_agente") {
+    const propuesta = (conv.datos ?? {}) as unknown as PropuestaIngreso;
+    // BOT-4: defensa en profundidad. La patente ya se validó al armar la propuesta,
+    // pero antes de escribir volvemos a chequear el formato. Si es inválida, no
+    // creamos nada: descartamos y pedimos que la repitan.
+    const patente = normalizarPatente(propuesta.patente ?? "");
+    if (afirmativo && !esPatenteValida(patente)) {
+      await tdb.deleteById(conversaciones, conv.id);
+      await deps.send(
+        from,
+        "Esa patente no parece válida, ¿me la repetís? (formato ABC123 o AB123CD)",
+      );
+      return "patente_invalida";
+    }
+    if (afirmativo) {
+      const order = await createOrder(tdb, BOT_ACTOR, {
+        plate: patente,
+        brand: propuesta.marca || "",
+        model: propuesta.modelo || "",
+        customerName: propuesta.cliente || "",
+        phone: from,
+        services: propuesta.tarea ? [propuesta.tarea] : [],
+        mileage: propuesta.kilometraje ?? null,
+      });
+
+      // Historial (para el panel y para adjuntar fotos) + modo "esperando foto".
+      const h = await tdb.insertOne(historialTaller, {
+        waMessageId: `agent-${order.id}`,
+        waFrom: from,
+        waTimestamp: String(Math.floor(Date.now() / 1000)),
+        rawMessage: null,
+        marcaModelo: `${propuesta.marca} ${propuesta.modelo}`.trim() || null,
+        patente,
+        kilometraje: propuesta.kilometraje != null ? String(propuesta.kilometraje) : null,
+        tarea: propuesta.tarea || null,
+        cliente: propuesta.cliente || null,
+        vehicleId: order.vehicleId,
+        workOrderId: order.id,
+        status: "linked",
+        fotoPaths: [],
+      });
+      await tdb.updateById(conversaciones, conv.id, {
+        etapa: "esperando_foto",
+        datos: { fotoPaths: [] },
+        historialId: h.id,
+        updatedAt: new Date(),
+      });
+      const vehiculo = `${propuesta.marca} ${propuesta.modelo}`.trim();
+      await deps.send(
+        from,
+        await natural(
+          deps,
+          `✅ Listo, cargué el ingreso de ${patente}${vehiculo ? ` (${vehiculo})` : ""} — orden #${order.number}. Podés mandar fotos del vehículo si querés. 📸`,
+        ),
+      );
+      return "ingreso_confirmado";
+    }
+    if (negativo) {
+      await tdb.deleteById(conversaciones, conv.id);
+      await deps.send(from, "Listo, no lo cargué. Contame si necesitás otra cosa. 🙂");
+      return "ingreso_descartado";
+    }
+    await deps.send(
+      from,
+      `¿Confirmo el ingreso de ${patente}? Respondé *Sí* para cargarlo o *No* para descartarlo.`,
+    );
+    return "confirmar_ingreso_agente";
+  }
 
   if (conv.etapa === "verificando_cliente") {
     if (afirmativo) {

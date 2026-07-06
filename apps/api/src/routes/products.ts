@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { inventoryMovements, products } from "../db/schema.js";
 import { authed, requireAuth, requireRole } from "../auth/middleware.js";
@@ -88,6 +88,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const d = parsed.data;
 
     const newQuantity = d.quantity ?? existing.quantity;
+    if (newQuantity < 0) {
+      return reply.code(400).send({ error: "invalid_quantity", message: "El stock no puede ser negativo." });
+    }
+
     const newReorder = d.reorderPoint ?? existing.reorderPoint;
     const lowStock = newQuantity <= newReorder;
     const { reason, ...fields } = d;
@@ -116,6 +120,62 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         quantityChange: quantityChanged ? newQuantity - existing.quantity : null,
         previousPrice: existing.price,
         newPrice: updated?.price ?? existing.price,
+        reason: reason ?? null,
+        details: { previousData: existing, newData: updated },
+      },
+    );
+    return reply.send({ product: updated });
+  });
+
+  app.post("/api/products/:id/adjust", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb, auth } = authed(request);
+    const { id } = request.params as { id: string };
+    const parsed = z
+      .object({ delta: z.number().int(), reason: z.string().max(500).optional() })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+    const { delta, reason } = parsed.data;
+
+    const existing = await tenantDb.findById(products, id);
+    if (!existing) return reply.code(404).send({ error: "not_found" });
+
+    // Update atómico: quantity = quantity + delta. La constraint QW-1
+    // (products_quantity_non_negative) lanza si el resultado quedara negativo.
+    let updated;
+    try {
+      const rows = await tenantDb.update(
+        products,
+        { quantity: sql`${products.quantity} + ${delta}`, updatedAt: new Date() },
+        eq(products.id, id),
+      );
+      updated = rows[0];
+    } catch {
+      return reply
+        .code(400)
+        .send({ error: "stock_insuficiente", message: "Stock insuficiente para ese ajuste." });
+    }
+    if (!updated) return reply.code(404).send({ error: "not_found" });
+
+    // Recalcular lowStock con la nueva cantidad.
+    const lowStock = updated.quantity <= updated.reorderPoint;
+    if (lowStock !== updated.lowStock) {
+      const relowered = await tenantDb.updateById(products, id, { lowStock });
+      if (relowered) updated = relowered;
+    }
+
+    await logInventoryMovement(
+      tenantDb,
+      { userId: auth.userId, userName: auth.userName },
+      {
+        productId: id,
+        productName: updated.name,
+        productType: updated.type,
+        movementType: delta >= 0 ? "stock_increase" : "stock_decrease",
+        previousQuantity: existing.quantity,
+        newQuantity: updated.quantity,
+        quantityChange: delta,
+        previousPrice: existing.price,
+        newPrice: updated.price,
         reason: reason ?? null,
         details: { previousData: existing, newData: updated },
       },

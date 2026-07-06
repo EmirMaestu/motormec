@@ -54,6 +54,11 @@ export async function login(input: LoginInput): Promise<LoginSuccess | LoginFail
     : [];
   const user = userRows[0];
 
+  // If the account is currently locked out, reject before checking the
+  // password (still run a dummy hash below to keep timing constant).
+  const lockedOut =
+    user?.lockoutUntil != null && user.lockoutUntil.getTime() > Date.now();
+
   // Dummy hash to equalize timing when the user does not exist.
   const storedHash =
     user?.passwordHash ??
@@ -61,8 +66,30 @@ export async function login(input: LoginInput): Promise<LoginSuccess | LoginFail
 
   const { valid, needsRehash } = await verifyPassword(input.password, storedHash);
 
-  if (!tenant || !user || !valid) {
+  if (!tenant || !user || lockedOut) {
     return { ok: false };
+  }
+
+  if (!valid) {
+    // Count the failure per-user; lock the account after 5 consecutive fails.
+    const next = (user.failedLoginCount ?? 0) + 1;
+    await db
+      .update(users)
+      .set(
+        next >= 5
+          ? { failedLoginCount: 0, lockoutUntil: new Date(Date.now() + 15 * 60_000) }
+          : { failedLoginCount: next },
+      )
+      .where(eq(users.id, user.id));
+    return { ok: false };
+  }
+
+  // Successful login: clear any accumulated failures / lockout.
+  if (user.failedLoginCount || user.lockoutUntil) {
+    await db
+      .update(users)
+      .set({ failedLoginCount: 0, lockoutUntil: null })
+      .where(eq(users.id, user.id));
   }
 
   if (needsRehash) {

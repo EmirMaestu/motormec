@@ -57,6 +57,48 @@
       "when": 1782900231181,
       "tag": "0007_colossal_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783147001158,
+      "tag": "0008_right_tempest",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783149026323,
+      "tag": "0009_lush_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783152429935,
+      "tag": "0010_fixed_dark_beast",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783210355703,
+      "tag": "0011_shiny_forge",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783212745052,
+      "tag": "0012_eminent_nitro",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783220204916,
+      "tag": "0013_nasty_mockingbird",
+      "breakpoints": true
     }
   ]
 }

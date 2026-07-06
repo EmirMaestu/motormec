@@ -1,11 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { customers, historialTaller, orderStatus, vehicles, workOrders } from "../db/schema.js";
+import { customers, historialTaller, orderStatus, payments, vehicles, workOrders } from "../db/schema.js";
 import { authed, requireAuth, requireRole } from "../auth/middleware.js";
 import * as O from "../domain/orders.js";
+import { registrarPago } from "../domain/payments.js";
 import { notifyOrderStatusChange } from "../domain/notifications.js";
 import { localDisk } from "../storage/provider.js";
+import { detectImageType } from "../lib/imageType.js";
+import { env } from "../config/env.js";
 
 /** Fotos (fotoPaths) de todo el historial ligado a una orden. */
 async function orderPhotos(
@@ -21,6 +24,9 @@ const IMG_EXT: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
 };
+
+// Tipos de imagen aceptados (validados por magic bytes, no por el data-URL).
+const ALLOWED = Object.keys(IMG_EXT);
 
 const partSchema = z.object({
   productId: z.string().uuid().nullable().optional(),
@@ -41,6 +47,8 @@ const createSchema = z.object({
   services: z.array(z.string()).optional(),
   parts: z.array(partSchema).optional(),
   laborCost: z.number().min(0).optional(),
+  discountAmount: z.number().int().min(0).optional(),
+  taxRate: z.number().int().min(0).max(10000).optional(),
   mileage: z.number().int().nullable().optional(),
   notes: z.string().max(4000).optional(),
   estimatedDate: z.string().max(40).nullable().optional(),
@@ -52,9 +60,17 @@ const updateSchema = z.object({
   services: z.array(z.string()).optional(),
   parts: z.array(partSchema).optional(),
   laborCost: z.number().min(0).optional(),
+  discountAmount: z.number().int().min(0).optional(),
+  taxRate: z.number().int().min(0).max(10000).optional(),
   notes: z.string().max(4000).optional(),
   estimatedDate: z.string().max(40).nullable().optional(),
   mileage: z.number().int().nullable().optional(),
+});
+
+const paymentSchema = z.object({
+  amount: z.number().int().positive(),
+  method: z.string().max(40).optional(),
+  note: z.string().max(500).optional(),
 });
 
 export async function orderRoutes(app: FastifyInstance): Promise<void> {
@@ -91,7 +107,11 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
   // base64 (data URL); el cliente la comprime antes de enviar.
   app.post(
     "/api/orders/:id/photos",
-    { preHandler: requireAuth, bodyLimit: 15 * 1024 * 1024 },
+    {
+      preHandler: requireAuth,
+      bodyLimit: 15 * 1024 * 1024,
+      config: { rateLimit: { max: env.NODE_ENV === "production" ? 30 : 100000, timeWindow: "1 minute" } },
+    },
     async (request, reply) => {
       const { tenantDb, auth } = authed(request);
       const { id } = request.params as { id: string };
@@ -105,6 +125,12 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
       if (!match) return reply.code(400).send({ error: "invalid_image" });
       const ext = IMG_EXT[match[1]!] ?? "jpg";
       const bytes = Buffer.from(match[2]!, "base64");
+      const realType = detectImageType(bytes);
+      if (!realType || !ALLOWED.includes(realType)) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_image", message: "El archivo no es una imagen válida." });
+      }
       if (bytes.length > 12 * 1024 * 1024) return reply.code(413).send({ error: "too_large" });
 
       // Reusar el historial ligado a esta orden, o crear uno para las fotos web.
@@ -155,7 +181,15 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
     const parsed = updateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
     const before = await tenantDb.findById(workOrders, id);
-    const order = await O.updateOrder(tenantDb, id, parsed.data);
+    let order;
+    try {
+      order = await O.updateOrder(tenantDb, id, parsed.data);
+    } catch (err) {
+      return reply.code(409).send({
+        error: "order_finalized",
+        message: "No se puede editar una orden finalizada. Reabrila primero.",
+      });
+    }
     if (!order) return reply.code(404).send({ error: "not_found" });
     // Aviso al cliente sólo si el estado cambió (best-effort, no bloquea).
     if (parsed.data.status && before && before.status !== order.status) {
@@ -188,5 +222,46 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       return reply.code(409).send({ error: "stock_error", message: (err as Error).message });
     }
+  });
+
+  // Registrar un pago (incluidos parciales; el fiado está permitido) contra una orden.
+  app.post("/api/orders/:id/payments", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb, auth } = authed(request);
+    const { id } = request.params as { id: string };
+    const parsed = paymentSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+    let result;
+    try {
+      result = await registrarPago(
+        tenantDb,
+        { userId: auth.userId, userName: auth.userName },
+        id,
+        parsed.data,
+      );
+    } catch {
+      return reply.code(400).send({ error: "invalid_amount" });
+    }
+    if (!result) return reply.code(404).send({ error: "not_found" });
+    const { payment, order, saldo, estado } = result;
+    return reply.code(201).send({
+      payment,
+      order: {
+        id: order.id,
+        number: order.number,
+        total: order.total,
+        paidAmount: order.paidAmount,
+        saldo,
+        estado,
+      },
+    });
+  });
+
+  // Pagos de una orden, del más antiguo al más reciente.
+  app.get("/api/orders/:id/payments", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb } = authed(request);
+    const { id } = request.params as { id: string };
+    const rows = await tenantDb.select(payments, eq(payments.workOrderId, id));
+    rows.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+    return reply.send({ payments: rows });
   });
 }

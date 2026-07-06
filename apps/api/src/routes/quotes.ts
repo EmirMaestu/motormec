@@ -6,6 +6,8 @@ import { db } from "../db/client.js";
 import { presupuestos, tenants, type TenantSettings } from "../db/schema.js";
 import { localDisk } from "../storage/provider.js";
 import * as Q from "../domain/quotes.js";
+import { detectImageType } from "../lib/imageType.js";
+import { env } from "../config/env.js";
 
 const itemSchema = z.object({
   description: z.string().min(1),
@@ -20,6 +22,8 @@ const createSchema = z.object({
   vehiclePlate: z.string().max(20).optional(),
   vehicleInfo: z.string().max(120).optional(),
   items: z.array(itemSchema).min(1),
+  discountAmount: z.number().int().min(0).optional(),
+  taxRate: z.number().int().min(0).max(10000).optional(),
   notes: z.string().max(4000).optional(),
   validUntil: z.string().max(40).optional(),
 });
@@ -31,6 +35,10 @@ const IMG_EXT: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
 };
+
+// Tipos de logo aceptados (validados por magic bytes, no por el data-URL).
+// Sin gif ni svg: el logo va embebido en el PDF y sólo admitimos rasterizados.
+const ALLOWED = Object.keys(IMG_EXT);
 
 export async function quoteRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/quotes", { preHandler: requireAuth }, async (request, reply) => {
@@ -79,7 +87,11 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
   // Logo propio del taller para los presupuestos (base64; sólo admin).
   app.post(
     "/api/settings/logo",
-    { preHandler: requireRole("admin"), bodyLimit: 6 * 1024 * 1024 },
+    {
+      preHandler: requireRole("admin"),
+      bodyLimit: 6 * 1024 * 1024,
+      config: { rateLimit: { max: env.NODE_ENV === "production" ? 30 : 100000, timeWindow: "1 minute" } },
+    },
     async (request, reply) => {
       const { auth } = authed(request);
       const parsed = z.object({ image: z.string().min(16) }).safeParse(request.body);
@@ -88,6 +100,12 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       if (!match) return reply.code(400).send({ error: "invalid_image" });
       const ext = IMG_EXT[match[1]!] ?? "png";
       const bytes = Buffer.from(match[2]!, "base64");
+      const realType = detectImageType(bytes);
+      if (!realType || !ALLOWED.includes(realType)) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_image", message: "El archivo no es una imagen válida." });
+      }
       if (bytes.length > 5 * 1024 * 1024) return reply.code(413).send({ error: "too_large" });
 
       const path = await localDisk.save(auth.tenantId, "branding", bytes, ext);
@@ -100,6 +118,26 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(201).send({ logoPath: path });
     },
   );
+
+  // Moneda del taller: todos los documentos usan esta moneda (sólo admin).
+  app.patch("/api/settings", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const { auth } = authed(request);
+    const parsed = z
+      .object({ currency: z.enum(["ARS", "CLP", "USD"]) })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+    const [row] = await db
+      .select({ settings: tenants.settings })
+      .from(tenants)
+      .where(eq(tenants.id, auth.tenantId));
+    // Merge: no pisar logoPath/quoteHeader/otros campos de settings.
+    const settings: TenantSettings = {
+      ...((row?.settings as TenantSettings | null) ?? {}),
+      currency: parsed.data.currency,
+    };
+    await db.update(tenants).set({ settings }).where(eq(tenants.id, auth.tenantId));
+    return reply.send({ ok: true, settings });
+  });
 
   // Datos de contacto que salen en el presupuesto (sólo admin).
   app.patch("/api/settings/quote-header", { preHandler: requireRole("admin") }, async (request, reply) => {

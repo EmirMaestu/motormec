@@ -17,12 +17,41 @@ import {
   NumberInput,
   PlateInput,
   Select,
+  TaxDiscountSection,
 } from "@/components/form";
 import { Badge, Button, IconButton, Input, PageHeader } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { centsToPesos, formatCurrency, formatDate, pesosToCents } from "@/lib/utils";
 import { compressImage } from "@/lib/image";
 import { isValidPlate } from "@/lib/validation";
-import { ORDER_STATUSES, type OrderPart, type Product, type Service, type Vehicle, type WorkOrder } from "@/lib/types";
+import { ORDER_STATUSES, type OrderPart, type Payment, type PaymentEstado, type Product, type Service, type Vehicle, type WorkOrder } from "@/lib/types";
+
+/** Métodos de pago (deben coincidir con el enum del backend). */
+const PAYMENT_METHODS: { value: string; label: string }[] = [
+  { value: "efectivo", label: "Efectivo" },
+  { value: "transferencia", label: "Transferencia" },
+  { value: "tarjeta", label: "Tarjeta" },
+  { value: "mercadopago", label: "MercadoPago" },
+  { value: "otro", label: "Otro" },
+];
+
+const PAYMENT_ESTADO_LABEL: Record<PaymentEstado, string> = {
+  impaga: "Impaga",
+  parcial: "Parcial",
+  pagada: "Pagada",
+};
+
+function paymentEstadoTone(estado: PaymentEstado): string {
+  if (estado === "pagada") return "Entregado";
+  if (estado === "parcial") return "En Reparación";
+  return "Egreso";
+}
+
+/** Deriva el estado de cobro de una orden a partir de total y paidAmount. */
+function orderPaymentEstado(total: number, paidAmount: number): PaymentEstado {
+  if (paidAmount <= 0) return "impaga";
+  if (paidAmount >= total) return "pagada";
+  return "parcial";
+}
 
 export function OrdersPage() {
   const queryClient = useQueryClient();
@@ -161,9 +190,10 @@ function PartsEditor({
     if (mode === "inventario") {
       const prod = products.find((p) => p.name === productName);
       if (!prod) return;
+      // `price` (MoneyInput) y el estado `parts` viven en PESOS; prod.price viene en centavos.
       onChange([
         ...parts,
-        { productId: prod.id, name: prod.name, quantity, unitPrice: Number(price) || prod.price, fromInventory: true },
+        { productId: prod.id, name: prod.name, quantity, unitPrice: Number(price) || centsToPesos(prod.price), fromInventory: true },
       ]);
       setProductName("");
     } else {
@@ -186,7 +216,7 @@ function PartsEditor({
                   {p.name} {p.fromInventory ? <span className="text-[11px] text-charcoal">(stock)</span> : null}
                 </div>
                 <div className="text-[12px] text-charcoal">
-                  {p.quantity} × {formatCurrency(p.unitPrice)} = {formatCurrency(p.quantity * p.unitPrice)}
+                  {p.quantity} × {formatCurrency(pesosToCents(p.unitPrice))} = {formatCurrency(pesosToCents(p.quantity * p.unitPrice))}
                 </div>
               </div>
               <IconButton onClick={() => onChange(parts.filter((_, j) => j !== i))}>
@@ -218,7 +248,7 @@ function PartsEditor({
               onChange={(v) => {
                 setProductName(v);
                 const prod = products.find((p) => p.name === v);
-                if (prod) setPrice(String(prod.price));
+                if (prod) setPrice(String(centsToPesos(prod.price)));
               }}
               options={products.map((p) => p.name)}
               placeholder="Elegí un producto"
@@ -253,6 +283,8 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   const [labor, setLabor] = useState("");
   const [notes, setNotes] = useState("");
   const [estimated, setEstimated] = useState("");
+  const [discount, setDiscount] = useState("");
+  const [taxRate, setTaxRate] = useState(0); // bps; "Sin IVA" por defecto
   const [submitted, setSubmitted] = useState(false);
 
   const { data: servicesData } = useQuery({
@@ -296,8 +328,11 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
         customerName: owner.trim(),
         phone,
         services,
-        parts,
-        laborCost: Number(labor) || 0,
+        // El estado `parts` vive en PESOS; el backend espera centavos.
+        parts: parts.map((p) => ({ ...p, unitPrice: pesosToCents(p.unitPrice) })),
+        laborCost: pesosToCents(Number(labor) || 0),
+        discountAmount: pesosToCents(Number(discount) || 0),
+        taxRate,
         notes: notes.trim() || undefined,
         estimatedDate: estimated || null,
       }),
@@ -377,12 +412,14 @@ function CreateOrderModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
         <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
       </FormField>
 
-      <div className="rounded-[4px] bg-deep-forest text-paper-white px-4 py-3 flex items-center justify-between">
-        <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-chartreuse-lime">Total estimado</span>
-        <span className="font-display text-[22px]">
-          {formatCurrency((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0))}
-        </span>
-      </div>
+      <TaxDiscountSection
+        subtotal={(Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0)}
+        discount={discount}
+        onDiscount={setDiscount}
+        taxRate={taxRate}
+        onTaxRate={setTaxRate}
+        totalLabel="Total estimado"
+      />
     </Modal>
   );
 }
@@ -417,7 +454,15 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
   const [labor, setLabor] = useState("");
   const [notes, setNotes] = useState("");
   const [estimated, setEstimated] = useState("");
+  const [discount, setDiscount] = useState("");
+  const [taxRate, setTaxRate] = useState(0); // bps
   const [confirmKind, setConfirmKind] = useState<null | "cancel" | "delete">(null);
+  const [showPayment, setShowPayment] = useState(false);
+
+  const { data: paymentsData } = useQuery({
+    queryKey: ["order-payments", id],
+    queryFn: () => api.get<{ payments: Payment[] }>(`/api/orders/${id}/payments`),
+  });
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["order", id] });
   const closeable = order && order.status !== "Entregado" && order.status !== "Cancelado";
@@ -425,10 +470,13 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
   function startEdit() {
     if (!order) return;
     setServices(order.services);
-    setParts(order.parts);
-    setLabor(order.laborCost ? String(order.laborCost) : "");
+    // El backend guarda en centavos; el estado de edición vive en PESOS.
+    setParts(order.parts.map((p) => ({ ...p, unitPrice: centsToPesos(p.unitPrice) })));
+    setLabor(order.laborCost ? String(centsToPesos(order.laborCost)) : "");
     setNotes(order.notes ?? "");
     setEstimated(order.estimatedDate ?? "");
+    setDiscount(order.discountAmount ? String(centsToPesos(order.discountAmount)) : "");
+    setTaxRate(order.taxRate ?? 0);
     setEditing(true);
   }
 
@@ -444,8 +492,11 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
     mutationFn: () =>
       api.patch(`/api/orders/${id}`, {
         services,
-        parts,
-        laborCost: Number(labor) || 0,
+        // El estado `parts` vive en PESOS; el backend espera centavos.
+        parts: parts.map((p) => ({ ...p, unitPrice: pesosToCents(p.unitPrice) })),
+        laborCost: pesosToCents(Number(labor) || 0),
+        discountAmount: pesosToCents(Number(discount) || 0),
+        taxRate,
         notes: notes.trim() || undefined,
         estimatedDate: estimated || null,
       }),
@@ -563,12 +614,13 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
           <FormField label="Observaciones">
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
-          <div className="rounded-[4px] bg-deep-forest text-paper-white px-4 py-3 flex items-center justify-between">
-            <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-chartreuse-lime">Total</span>
-            <span className="font-display text-[22px]">
-              {formatCurrency((Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0))}
-            </span>
-          </div>
+          <TaxDiscountSection
+            subtotal={(Number(labor) || 0) + parts.reduce((s, p) => s + p.quantity * p.unitPrice, 0)}
+            discount={discount}
+            onDiscount={setDiscount}
+            taxRate={taxRate}
+            onTaxRate={setTaxRate}
+          />
         </div>
       ) : (
         <div className="space-y-4">
@@ -629,11 +681,53 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
           <div className="space-y-1 border-t border-black/10 pt-3">
             <CardRow label="Mano de obra">{formatCurrency(order.laborCost)}</CardRow>
             <CardRow label="Repuestos">{formatCurrency(order.partsCost)}</CardRow>
+            {order.discountAmount ? (
+              <CardRow label="Descuento">-{formatCurrency(order.discountAmount)}</CardRow>
+            ) : null}
+            {order.taxRate ? (
+              <CardRow label={`IVA (${order.taxRate / 100}%)`}>{formatCurrency(order.taxAmount)}</CardRow>
+            ) : null}
             <div className="flex items-center justify-between pt-1">
               <span className="font-medium text-deep-forest">Total</span>
               <span className="font-display text-[22px] text-deep-forest">{formatCurrency(order.total)}</span>
             </div>
           </div>
+
+          {/* Cobro: pagado, saldo y estado de pago */}
+          {(() => {
+            const paidAmount = order.paidAmount ?? 0;
+            const saldo = order.total - paidAmount;
+            const estado = orderPaymentEstado(order.total, paidAmount);
+            const pagada = saldo <= 0;
+            return (
+              <div className="space-y-2 rounded-[8px] bg-pale-sage px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="eyebrow">Cobro</span>
+                  <Badge tone={paymentEstadoTone(estado)}>{PAYMENT_ESTADO_LABEL[estado]}</Badge>
+                </div>
+                <CardRow label="Pagado">{formatCurrency(paidAmount)}</CardRow>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-deep-forest">Saldo</span>
+                  <span className="font-display text-[20px] text-deep-forest">{formatCurrency(saldo)}</span>
+                </div>
+                {paymentsData?.payments.length ? (
+                  <div className="space-y-1 border-t border-black/10 pt-2">
+                    {paymentsData.payments.map((p) => (
+                      <div key={p.id} className="flex justify-between text-[13px] text-charcoal">
+                        <span>{formatDate(p.paidAt)} · {p.method}</span>
+                        <span className="text-deep-forest">{formatCurrency(p.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {!pagada ? (
+                  <Button size="sm" className="w-full mt-1" onClick={() => setShowPayment(true)}>
+                    Registrar pago
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })()}
 
           {order.notes ? (
             <div>
@@ -708,6 +802,96 @@ function OrderDetailModal({ id, onClose, onChanged }: { id: string; onClose: () 
       }}
       onCancel={() => setConfirmKind(null)}
     />
+
+    {showPayment && order ? (
+      <RegisterPaymentModal
+        orderId={id}
+        orderNumber={order.number}
+        saldo={order.total - (order.paidAmount ?? 0)}
+        onClose={() => setShowPayment(false)}
+        onSaved={() => {
+          onChanged();
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ["order-payments", id] });
+          queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+          toast.success("Pago registrado");
+        }}
+      />
+    ) : null}
    </>
+  );
+}
+
+/* --------------------------- Register payment ---------------------------- */
+function RegisterPaymentModal({
+  orderId,
+  orderNumber,
+  saldo,
+  onClose,
+  onSaved,
+}: {
+  orderId: string;
+  orderNumber: number;
+  saldo: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [amount, setAmount] = useState(String(centsToPesos(saldo)));
+  const [method, setMethod] = useState("efectivo");
+  const [submitted, setSubmitted] = useState(false);
+
+  const pesos = Number(amount) || 0;
+  const amountError = submitted && pesos <= 0 ? "Ingresá un monto mayor a 0" : undefined;
+
+  const pay = useMutation({
+    mutationFn: () =>
+      api.post(`/api/orders/${orderId}/payments`, { amount: pesosToCents(pesos), method }),
+    onSuccess: () => {
+      onSaved();
+      onClose();
+    },
+    onError: () => toast.error("No se pudo registrar el pago"),
+  });
+
+  const submit = () => {
+    setSubmitted(true);
+    if (pesos <= 0) return;
+    pay.mutate();
+  };
+
+  return (
+    <Modal
+      open
+      onOpenChange={(v) => !v && onClose()}
+      title={`Registrar pago · Orden #${orderNumber}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={submit} disabled={pay.isPending}>
+            {pay.isPending ? "Registrando…" : "Registrar pago"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex items-center justify-between rounded-[8px] bg-pale-sage px-4 py-3">
+        <span className="eyebrow">Saldo pendiente</span>
+        <span className="font-display text-[20px] text-deep-forest">{formatCurrency(saldo)}</span>
+      </div>
+      <FormField label="Monto" required error={amountError} hint="En pesos">
+        <MoneyInput value={amount} onChange={setAmount} />
+      </FormField>
+      <FormField label="Método">
+        <Select value={method} onChange={setMethod}>
+          {PAYMENT_METHODS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </Select>
+      </FormField>
+    </Modal>
   );
 }
