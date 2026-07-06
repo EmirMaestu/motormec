@@ -16,11 +16,13 @@ dist-ssr
 .env
 .env.*
 !.env.example
+!.env.test
 
 # Per-tenant media (uploaded photos)
 apps/api/media
 apps/api/media-test
 media/
+media-test/
 
 # Editor directories and files
 .vscode/*
