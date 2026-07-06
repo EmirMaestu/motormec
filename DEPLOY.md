@@ -10,7 +10,7 @@ Todo el ciclo build → migrar → publicar → reiniciar está envuelto en
 `infra/bootstrap.sh` (idempotente): `sudo -u motormec bash infra/bootstrap.sh`.
 
 ```
-WhatsApp (Meta) ─► Caddy (TLS, headers) ─► /api,/webhooks ─► Fastify :3001 ─► Postgres
+WhatsApp (Meta) ─► Caddy (TLS, headers) ─► /api,/webhooks ─► Fastify :3002 ─► Postgres
                                          └► /app/*  ─────────► static SPA (dist)
                                                               photos: /var/www/motormec-media
 ```
@@ -61,7 +61,7 @@ Set, at minimum:
 - `GROQ_API_KEY`
 - `COOKIE_SECURE=true`
 - `MEDIA_ROOT=/var/www/motormec-media`
-- `PORT=3001`
+- `PORT=3002` (puerto local de la API; este VPS usa 3002 porque :3001 ya lo ocupa otro proyecto. Caddy y el health-check deben apuntar a este mismo puerto.)
 
 ```bash
 sudo mkdir -p /var/www/motormec-media && sudo chown motormec:motormec /var/www/motormec-media
@@ -97,7 +97,7 @@ sudo cp /opt/motormec/infra/systemd/motormec-api.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now motormec-api
 sudo systemctl status motormec-api
-curl -s http://127.0.0.1:3001/api/health     # {"status":"ok","db":"up"}
+curl -s http://127.0.0.1:3002/api/health     # {"status":"ok","db":"up"}  (PORT del .env)
 ```
 
 ## 7. Caddy
@@ -108,6 +108,9 @@ sudo cp /opt/motormec/infra/Caddyfile /etc/caddy/Caddyfile
 echo 'DOMAIN=taller.midominio.com' | sudo tee /etc/default/caddy
 sudo systemctl restart caddy
 ```
+
+> El template trae `reverse_proxy 127.0.0.1:3001`. Si tu API corre en otro puerto
+> (este VPS usa **3002**), cambialo en el `Caddyfile` para que coincida con `PORT` del `.env`.
 
 Caddy provisions TLS automatically. Verify `https://<domain>/app/` loads and
 `https://<domain>/api/health` returns ok.
