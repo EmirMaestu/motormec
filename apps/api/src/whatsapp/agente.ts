@@ -506,7 +506,12 @@ export async function agenteConsulta(
       const res = await c.messages.create(
         {
           model,
-          max_tokens: 1024,
+          // Tope alto: la llamada a `crear_presupuesto` con muchos ítems puede
+          // ocupar >1024 tokens de salida (JSON de todos los ítems). Con 1024 se
+          // truncaba (stop_reason "max_tokens") y el presupuesto NO se creaba, y
+          // el bot caía al texto de respaldo. `max_tokens` es un TOPE, no un
+          // objetivo: no encarece las respuestas normales (cortas). BOT-8.
+          max_tokens: 4096,
           system,
           tools: TOOLS,
           messages,
