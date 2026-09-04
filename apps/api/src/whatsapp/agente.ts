@@ -55,6 +55,33 @@ function parseKm(v: unknown): number | null {
 }
 
 /**
+ * Convierte un ítem del presupuesto a {description, quantity, unitPrice(centavos)}.
+ * Si la descripción trae "xN" (ej: "Inyector chino x4", "Bulones de biela x16") y
+ * el modelo NO fijó una cantidad, interpreta N como la CANTIDAD y el monto escrito
+ * como el TOTAL de la línea → precio unitario = total / N. Así el subtotal NO se
+ * multiplica (880.473 sigue siendo 880.473, pero muestra 4 × 220.118,25). En
+ * centavos para no perder los decimales de la división.
+ */
+export function desglosarItemPresupuesto(
+  descripcion: unknown,
+  cantidad: unknown,
+  precio: unknown,
+): { description: string; quantity: number; unitPrice: number } {
+  const description = String(descripcion ?? "").trim();
+  let quantity = Number(cantidad) || 1;
+  let unitPrice = Math.round((Number(precio) || 0) * 100); // centavos; monto tal cual se escribió
+  const m = description.match(/(?:^|\s)x\s?(\d{1,4})(?:\s|$)/i);
+  if (m && quantity === 1) {
+    const n = Number.parseInt(m[1]!, 10);
+    if (n > 1) {
+      quantity = n;
+      unitPrice = Math.round(unitPrice / n); // el monto escrito es el TOTAL de la línea
+    }
+  }
+  return { description, quantity, unitPrice };
+}
+
+/**
  * Agente conversacional del bot (Haiku con herramientas). Responde CUALQUIER
  * consulta del personal del taller usando SOLO datos reales de la base, vía
  * tools. La app mantiene el control: el agente sólo LEE (no crea ni borra).
@@ -372,13 +399,9 @@ export async function ejecutarTool(
       const items = rawItems
         .map((it) => {
           const o = it as Record<string, unknown>;
-          return {
-            description: String(o.descripcion ?? "").trim(),
-            quantity: Number(o.cantidad) || 1,
-            // El usuario dicta PESOS ("pastillas 15000"); el dinero se guarda en
-            // CENTAVOS, así que convertimos ×100.
-            unitPrice: Math.round((Number(o.precio) || 0) * 100),
-          };
+          // El usuario dicta PESOS ("pastillas 15000"); se guarda en CENTAVOS.
+          // "xN" en la descripción → cantidad N y el monto es el total de la línea.
+          return desglosarItemPresupuesto(o.descripcion, o.cantidad, o.precio);
         })
         .filter((i) => i.description);
       if (!cliente || items.length === 0) {

@@ -70,20 +70,74 @@ function wrap(text: string, font: PDFFont, size: number, maxWidth: number): stri
   return lines;
 }
 
-/** Genera un presupuesto en PDF con la marca del taller y los colores de Momec. */
+/** Genera un presupuesto en PDF con la marca del taller y los colores de Momec.
+ * Multipágina: si los ítems (u observaciones) no entran en una hoja, sigue en
+ * la siguiente repitiendo el encabezado de columnas. Nada se recorta. */
 export async function renderQuotePdf(input: QuotePdfInput): Promise<Buffer> {
   const { quote } = input;
   const currency: Currency = input.currency ?? "ARS";
   /** Formatea centavos con la moneda del taller (ej. 123456 → "$ 1.235"). */
   const money = (cents: number): string => formatArs(cents, currency);
   const doc = await PDFDocument.create();
-  const page = doc.addPage([595.28, 841.89]); // A4
-  const { width, height } = page.getSize();
+  const A4: [number, number] = [595.28, 841.89];
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const M = 40;
+  const [width, height] = A4;
 
-  /* --- Banda superior (verde bosque) con logo/nombre + N° --- */
+  const cCant = width - 250;
+  const cPrecio = width - 150;
+  const cSub = width - M;
+  const FOOT_Y = 46;
+  const BOTTOM = 78; // los contenidos no bajan de acá (arriba del pie)
+
+  /* Pie "hecho con Momec" (en TODAS las páginas). */
+  function drawFooter(p: PDFPage): void {
+    p.drawLine({
+      start: { x: M, y: FOOT_Y + 18 },
+      end: { x: width - M, y: FOOT_Y + 18 },
+      thickness: 0.5,
+      color: HAIRLINE,
+    });
+    const foot = "Presupuesto generado con Momec   ·   momec.pro";
+    p.drawText(foot, {
+      x: (width - font.widthOfTextAtSize(foot, 9)) / 2,
+      y: FOOT_Y,
+      size: 9,
+      font,
+      color: MUTED,
+    });
+  }
+
+  /* Encabezado de columnas de la tabla; devuelve la `y` de la primera fila. */
+  function drawItemsHeader(p: PDFPage, top: number): number {
+    p.drawRectangle({ x: M - 4, y: top - 7, width: width - 2 * (M - 4), height: 22, color: SAGE });
+    p.drawText("DETALLE", { x: M, y: top, size: 9, font: bold, color: FOREST });
+    drawRight(p, "CANT.", cCant + 34, top, 9, bold, FOREST);
+    drawRight(p, "PRECIO", cPrecio + 40, top, 9, bold, FOREST);
+    drawRight(p, "SUBTOTAL", cSub, top, 9, bold, FOREST);
+    return top - 24;
+  }
+
+  /* Banda superior slim para páginas de continuación; devuelve la `y` inicial. */
+  function drawContHeader(p: PDFPage): number {
+    const hH = 44;
+    p.drawRectangle({ x: 0, y: height - hH, width, height: hH, color: FOREST });
+    p.drawText(ellipsize(input.tallerNombre || "Taller", bold, 13, width - 2 * M - 160), {
+      x: M,
+      y: height - 28,
+      size: 13,
+      font: bold,
+      color: WHITE,
+    });
+    drawRight(p, `Presupuesto #${quote.number} (cont.)`, width - M, height - 28, 10, font, LIME);
+    return height - hH - 28;
+  }
+
+  let page = doc.addPage(A4);
+  drawFooter(page);
+
+  /* --- Banda superior (verde bosque) con logo/nombre + N° (página 1) --- */
   const headerH = 96;
   page.drawRectangle({ x: 0, y: height - headerH, width, height: headerH, color: FOREST });
 
@@ -138,20 +192,21 @@ export async function renderQuotePdf(input: QuotePdfInput): Promise<Buffer> {
   if (quote.validUntil) drawRight(page, `Válido hasta ${quote.validUntil}`, width - M, y, 10, font, MUTED);
   y -= 26;
 
-  /* --- Tabla de ítems --- */
-  const cCant = width - 250;
-  const cPrecio = width - 150;
-  const cSub = width - M;
-  page.drawRectangle({ x: M - 4, y: y - 7, width: width - 2 * (M - 4), height: 22, color: SAGE });
-  page.drawText("DETALLE", { x: M, y, size: 9, font: bold, color: FOREST });
-  drawRight(page, "CANT.", cCant + 34, y, 9, bold, FOREST);
-  drawRight(page, "PRECIO", cPrecio + 40, y, 9, bold, FOREST);
-  drawRight(page, "SUBTOTAL", cSub, y, 9, bold, FOREST);
-  y -= 24;
+  /* Salta a una página nueva si no queda `space` px por encima del pie. */
+  const ensure = (space: number, contHeader = true): void => {
+    if (y - space >= BOTTOM) return;
+    page = doc.addPage(A4);
+    drawFooter(page);
+    y = contHeader ? drawContHeader(page) : height - 40;
+  };
 
-  const maxItems = 24; // una página; el resto se resume
-  const shown = quote.items.slice(0, maxItems);
-  for (const it of shown) {
+  /* --- Tabla de ítems (todos; pagina si hace falta) --- */
+  y = drawItemsHeader(page, y);
+  for (const it of quote.items) {
+    if (y - 22 < BOTTOM) {
+      ensure(0);
+      y = drawItemsHeader(page, y);
+    }
     const sub = (it.quantity || 0) * (it.unitPrice || 0);
     page.drawText(ellipsize(it.description, font, 11, cCant - M - 10), {
       x: M,
@@ -167,16 +222,6 @@ export async function renderQuotePdf(input: QuotePdfInput): Promise<Buffer> {
     page.drawLine({ start: { x: M - 4, y }, end: { x: cSub, y }, thickness: 0.5, color: HAIRLINE });
     y -= 14;
   }
-  if (quote.items.length > maxItems) {
-    page.drawText(`… y ${quote.items.length - maxItems} ítem(s) más`, {
-      x: M,
-      y,
-      size: 9,
-      font,
-      color: MUTED,
-    });
-    y -= 18;
-  }
 
   /* --- Desglose: Subtotal / Descuento / IVA --- */
   const boxW = 210;
@@ -191,10 +236,13 @@ export async function renderQuotePdf(input: QuotePdfInput): Promise<Buffer> {
     quote.subtotal ??
     quote.items.reduce((s, it) => s + (it.quantity || 0) * (it.unitPrice || 0), 0);
 
-  y -= 10;
   const breakdown: Array<[string, string]> = [["Subtotal", money(subtotal)]];
   if (discount > 0) breakdown.push(["Descuento", `- ${money(discount)}`]);
   if (taxRate > 0) breakdown.push([`IVA (${taxRate / 100}%)`, money(taxAmount)]);
+
+  // El desglose + el recuadro de total deben quedar juntos en la misma página.
+  ensure(10 + breakdown.length * 16 + 2 + 36 + 10);
+  y -= 10;
   for (const [label, value] of breakdown) {
     page.drawText(label, { x: labelX, y, size: 10, font, color: MUTED });
     drawRight(page, value, valueX, y, 10, font, INK);
@@ -210,32 +258,21 @@ export async function renderQuotePdf(input: QuotePdfInput): Promise<Buffer> {
   drawRight(page, money(quote.total), boxX + boxW - 16, boxY + boxH / 2 - 6, 16, bold, INK);
   y = boxY - 28;
 
-  /* --- Observaciones --- */
+  /* --- Observaciones (completas; paginan si hace falta) --- */
   if (quote.notes) {
+    const lines = wrap(quote.notes, font, 10, width - 2 * M);
+    ensure(15 + lines.length * 14 + 6);
     page.drawText("Observaciones", { x: M, y, size: 10, font: bold, color: FOREST });
     y -= 15;
-    for (const line of wrap(quote.notes, font, 10, width - 2 * M).slice(0, 6)) {
+    for (const line of lines) {
+      if (y - 14 < BOTTOM) {
+        ensure(0);
+        y -= 4;
+      }
       page.drawText(line, { x: M, y, size: 10, font, color: INK });
       y -= 14;
     }
   }
-
-  /* --- Pie: hecho con Momec --- */
-  const footY = 46;
-  page.drawLine({
-    start: { x: M, y: footY + 18 },
-    end: { x: width - M, y: footY + 18 },
-    thickness: 0.5,
-    color: HAIRLINE,
-  });
-  const foot = "Presupuesto generado con Momec   ·   momec.pro";
-  page.drawText(foot, {
-    x: (width - font.widthOfTextAtSize(foot, 9)) / 2,
-    y: footY,
-    size: 9,
-    font,
-    color: MUTED,
-  });
 
   const bytes = await doc.save();
   return Buffer.from(bytes);
