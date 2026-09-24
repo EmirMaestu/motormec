@@ -11,7 +11,7 @@ import {
   type Presupuesto,
 } from "../db/schema.js";
 import { createQuote } from "../domain/quotes.js";
-import { esPatenteValida, normalizarPatente } from "./patente.js";
+import { esPatenteAceptable, normalizarPatente } from "./patente.js";
 import { sanitizePromptField, sanitizeToolText } from "./sanitize.js";
 
 const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
@@ -158,6 +158,11 @@ const TOOLS: Anthropic.Tool[] = [
         kilometraje: { type: "number", description: "Kilometraje en número (ej: 10000)" },
         tarea: { type: "string", description: "Trabajo a realizar (ej: service, cambio de aceite)" },
         cliente: { type: "string", description: "Nombre del cliente/dueño" },
+        extranjera: {
+          type: "boolean",
+          description:
+            "true si la patente es de otro país (Uruguay, Chile, Brasil, Paraguay…) y por eso no tiene formato argentino. Usalo cuando el usuario lo diga o sea evidente.",
+        },
       },
       required: ["patente"],
     },
@@ -232,6 +237,8 @@ export interface PropuestaIngreso {
   cliente: string;
   tarea: string;
   kilometraje: number | null;
+  /** Patente de otro país: se valida con la regla laxa, no con la argentina. */
+  extranjera?: boolean;
 }
 
 export async function ejecutarTool(
@@ -345,11 +352,15 @@ export async function ejecutarTool(
 
       // BOT-4: validar el formato de patente (viejo AAA000 / Mercosur AA000AA).
       // Si no es válida, NO dejar la propuesta pendiente: pedir que la repitan.
-      if (!esPatenteValida(patente)) {
+      // BOT-10: una patente extranjera (extranjera=true) usa una regla laxa propia.
+      const extranjera = input.extranjera === true;
+      if (!esPatenteAceptable(patente, extranjera)) {
         return JSON.stringify({
           ok: false,
           patente_invalida: true,
-          nota: "La patente no tiene un formato válido (esperado AAA000 o AA000AA). NO registres nada; pedile al usuario que te repita la patente (ej: 'Esa patente no parece válida, ¿me la repetís?').",
+          nota: extranjera
+            ? "Ni como patente extranjera es válida (4 a 10 letras y números). NO registres nada; pedile al usuario que te la repita."
+            : "La patente no tiene formato argentino (AAA000 o AA000AA). NO registres nada. Si el usuario dice que es extranjera (Uruguay, Chile, Brasil…) o es evidente, volvé a llamar a registrar_ingreso con extranjera=true. Si no, pedile que te repita la patente (ej: 'Esa patente no parece válida, ¿me la repetís? Si es extranjera, avisame').",
         });
       }
 
@@ -374,6 +385,7 @@ export async function ejecutarTool(
         cliente: cliente || existente?.owner || "",
         tarea,
         kilometraje: km,
+        ...(extranjera ? { extranjera: true } : {}),
       };
       await tdb.delete(conversaciones, eq(conversaciones.phone, from));
       await tdb.insert(conversaciones, {
@@ -496,7 +508,7 @@ export async function agenteConsulta(
   const system = `Sos el asistente de WhatsApp del taller ${nombreTaller || "mecánico"}. Atendés al personal del taller. Hoy es ${hoy}.
 - Respondé SOLO con datos reales obtenidos de las herramientas. Nunca inventes patentes, estados, montos ni nombres.
 - HACER UN PRESUPUESTO: si el usuario pide "hacé/armá un presupuesto", "cotizá", "presupuestá" (ej: "presupuestá a Juan: pastillas 15000, mano de obra 8000" o "presupuesto de 10000 para Juan de cambio de correa, repuestos 30mil"), llamá a "crear_presupuesto" DE UNA con lo que tengas. SOLO hacen falta el cliente y al menos un ítem. NUNCA pidas patente, número de orden, marca ni modelo para un presupuesto — no hacen falta y NO existe "orden" en el presupuesto. Interpretá montos naturales: "10000 de mano de obra" → ítem "Mano de obra" 10000; "repuestos 30mil" → ítem "Repuestos" 30000; "3mil"=3000, "30mil"=30000, "1.5 palo"=1500000. El PDF se envía solo; vos confirmá en UNA línea (ej: "Listo, te paso el presupuesto 👇") SIN repetir ítems ni total.
-- CARGAR UN INGRESO: si el usuario quiere agregar/cargar un auto. Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). Si "registrar_ingreso" devuelve "patente_invalida", NO digas que quedó registrado: pedí la patente de nuevo en UNA línea. Hay DOS caminos:
+- CARGAR UN INGRESO: si el usuario quiere agregar/cargar un auto. Normalizá marcas (VW=Volkswagen, Chevy=Chevrolet). Si "registrar_ingreso" devuelve "patente_invalida", NO digas que quedó registrado: pedí la patente de nuevo en UNA línea. PATENTES EXTRANJERAS (Uruguay, Chile, Brasil, Paraguay…): si el usuario dice que es extranjera o el formato claramente no es argentino y no es un error de tipeo, llamá a "registrar_ingreso" con extranjera=true; nunca te niegues a cargar un auto extranjero. Hay DOS caminos:
   (a) TODO JUNTO (ej: "agregá un VW Gol patente ABC123 de Juan, service"): llamá a "registrar_ingreso" de una con lo que haya (sólo la patente es obligatoria).
   (b) POR PARTES (ej: "agregá un auto", o le faltan datos): GUIALO pidiendo UN dato por vez, breve y natural, RECORDANDO lo que ya te dijo antes en la charla. Orden: 1) patente; 2) nombre del cliente → cuando te lo diga usá "buscar_cliente": si hay una coincidencia parecida confirmá ("¿Es Juan Morales?"), si no existe avisá y ofrecé crearlo ("No tengo a Juan Pérez, ¿lo creo?"); 3) marca y modelo; 4) tarea/servicio (opcional). Preguntá una cosa a la vez, sin abrumar. Cuando tengas al menos la patente, llamá a "registrar_ingreso" con TODO lo que juntaste en la conversación.
 - CONFIRMAR EL INGRESO: el ingreso NO se carga solo. La herramienta devuelve "pendiente_confirmacion": en ese caso NO digas que quedó registrado; pedí confirmación en UNA línea con los datos del "resumen" (ej: "¿Confirmo el ingreso de ABC123 Gol de Juan? Respondé *Sí* para cargarlo"). Al responder Sí, la app lo carga sola. Si el vehículo YA EXISTÍA (yaExistia=true), aclaralo con naturalidad ("ya lo teníamos, le sumaría una nueva entrada").

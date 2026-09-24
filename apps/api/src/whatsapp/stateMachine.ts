@@ -12,7 +12,7 @@ import { createVehicle } from "../domain/vehicles.js";
 import { createOrder } from "../domain/orders.js";
 import type { PropuestaIngreso, TurnoHistorial } from "./agente.js";
 import { detectarComando, ejecutarComando } from "./commands.js";
-import { esPatenteValida, normalizarPatente } from "./patente.js";
+import { esPatenteAceptable, normalizarPatente } from "./patente.js";
 import { sameNumber } from "./phone.js";
 import type { StorageProvider } from "../storage/provider.js";
 import type { DatosVehiculo } from "./parser.js";
@@ -30,9 +30,20 @@ import {
 // el hilo (memoria del agente + flujos); pasado ese tiempo de inactividad, arranca
 // una charla nueva desde cero (y avisa al usuario que se reinició).
 const EXPIRY_MS = 5 * 60 * 1000;
+// BOT-9: un ingreso que espera el "Sí" NO vence con la charla. Los mecánicos
+// contestan cuando se desocupan (en prod: un "Si" 68 min después). Si igual
+// vence, se avisa qué patente NO se cargó: nunca se descarta en silencio.
+const EXPIRY_PROPUESTA_MS = 24 * 60 * 60 * 1000;
 const AVISO_REINICIO =
   "🔄 Pasaron unos minutos sin actividad, así que arranco una charla nueva.\n\n";
 const BOT_ACTOR = { userId: null, userName: "WhatsApp Bot" };
+
+/** "NFN919 (Chevrolet Cobalt) de Pedro" — para nombrar un ingreso pendiente. */
+function describirPropuesta(p: Partial<PropuestaIngreso>): string {
+  const patente = normalizarPatente(p.patente ?? "") || "sin patente";
+  const vehiculo = `${p.marca ?? ""} ${p.modelo ?? ""}`.trim();
+  return `*${patente}*${vehiculo ? ` (${vehiculo})` : ""}${p.cliente ? ` de ${p.cliente}` : ""}`;
+}
 
 export interface WAMessage {
   id: string;
@@ -295,10 +306,23 @@ export async function procesarMensaje(
   // pasó la ventana, la reiniciamos y marcamos para avisar al usuario.
   let conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, from));
   let reinicioPorExpiracion = false;
-  if (conv && Date.now() - conv.updatedAt.getTime() > EXPIRY_MS) {
-    await tdb.deleteById(conversaciones, conv.id);
-    conv = null;
-    reinicioPorExpiracion = true;
+  if (conv) {
+    const edad = Date.now() - conv.updatedAt.getTime();
+    if (conv.etapa === "confirmar_ingreso_agente") {
+      if (edad > EXPIRY_PROPUESTA_MS) {
+        const p = (conv.datos ?? {}) as unknown as PropuestaIngreso;
+        await tdb.deleteById(conversaciones, conv.id);
+        conv = null;
+        await deps.send(
+          from,
+          `⚠️ El ingreso de ${describirPropuesta(p)} no se cargó porque no llegó la confirmación. Si todavía hay que cargarlo, mandámelo de nuevo.`,
+        );
+      }
+    } else if (edad > EXPIRY_MS) {
+      await tdb.deleteById(conversaciones, conv.id);
+      conv = null;
+      reinicioPorExpiracion = true;
+    }
   }
 
   // 3b. Modo "esperando foto" (tras un registro hecho por el agente).
@@ -496,7 +520,7 @@ export async function procesarMensaje(
     // pero antes de escribir volvemos a chequear el formato. Si es inválida, no
     // creamos nada: descartamos y pedimos que la repitan.
     const patente = normalizarPatente(propuesta.patente ?? "");
-    if (afirmativo && !esPatenteValida(patente)) {
+    if (afirmativo && !esPatenteAceptable(patente, propuesta.extranjera === true)) {
       await tdb.deleteById(conversaciones, conv.id);
       await deps.send(
         from,
@@ -552,9 +576,11 @@ export async function procesarMensaje(
       await deps.send(from, "Listo, no lo cargué. Contame si necesitás otra cosa. 🙂");
       return "ingreso_descartado";
     }
+    // El ingreso pendiente puede tener horas: nombrar el auto para que nadie
+    // confirme uno creyendo que es otro, y avisar que lo nuevo hay que reenviarlo.
     await deps.send(
       from,
-      `¿Confirmo el ingreso de ${patente}? Respondé *Sí* para cargarlo o *No* para descartarlo.`,
+      `Tengo pendiente el ingreso de ${describirPropuesta(propuesta)}. ¿Lo cargo? Respondé *Sí* o *No*, y después mandame de nuevo lo último.`,
     );
     return "confirmar_ingreso_agente";
   }

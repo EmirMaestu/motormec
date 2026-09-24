@@ -352,6 +352,117 @@ describe("WhatsApp bot — confirmación de ingreso del agente (BOT-3)", () => {
     expect(await tdb.count(conversaciones)).toBe(0);
   });
 
+  /** Envejece la conversación del remitente `ms` milisegundos. */
+  async function envejecerConversacion(ms: number) {
+    const conv = await tdb.selectOne(conversaciones, eq(conversaciones.phone, AUTH_PHONE));
+    await tdb.updateById(conversaciones, conv!.id, { updatedAt: new Date(Date.now() - ms) });
+  }
+
+  it("BOT-9: un 'Si' que llega 68 min después TODAVÍA carga el ingreso (caso NFN919)", async () => {
+    await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "NFN919", marca: "Chevrolet", modelo: "Cobalt", cliente: "Pedro", tarea: "Cambio de manguera" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    await envejecerConversacion(68 * 60 * 1000); // el mecánico estaba trabajando
+
+    const { deps, sent } = fakeDeps(EMPTY);
+    const r = await procesarMensaje(tdb, textMsg("late-si", "Si"), deps);
+    expect(r).toBe("ingreso_confirmado");
+    const orders = await tdb.select(workOrders);
+    expect(orders).toHaveLength(1);
+    expect(orders[0]?.vehiclePlate).toBe("NFN919");
+    expect(sent.join(" ")).toMatch(/NFN919/);
+  });
+
+  it("BOT-9: si el ingreso pendiente vence (>24 h), el bot AVISA qué patente no se cargó", async () => {
+    await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "AD985AQ", marca: "Fiat", modelo: "Fiorino", cliente: "Pedro" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    await envejecerConversacion(25 * 60 * 60 * 1000);
+
+    const { deps, sent } = fakeDeps(EMPTY);
+    await procesarMensaje(tdb, textMsg("after-expiry", "hola"), deps);
+    const todo = sent.join(" ");
+    expect(todo).toMatch(/AD985AQ/);
+    expect(todo).toMatch(/no se cargó/i);
+    // No se creó nada y la propuesta vencida se descartó.
+    expect(await tdb.count(workOrders)).toBe(0);
+  });
+
+  it("BOT-9: con un ingreso pendiente, un mensaje que no es sí/no repregunta nombrando el auto", async () => {
+    await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "NFN919", marca: "Chevrolet", modelo: "Cobalt", cliente: "Pedro" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    await envejecerConversacion(40 * 60 * 1000);
+    const { deps, sent } = fakeDeps(EMPTY);
+    const r = await procesarMensaje(tdb, textMsg("otro", "Cargar vehículo / FUA404 / Iveco"), deps);
+    expect(r).toBe("confirmar_ingreso_agente");
+    const todo = sent.join(" ");
+    expect(todo).toMatch(/NFN919/);
+    expect(todo).toMatch(/Cobalt/);
+    expect(await tdb.count(workOrders)).toBe(0);
+  });
+
+  it("la charla libre (sin ingreso pendiente) SÍ se reinicia a los 5 minutos", async () => {
+    await tdb.insert(conversaciones, {
+      phone: AUTH_PHONE,
+      etapa: "agente_libre",
+      datos: { historial: [{ role: "user", content: "viejo" }] },
+    });
+    await envejecerConversacion(10 * 60 * 1000);
+    const { deps, sent } = fakeDeps(EMPTY);
+    let historialRecibido: unknown[] | undefined;
+    deps.agente = async (_from, texto, historialPrevio) => {
+      historialRecibido = historialPrevio;
+      return { texto: "ok", historial: [{ role: "user", content: texto }] };
+    };
+    await procesarMensaje(tdb, textMsg("reset", "hola"), deps);
+    expect(historialRecibido ?? []).toHaveLength(0);
+    expect(sent.join(" ")).toMatch(/charla nueva/);
+  });
+
+  it("BOT-10: patente extranjera con extranjera=true deja propuesta y el 'sí' la carga", async () => {
+    const out = await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "JY0 9670", marca: "Toyota", modelo: "Hilux", cliente: "Sebastián", extranjera: true },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    expect((JSON.parse(out) as { pendiente_confirmacion?: boolean }).pendiente_confirmacion).toBe(true);
+
+    const { deps } = fakeDeps(EMPTY);
+    const r = await procesarMensaje(tdb, textMsg("si-ext", "sí"), deps);
+    expect(r).toBe("ingreso_confirmado");
+    const orders = await tdb.select(workOrders);
+    expect(orders[0]?.vehiclePlate).toBe("JY09670");
+  });
+
+  it("BOT-10: patente no argentina SIN extranjera=true se rechaza y le indica al agente cómo reintentar", async () => {
+    const out = await ejecutarTool(
+      tdb,
+      "registrar_ingreso",
+      { patente: "JY09670", marca: "Toyota", modelo: "Hilux" },
+      AUTH_PHONE,
+      "Taller A",
+    );
+    const parsed = JSON.parse(out) as { patente_invalida?: boolean; nota?: string };
+    expect(parsed.patente_invalida).toBe(true);
+    expect(parsed.nota).toMatch(/extranjera/);
+    expect(await tdb.count(conversaciones)).toBe(0);
+  });
+
   it("BOT-4: registrar_ingreso con patente inválida NO deja propuesta (repregunta)", async () => {
     const out = await ejecutarTool(
       tdb,
