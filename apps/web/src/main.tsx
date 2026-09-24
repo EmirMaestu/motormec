@@ -32,10 +32,19 @@ createRoot(document.getElementById("root")!).render(
 );
 
 // PWA: registrar el service worker (instalable + arranque offline del shell).
+// Solo en producción: en dev los módulos no llevan hash en el nombre y el SW
+// (cache-first para assets) serviría código viejo después de editar.
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
-      /* sin SW la app sigue andando igual */
+  if (import.meta.env.PROD) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+        /* sin SW la app sigue andando igual */
+      });
     });
-  });
+  } else {
+    void navigator.serviceWorker
+      .getRegistrations()
+      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+      .catch(() => {});
+  }
 }
