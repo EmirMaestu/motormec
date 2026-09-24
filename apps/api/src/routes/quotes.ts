@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { authed, requireAuth, requireRole } from "../auth/middleware.js";
+import { authed, requireRole } from "../auth/middleware.js";
 import { db } from "../db/client.js";
 import { presupuestos, tenants, type TenantSettings } from "../db/schema.js";
 import { localDisk } from "../storage/provider.js";
@@ -41,12 +41,15 @@ const IMG_EXT: Record<string, string> = {
 const ALLOWED = Object.keys(IMG_EXT);
 
 export async function quoteRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/quotes", { preHandler: requireAuth }, async (request, reply) => {
+  // Presupuestos privados: los montos son información de gestión, solo para
+  // admins (como Finanzas). El bot de WhatsApp no usa estas rutas: cualquier
+  // número autorizado puede pedir un presupuesto y recibe SOLO ese PDF.
+  app.get("/api/quotes", { preHandler: requireRole("admin") }, async (request, reply) => {
     const { tenantDb } = authed(request);
     return reply.send({ quotes: await Q.listQuotes(tenantDb) });
   });
 
-  app.get("/api/quotes/:id", { preHandler: requireAuth }, async (request, reply) => {
+  app.get("/api/quotes/:id", { preHandler: requireRole("admin") }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const { id } = request.params as { id: string };
     const quote = await tenantDb.findById(presupuestos, id);
@@ -55,7 +58,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // PDF del presupuesto con la marca del taller (misma fuente que WhatsApp).
-  app.get("/api/quotes/:id/pdf", { preHandler: requireAuth }, async (request, reply) => {
+  app.get("/api/quotes/:id/pdf", { preHandler: requireRole("admin") }, async (request, reply) => {
     const { tenantDb, auth } = authed(request);
     const { id } = request.params as { id: string };
     const quote = await tenantDb.findById(presupuestos, id);
@@ -68,7 +71,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       .send(pdf);
   });
 
-  app.post("/api/quotes", { preHandler: requireAuth }, async (request, reply) => {
+  app.post("/api/quotes", { preHandler: requireRole("admin") }, async (request, reply) => {
     const { tenantDb, auth } = authed(request);
     const parsed = createSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
@@ -77,7 +80,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Convertir un presupuesto aprobado en orden de trabajo (PAY-5).
-  app.post("/api/quotes/:id/convert", { preHandler: requireAuth }, async (request, reply) => {
+  app.post("/api/quotes/:id/convert", { preHandler: requireRole("admin") }, async (request, reply) => {
     const { tenantDb, auth } = authed(request);
     const { id } = request.params as { id: string };
     const actor = { userId: auth.userId, userName: auth.userName };
@@ -95,7 +98,7 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.delete("/api/quotes/:id", { preHandler: requireAuth }, async (request, reply) => {
+  app.delete("/api/quotes/:id", { preHandler: requireRole("admin") }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const { id } = request.params as { id: string };
     const removed = await tenantDb.deleteById(presupuestos, id);

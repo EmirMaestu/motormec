@@ -33,7 +33,7 @@ const DESKTOP_NAV: NavItem[] = [
   { to: "/dashboard", label: "Inicio", icon: LayoutDashboard },
   { to: "/vehiculos", label: "Vehículos", icon: Car },
   { to: "/ordenes", label: "Órdenes", icon: ClipboardList },
-  { to: "/presupuestos", label: "Presupuestos", icon: FileText },
+  { to: "/presupuestos", label: "Presupuestos", icon: FileText, adminOnly: true },
   { to: "/clientes", label: "Clientes", icon: Users, adminOnly: true },
   { to: "/inventario", label: "Inventario", icon: Boxes },
   { to: "/finanzas", label: "Finanzas", icon: DollarSign, adminOnly: true },
