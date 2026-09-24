@@ -191,11 +191,17 @@ function CreateTenantModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     },
     onError: (e: unknown) => {
       const code = e instanceof ApiError ? e.code : "";
-      toast.error(code === "slug_taken" ? "Ese slug ya existe" : "No se pudo crear");
+      toast.error(
+        code === "slug_taken"
+          ? "Ese slug ya existe"
+          : code === "weak_password" && e instanceof ApiError
+            ? (e.message ?? "La contraseña debe tener al menos 8 caracteres.")
+            : "No se pudo crear",
+      );
     },
   });
 
-  const valid = form.name.trim() && /^[a-z0-9-]{2,}$/.test(form.slug) && form.adminName.trim() && form.adminPassword.length >= 6;
+  const valid = form.name.trim() && /^[a-z0-9-]{2,}$/.test(form.slug) && form.adminName.trim() && form.adminPassword.length >= 8;
 
   return (
     <Modal
@@ -244,7 +250,7 @@ function CreateTenantModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             <Input value={form.adminUsername} onChange={(e) => set("adminUsername", e.target.value)} />
           </FormField>
         </div>
-        <FormField label="Contraseña" required hint="mínimo 6 caracteres">
+        <FormField label="Contraseña" required hint="mínimo 8 caracteres">
           <Input type="password" value={form.adminPassword} onChange={(e) => set("adminPassword", e.target.value)} />
         </FormField>
       </div>
@@ -385,7 +391,9 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
           ? "Ese usuario ya existe"
           : e instanceof ApiError && e.code === "plan_limit"
             ? (e.message ?? "Alcanzaste el límite de usuarios del plan")
-            : "No se pudo crear el usuario",
+            : e instanceof ApiError && e.code === "weak_password"
+              ? (e.message ?? "La contraseña debe tener al menos 8 caracteres.")
+              : "No se pudo crear el usuario",
       ),
   });
 
@@ -520,7 +528,7 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
                   type="password"
                   value={nuPass}
                   onChange={(e) => setNuPass(e.target.value)}
-                  placeholder="Contraseña (mín. 6)"
+                  placeholder="Contraseña (mín. 8)"
                 />
                 <Select value={nuRole} onChange={setNuRole}>
                   <option value="mecanico">mecánico</option>
@@ -533,7 +541,7 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
                 className="mt-2"
                 onClick={() => createUser.mutate()}
                 disabled={
-                  !nuName.trim() || !nuUser.trim() || nuPass.length < 6 || createUser.isPending
+                  !nuName.trim() || !nuUser.trim() || nuPass.length < 8 || createUser.isPending
                 }
               >
                 <Plus size={15} /> {createUser.isPending ? "Creando…" : "Agregar usuario"}
