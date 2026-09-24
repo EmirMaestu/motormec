@@ -133,7 +133,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const t = await tenantById(id);
     if (!t) return reply.code(404).send({ error: "not_found" });
     const [tUsers, tNumbers, custCount] = await Promise.all([
-      db.select({ id: users.id, name: users.name, username: users.username, role: users.role, active: users.active })
+      db.select({ id: users.id, name: users.name, username: users.username, role: users.role, active: users.active, phone: users.phone })
         .from(users).where(eq(users.tenantId, id)),
       db.select().from(numerosAutorizados).where(eq(numerosAutorizados.tenantId, id)),
       db.select({ c: sql<number>`count(*)::int` }).from(customers).where(eq(customers.tenantId, id)),
@@ -211,6 +211,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         username: z.string().min(1).max(60),
         password: z.string().min(6).max(200),
         role: z.enum(["admin", "mecanico"]).default("mecanico"),
+        phone: z.string().max(30).optional(),
       })
       .safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
@@ -251,12 +252,22 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/api/admin/users/:id", { preHandler: requirePlatformAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = z
-      .object({ role: z.enum(["admin", "mecanico"]).optional(), active: z.boolean().optional() })
+      .object({
+        role: z.enum(["admin", "mecanico"]).optional(),
+        active: z.boolean().optional(),
+        // WhatsApp del usuario; "" lo desvincula.
+        phone: z.string().max(30).optional(),
+      })
       .safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
-    const [updated] = await db.update(users).set(parsed.data).where(eq(users.id, id)).returning();
+    const { phone, ...rest } = parsed.data;
+    const patch = phone === undefined ? rest : { ...rest, phone: phone.trim() || null };
+    if (Object.keys(patch).length === 0) return reply.code(400).send({ error: "invalid_input" });
+    const [updated] = await db.update(users).set(patch).where(eq(users.id, id)).returning();
     if (!updated) return reply.code(404).send({ error: "not_found" });
-    return reply.send({ user: { id: updated.id, role: updated.role, active: updated.active } });
+    return reply.send({
+      user: { id: updated.id, role: updated.role, active: updated.active, phone: updated.phone },
+    });
   });
 
   /* --------------- authorized numbers (per tenant) --------------------- */

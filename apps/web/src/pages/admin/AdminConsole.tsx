@@ -270,7 +270,7 @@ interface TenantDetail {
     hasAccessToken: boolean;
     createdAt: string;
   };
-  users: Array<{ id: string; name: string; username: string; role: string; active: boolean }>;
+  users: Array<{ id: string; name: string; username: string; role: string; active: boolean; phone: string | null }>;
   numbers: Array<{ id: string; phone: string; name: string; active: boolean }>;
   customers: number;
   limits: {
@@ -334,6 +334,7 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
   const [nuUser, setNuUser] = useState("");
   const [nuPass, setNuPass] = useState("");
   const [nuRole, setNuRole] = useState("mecanico");
+  const [nuPhone, setNuPhone] = useState("");
 
   const updateTenant = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.patch(`/api/admin/tenants/${id}`, body),
@@ -370,6 +371,15 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
     },
     onError: () => toast.error("No se pudo actualizar el rol"),
   });
+  const setPhone = useMutation({
+    mutationFn: ({ userId, phone }: { userId: string; phone: string }) =>
+      api.patch(`/api/admin/users/${userId}`, { phone }),
+    onSuccess: () => {
+      refetch();
+      toast.success("WhatsApp actualizado");
+    },
+    onError: () => toast.error("No se pudo actualizar el WhatsApp"),
+  });
   const createUser = useMutation({
     mutationFn: () =>
       api.post(`/api/admin/tenants/${id}/users`, {
@@ -377,12 +387,14 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
         username: nuUser.trim(),
         password: nuPass,
         role: nuRole,
+        ...(nuPhone.trim() ? { phone: nuPhone.trim() } : {}),
       }),
     onSuccess: () => {
       refetch();
       setNuName("");
       setNuUser("");
       setNuPass("");
+      setNuPhone("");
       toast.success("Usuario creado");
     },
     onError: (e: unknown) =>
@@ -503,6 +515,12 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
                   <span className="min-w-0 truncate">
                     {u.name} · <span className="text-charcoal">{u.username}</span>
                   </span>
+                  <UserPhoneInput
+                    key={u.phone ?? ""}
+                    current={u.phone ?? ""}
+                    disabled={setPhone.isPending}
+                    onSave={(phone) => setPhone.mutate({ userId: u.id, phone })}
+                  />
                   <select
                     value={u.role}
                     onChange={(e) => setRole.mutate({ userId: u.id, role: e.target.value })}
@@ -516,8 +534,17 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
               ))}
             </div>
             <p className="mt-2 text-[12px] text-charcoal">
-              Admin ve todo (incluida Finanzas). Mecánico no ve Finanzas/Reportes.
+              Admin ve todo (incluida Finanzas). Mecánico no ve Finanzas/Reportes, y en
+              Presupuestos ve solo los suyos: los que hace en la web y los que pide por WhatsApp
+              desde el número cargado en su usuario.
             </p>
+            <datalist id="numeros-autorizados">
+              {(data?.numbers ?? []).map((n) => (
+                <option key={n.id} value={n.phone}>
+                  {n.name}
+                </option>
+              ))}
+            </datalist>
 
             <div className="mt-3 rounded-[12px] bg-pale-sage p-3">
               <div className="eyebrow mb-2">Agregar usuario</div>
@@ -534,6 +561,14 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
                   <option value="mecanico">mecánico</option>
                   <option value="admin">admin</option>
                 </Select>
+                <Input
+                  className="col-span-2"
+                  value={nuPhone}
+                  onChange={(e) => setNuPhone(e.target.value)}
+                  list="numeros-autorizados"
+                  inputMode="tel"
+                  placeholder="WhatsApp (opcional) — elegí su número autorizado"
+                />
               </div>
               <Button
                 variant="ghost"
@@ -551,5 +586,40 @@ function TenantDetailModal({ id, onClose, onChanged }: { id: string; onClose: ()
         </div>
       )}
     </Modal>
+  );
+}
+
+/**
+ * WhatsApp de un usuario, editable en línea: se guarda al salir del campo (o con
+ * Enter) solo si cambió. Vacío = desvinculado. Sugiere los números autorizados.
+ */
+function UserPhoneInput({
+  current,
+  disabled,
+  onSave,
+}: {
+  current: string;
+  disabled: boolean;
+  onSave: (phone: string) => void;
+}) {
+  const [value, setValue] = useState(current);
+  const guardar = () => {
+    if (value.trim() !== current) onSave(value.trim());
+  };
+  return (
+    <input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={guardar}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+      disabled={disabled}
+      list="numeros-autorizados"
+      inputMode="tel"
+      placeholder="WhatsApp"
+      title="WhatsApp del usuario: lo que pida por el bot (p. ej. presupuestos) queda a su nombre"
+      className="w-[9.5rem] shrink-0 rounded-[4px] border border-black/20 bg-paper-white px-2 py-1 text-[13px]"
+    />
   );
 }

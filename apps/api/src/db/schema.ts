@@ -132,6 +132,9 @@ export const users = pgTable(
       .notNull()
       .default("mecanico"),
     active: boolean("active").notNull().default(true),
+    // WhatsApp del usuario: vincula lo que hace por el bot (p. ej. presupuestos)
+    // con su usuario web. Se compara con tolerancia de formato (sameNumber).
+    phone: text("phone"),
     // Per-user brute-force protection: count consecutive failed logins and
     // temporarily lock the account after too many (rate limit is per-IP only).
     failedLoginCount: integer("failed_login_count").notNull().default(0),
@@ -839,6 +842,11 @@ export const presupuestos = pgTable(
       onDelete: "set null",
     }),
     createdByName: text("created_by_name"),
+    // Autor del presupuesto (privacidad: un mecánico ve solo los suyos).
+    // Web → usuario; WhatsApp → número del remitente. Los viejos (sin autor)
+    // solo los ve el admin.
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdByPhone: text("created_by_phone"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

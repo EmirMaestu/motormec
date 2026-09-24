@@ -41,6 +41,8 @@ export interface CreateUserInput {
   password: string;
   role?: "admin" | "mecanico";
   email?: string;
+  /** WhatsApp del usuario (vincula lo que hace por el bot con su usuario). */
+  phone?: string | null;
 }
 
 export async function createUser(
@@ -57,6 +59,7 @@ export async function createUser(
       passwordHash,
       role: input.role ?? "mecanico",
       email: input.email ?? null,
+      phone: input.phone?.trim() || null,
     })
     .returning();
   if (!user) throw new Error("Failed to create user");

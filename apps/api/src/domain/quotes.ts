@@ -15,6 +15,7 @@ import { localDisk } from "../storage/provider.js";
 import { renderQuotePdf } from "./quotePdf.js";
 import { createOrder } from "./orders.js";
 import type { Actor } from "./movements.js";
+import { sameNumber } from "../whatsapp/phone.js";
 
 export interface CreateQuoteInput {
   customerId?: string | null;
@@ -52,11 +53,33 @@ async function nextNumber(tdb: TenantDb): Promise<number> {
   return rows.reduce((max, q) => Math.max(max, q.number), 0) + 1;
 }
 
+/** Autor de un presupuesto: usuario web y/o número de WhatsApp. */
+export interface QuoteAuthor {
+  userId?: string | null;
+  phone?: string | null;
+}
+
+/** Quién mira: el admin ve todo; un mecánico, solo lo suyo. */
+export interface QuoteViewer {
+  role: "admin" | "mecanico";
+  userId: string;
+  /** WhatsApp del usuario (users.phone): suyos también los que pidió por el bot. */
+  phone?: string | null;
+}
+
+/** true si el presupuesto es visible para `viewer` (privacidad por autor). */
+export function puedeVerPresupuesto(q: Presupuesto, viewer: QuoteViewer): boolean {
+  if (viewer.role === "admin") return true;
+  if (q.createdByUserId && q.createdByUserId === viewer.userId) return true;
+  return Boolean(viewer.phone && q.createdByPhone && sameNumber(q.createdByPhone, viewer.phone));
+}
+
 /** Crea un presupuesto (numera por taller, resuelve cliente, calcula totales). */
 export async function createQuote(
   tdb: TenantDb,
   actorName: string,
   input: CreateQuoteInput,
+  author: QuoteAuthor = {},
 ): Promise<Presupuesto> {
   let name = input.customerName?.trim() ?? "";
   let phone = input.customerPhone ?? null;
@@ -88,12 +111,15 @@ export async function createQuote(
     total,
     validUntil: input.validUntil ?? null,
     createdByName: actorName,
+    createdByUserId: author.userId ?? null,
+    createdByPhone: author.phone ?? null,
   });
 }
 
-export async function listQuotes(tdb: TenantDb): Promise<Presupuesto[]> {
+/** Presupuestos del taller visibles para `viewer` (el admin, todos). */
+export async function listQuotes(tdb: TenantDb, viewer: QuoteViewer): Promise<Presupuesto[]> {
   const rows = await tdb.select(presupuestos);
-  return rows.sort((a, b) => b.number - a.number);
+  return rows.filter((q) => puedeVerPresupuesto(q, viewer)).sort((a, b) => b.number - a.number);
 }
 
 /**

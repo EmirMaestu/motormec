@@ -36,7 +36,7 @@ export function App() {
 }
 
 function TenantApp() {
-  const { user, isLoading, isAdmin } = useAuth();
+  const { user, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -55,11 +55,8 @@ function TenantApp() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/vehiculos" element={<VehiclesPage />} />
         <Route path="/ordenes" element={<OrdersPage />} />
-        {/* Presupuestos: solo admin (la API también responde 403 a mecánicos). */}
-        <Route
-          path="/presupuestos"
-          element={isAdmin ? <QuotesPage /> : <Navigate to="/dashboard" replace />}
-        />
+        {/* Presupuestos: el servidor filtra (el mecánico ve solo los suyos). */}
+        <Route path="/presupuestos" element={<QuotesPage />} />
         <Route path="/configuracion" element={<SettingsPage />} />
         <Route path="/clientes" element={<CustomersPage />} />
         <Route path="/finanzas" element={<FinancePage />} />

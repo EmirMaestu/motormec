@@ -421,14 +421,20 @@ export async function ejecutarTool(
       }
       const crudo = String(input.vehiculo ?? "").trim();
       const { marca, modelo } = normalizarMarcaModelo(crudo);
-      const quote = await createQuote(tdb, BOT_ACTOR.userName, {
-        customerName: cliente,
-        customerPhone: input.telefono ? String(input.telefono) : from,
-        vehiclePlate: input.patente ? String(input.patente).toUpperCase().trim() : undefined,
-        vehicleInfo: `${marca} ${modelo}`.trim() || undefined,
-        items,
-        notes: input.notas ? String(input.notas) : undefined,
-      });
+      const quote = await createQuote(
+        tdb,
+        BOT_ACTOR.userName,
+        {
+          customerName: cliente,
+          customerPhone: input.telefono ? String(input.telefono) : from,
+          vehiclePlate: input.patente ? String(input.patente).toUpperCase().trim() : undefined,
+          vehicleInfo: `${marca} ${modelo}`.trim() || undefined,
+          items,
+          notes: input.notas ? String(input.notas) : undefined,
+        },
+        // Autor = el número que lo pidió: así el mecánico lo ve en la web como suyo.
+        { phone: from },
+      );
       const documento = formatPresupuesto(tallerNombre, quote);
       return JSON.stringify({
         ok: true,

@@ -1,9 +1,9 @@
-import type { FastifyInstance } from "fastify";
-import { eq } from "drizzle-orm";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { authed, requireRole } from "../auth/middleware.js";
+import { authed, requireAuth, requireRole } from "../auth/middleware.js";
 import { db } from "../db/client.js";
-import { presupuestos, tenants, type TenantSettings } from "../db/schema.js";
+import { presupuestos, tenants, users, type TenantSettings } from "../db/schema.js";
 import { localDisk } from "../storage/provider.js";
 import * as Q from "../domain/quotes.js";
 import { detectImageType } from "../lib/imageType.js";
@@ -41,27 +41,47 @@ const IMG_EXT: Record<string, string> = {
 const ALLOWED = Object.keys(IMG_EXT);
 
 export async function quoteRoutes(app: FastifyInstance): Promise<void> {
-  // Presupuestos privados: los montos son información de gestión, solo para
-  // admins (como Finanzas). El bot de WhatsApp no usa estas rutas: cualquier
-  // número autorizado puede pedir un presupuesto y recibe SOLO ese PDF.
-  app.get("/api/quotes", { preHandler: requireRole("admin") }, async (request, reply) => {
+  // Presupuestos privados por autor: el admin ve TODOS; un mecánico ve SOLO los
+  // suyos (los que creó en la web + los que pidió por WhatsApp desde su número).
+  // Uno ajeno responde 404: ni siquiera se revela que existe.
+
+  /** Quién mira. El WhatsApp del mecánico se lee con filtro de taller explícito. */
+  async function viewerDe(request: FastifyRequest): Promise<Q.QuoteViewer> {
+    const { auth } = authed(request);
+    if (auth.role === "admin") return { role: "admin", userId: auth.userId };
+    const [u] = await db
+      .select({ phone: users.phone })
+      .from(users)
+      .where(and(eq(users.id, auth.userId), eq(users.tenantId, auth.tenantId)))
+      .limit(1);
+    return { role: "mecanico", userId: auth.userId, phone: u?.phone ?? null };
+  }
+
+  /** El presupuesto `id` si existe en el taller Y quien mira puede verlo; si no, null. */
+  async function presupuestoVisible(request: FastifyRequest, id: string) {
     const { tenantDb } = authed(request);
-    return reply.send({ quotes: await Q.listQuotes(tenantDb) });
+    const quote = await tenantDb.findById(presupuestos, id);
+    if (!quote || !Q.puedeVerPresupuesto(quote, await viewerDe(request))) return null;
+    return quote;
+  }
+
+  app.get("/api/quotes", { preHandler: requireAuth }, async (request, reply) => {
+    const { tenantDb } = authed(request);
+    return reply.send({ quotes: await Q.listQuotes(tenantDb, await viewerDe(request)) });
   });
 
-  app.get("/api/quotes/:id", { preHandler: requireRole("admin") }, async (request, reply) => {
-    const { tenantDb } = authed(request);
+  app.get("/api/quotes/:id", { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const quote = await tenantDb.findById(presupuestos, id);
+    const quote = await presupuestoVisible(request, id);
     if (!quote) return reply.code(404).send({ error: "not_found" });
     return reply.send({ quote });
   });
 
   // PDF del presupuesto con la marca del taller (misma fuente que WhatsApp).
-  app.get("/api/quotes/:id/pdf", { preHandler: requireRole("admin") }, async (request, reply) => {
-    const { tenantDb, auth } = authed(request);
+  app.get("/api/quotes/:id/pdf", { preHandler: requireAuth }, async (request, reply) => {
+    const { auth } = authed(request);
     const { id } = request.params as { id: string };
-    const quote = await tenantDb.findById(presupuestos, id);
+    const quote = await presupuestoVisible(request, id);
     if (!quote) return reply.code(404).send({ error: "not_found" });
     const pdf = await Q.buildQuotePdf(auth.tenantId, quote);
     return reply
@@ -71,18 +91,19 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
       .send(pdf);
   });
 
-  app.post("/api/quotes", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.post("/api/quotes", { preHandler: requireAuth }, async (request, reply) => {
     const { tenantDb, auth } = authed(request);
     const parsed = createSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
-    const quote = await Q.createQuote(tenantDb, auth.userName, parsed.data);
+    const quote = await Q.createQuote(tenantDb, auth.userName, parsed.data, { userId: auth.userId });
     return reply.code(201).send({ quote });
   });
 
   // Convertir un presupuesto aprobado en orden de trabajo (PAY-5).
-  app.post("/api/quotes/:id/convert", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.post("/api/quotes/:id/convert", { preHandler: requireAuth }, async (request, reply) => {
     const { tenantDb, auth } = authed(request);
     const { id } = request.params as { id: string };
+    if (!(await presupuestoVisible(request, id))) return reply.code(404).send({ error: "not_found" });
     const actor = { userId: auth.userId, userName: auth.userName };
     try {
       const result = await Q.convertQuoteToOrder(tenantDb, actor, id);
@@ -98,9 +119,10 @@ export async function quoteRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.delete("/api/quotes/:id", { preHandler: requireRole("admin") }, async (request, reply) => {
+  app.delete("/api/quotes/:id", { preHandler: requireAuth }, async (request, reply) => {
     const { tenantDb } = authed(request);
     const { id } = request.params as { id: string };
+    if (!(await presupuestoVisible(request, id))) return reply.code(404).send({ error: "not_found" });
     const removed = await tenantDb.deleteById(presupuestos, id);
     if (!removed) return reply.code(404).send({ error: "not_found" });
     return reply.send({ ok: true });

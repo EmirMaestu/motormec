@@ -143,4 +143,50 @@ describe("platform super-admin", () => {
     expect(after.plan).toBe("cadena");
     expect(after.active).toBe(false);
   });
+
+  it("carga y edita el WhatsApp de un usuario (para atribuirle sus presupuestos del bot)", async () => {
+    const { cookie } = await loginAdmin();
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/tenants",
+      headers: { cookie, "content-type": "application/json" },
+      payload: { name: "T4", slug: "t4", adminName: "D", adminUsername: "d", adminPassword: "secret123" },
+    });
+    const t4 = (await db.select().from(tenants).where(eq(tenants.slug, "t4")))[0]!;
+
+    const created = await app.inject({
+      method: "POST",
+      url: `/api/admin/tenants/${t4.id}/users`,
+      headers: { cookie, "content-type": "application/json" },
+      payload: { name: "David", username: "david", password: "secret123", role: "mecanico", phone: "5492613632012" },
+    });
+    expect(created.statusCode).toBe(201);
+    const userId = (created.json() as { user: { id: string } }).user.id;
+
+    const detalle = async () =>
+      (
+        (await app.inject({ method: "GET", url: `/api/admin/tenants/${t4.id}`, headers: { cookie } })).json() as {
+          users: Array<{ id: string; phone: string | null }>;
+        }
+      ).users.find((u) => u.id === userId);
+    expect((await detalle())?.phone).toBe("5492613632012");
+
+    const edit = await app.inject({
+      method: "PATCH",
+      url: `/api/admin/users/${userId}`,
+      headers: { cookie, "content-type": "application/json" },
+      payload: { phone: "2613632999" },
+    });
+    expect(edit.statusCode).toBe(200);
+    expect((await detalle())?.phone).toBe("2613632999");
+
+    // Vaciarlo lo desvincula.
+    await app.inject({
+      method: "PATCH",
+      url: `/api/admin/users/${userId}`,
+      headers: { cookie, "content-type": "application/json" },
+      payload: { phone: "" },
+    });
+    expect((await detalle())?.phone).toBeNull();
+  });
 });
